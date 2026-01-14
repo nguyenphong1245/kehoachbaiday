@@ -1,0 +1,295 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  height: 100%;
+  overflow-y: scroll;
+}
+
+body {
+  @apply bg-slate-100 dark:bg-gray-900 text-slate-900 dark:text-gray-100 antialiased;
+  min-height: 100%;
+  overflow-y: auto;
+}
+
+#root {
+  min-height: 100%;
+}
+
+a {
+  @apply text-sky-600 underline-offset-4 hover:text-sky-700;
+}
+
+/* Custom scrollbar styles for chat input */
+.chat-input-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.chat-input-scroll::-webkit-scrollbar {
+  width: 0px;
+}
+
+.chat-input-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-input-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+}
+
+/* Show scrollbar on hover */
+.chat-input-scroll:hover {
+  scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+}
+
+.chat-input-scroll:hover::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-input-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.5);
+  transition: background 0.2s;
+}
+
+.chat-input-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.8);
+}
+
+/* Dark mode scrollbar */
+.dark .chat-input-scroll:hover {
+  scrollbar-color: rgba(75, 85, 99, 0.5) transparent;
+}
+
+.dark .chat-input-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(75, 85, 99, 0.5);
+}
+
+.dark .chat-input-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(75, 85, 99, 0.8);
+}
+
+/* Prevent text overflow in markdown content */
+.prose {
+  @apply break-words;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+
+.prose p,
+.prose li,
+.prose td,
+.prose th {
+  @apply break-words;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* Handle long sequences of dots or characters */
+.prose * {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-wrap: break-word;
+  hyphens: auto;
+}
+
+/* Style for dotted lines in worksheets - make them consistent */
+.prose p {
+  /* If paragraph contains mostly dots, display as single line with scroll */
+}
+
+/* Worksheet line - replaces dotted text with CSS border */
+.worksheet-line {
+  border-bottom: 1px dotted #9ca3af;
+  height: 1.5em;
+  margin: 0.5em 0;
+  width: 100%;
+}
+
+.dark .worksheet-line {
+  border-bottom-color: #6b7280;
+}
+
+/* Dotted line styling - convert dot sequences to underlines */
+.dotted-line-container p {
+  overflow-x: auto;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Table responsive for mobile */
+.prose table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  font-size: 12px;
+}
+
+@media (min-width: 640px) {
+  .prose table {
+    font-size: 14px;
+  }
+}
+
+.prose table th,
+.prose table td {
+  white-space: nowrap;
+  padding: 4px 8px;
+}
+
+@media (min-width: 640px) {
+  .prose table th,
+  .prose table td {
+    white-space: normal;
+    padding: 8px 12px;
+  }
+}
+
+/* Prevent horizontal scroll on mobile */
+.prose pre {
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+/* Better spacing for prose content */
+.prose ul,
+.prose ol {
+  @apply my-4;
+}
+
+.prose li {
+  @apply my-2;
+}
+
+.prose p {
+  @apply my-3;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+  @apply mt-6 mb-3;
+}
+
+.prose strong {
+  @apply font-semibold;
+}
+
+/* Better list item spacing */
+.prose li > p {
+  @apply my-1;
+}
+
+.prose ul > li::marker,
+.prose ol > li::marker {
+  @apply text-gray-500 dark:text-gray-400;
+}
+
+/* Editable content styling */
+.editable-content {
+  @apply border-2 border-blue-300 dark:border-blue-600 rounded-lg p-2;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.editable-content:focus {
+  @apply border-blue-500 dark:border-blue-400 shadow-lg;
+}
+
+/* Fix text selection color */
+::selection {
+  background-color: rgba(59, 130, 246, 0.3);
+  color: inherit;
+}
+
+::-moz-selection {
+  background-color: rgba(59, 130, 246, 0.3);
+  color: inherit;
+}
+
+/* Mobile - fix input position when keyboard opens */
+@supports (-webkit-touch-callout: none) {
+  /* iOS Safari specific */
+  .fixed.inset-0 {
+    height: -webkit-fill-available;
+  }
+}
+
+/* 
+  NOTE: Removed fixed position and overflow hidden from html/body/#root 
+  to allow normal page scrolling. 
+  Chat pages use their own scroll containers.
+*/
+
+/* Safe area padding for iOS notch/home indicator */
+.safe-area-bottom {
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+}
+
+/* Dropdown animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInFromTop {
+  from { 
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInFromBottom {
+  from { 
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-in {
+  animation-duration: 200ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-fill-mode: forwards;
+}
+
+.fade-in {
+  animation-name: fadeIn;
+}
+
+.slide-in-from-top-2 {
+  animation-name: slideInFromTop;
+}
+
+.slide-in-from-bottom-2 {
+  animation-name: slideInFromBottom;
+}
+
+/* Message fade in animation */
+@keyframes messageFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: messageFadeIn 0.3s ease-out;
+}
