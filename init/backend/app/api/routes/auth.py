@@ -51,8 +51,8 @@ MAX_TOKEN_ATTEMPTS = 5
 
 
 def _utcnow() -> datetime:
-    """Return current UTC time as naive datetime (no timezone info)."""
-    return datetime.utcnow()
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
 
 def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
