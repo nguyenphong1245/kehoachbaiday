@@ -51,8 +51,8 @@ MAX_TOKEN_ATTEMPTS = 5
 
 
 def _utcnow() -> datetime:
-    """Return current UTC time as timezone-aware datetime."""
-    return datetime.now(timezone.utc)
+    """Return current UTC time as naive datetime (no timezone info)."""
+    return datetime.utcnow()
 
 def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
@@ -309,6 +309,9 @@ async def verify_email(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Quá nhiều lần thử sai. Vui lòng yêu cầu mã mới.")
 
     expires_at = token_row.expires_at
+    # Convert to naive datetime if it has timezone info for comparison
+    if expires_at.tzinfo is not None:
+        expires_at = expires_at.replace(tzinfo=None)
     if expires_at < _utcnow():
         await session.delete(token_row)
         await session.commit()
@@ -399,6 +402,9 @@ async def reset_password(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Quá nhiều lần thử sai. Vui lòng yêu cầu mã mới.")
 
     expires_at = token_row.expires_at
+    # Convert to naive datetime if it has timezone info for comparison
+    if expires_at.tzinfo is not None:
+        expires_at = expires_at.replace(tzinfo=None)
     if expires_at < _utcnow():
         await session.delete(token_row)
         await session.commit()
@@ -447,6 +453,9 @@ async def refresh_tokens(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
 
     expires_at = rt.expires_at
+    # Convert to naive datetime if it has timezone info for comparison
+    if expires_at.tzinfo is not None:
+        expires_at = expires_at.replace(tzinfo=None)
     if expires_at < _utcnow():
         rt.revoked = True
         await session.commit()
