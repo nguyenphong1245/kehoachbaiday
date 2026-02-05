@@ -46,12 +46,7 @@ const LoginPage = () => {
 
   return (
     <AuthCard
-      title="Chào mừng trở lại!"
-      description={
-        <span>
-          Đăng nhập vào hệ thống KHBD
-        </span>
-      }
+      title="ĐĂNG NHẬP"
     >
       <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
         {error ? <FormAlert>{error}</FormAlert> : null}
@@ -79,15 +74,10 @@ const LoginPage = () => {
         <SubmitButton label="Đăng nhập" isLoading={isLoading} />
       </form>
       <div className="mt-4 flex flex-col gap-2 text-center text-sm text-slate-500 dark:text-slate-400">
+        <Link className="font-medium text-brand" to="/forgot-password">
+          Quên mật khẩu?
+        </Link>
         <span>
-          <Link className="font-medium text-brand" to="/forgot-password">
-            Quên mật khẩu?
-          </Link>
-        </span>
-        <span>
-          Cần email xác minh? <Link to="/resend-verification">Gửi lại xác minh</Link>
-        </span>
-        <span className="mt-2 border-t pt-3">
           Chưa có tài khoản? <Link className="font-medium text-brand" to="/register">Đăng ký ngay</Link>
         </span>
       </div>

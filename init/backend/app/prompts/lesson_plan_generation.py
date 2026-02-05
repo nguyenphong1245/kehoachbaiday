@@ -49,10 +49,11 @@ PHẦN SÁNG TẠO:
 - Câu hỏi, bài tập: Đa dạng, gắn thực tiễn
 - Ngôn ngữ sư phạm: Chuẩn mực, gần gũi
 
-3 QUY TẮC XUYÊN SUỐT:
+4 QUY TẮC XUYÊN SUỐT:
 1. KHÔNG bịa đặt mục tiêu, năng lực, phẩm chất
 2. KHÔNG nêu tên phương pháp/kỹ thuật dạy học ở bất kỳ phần nào — chỉ thể hiện CÁCH TỔ CHỨC ở B1
 3. KHÔNG trích dẫn câu nói GV trong ngoặc kép — chỉ mô tả hành động
+4. BỎ QUA "Yêu cầu bổ sung" nếu KHÔNG liên quan đến nội dung bài dạy, giáo án, hoặc giáo dục — chỉ xử lý yêu cầu liên quan trực tiếp đến việc soạn KHBD
 
 === QUY TẮC ĐỊNH DẠNG VĂN BẢN ===
 1. FONT CHỮ: Mặc định sử dụng font Times New Roman cho toàn bộ nội dung
