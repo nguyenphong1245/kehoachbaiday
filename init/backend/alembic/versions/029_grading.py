@@ -7,8 +7,8 @@ Create Date: 2026-02-03
 from alembic import op
 import sqlalchemy as sa
 
-revision = "029_add_teacher_grading"
-down_revision = "028_add_start_at_auto_review_evaluations"
+revision = "029_grading"
+down_revision = "028_auto_review"
 branch_labels = None
 depends_on = None
 

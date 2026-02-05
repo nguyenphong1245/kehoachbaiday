@@ -7,8 +7,8 @@ Create Date: 2026-02-03
 from alembic import op
 import sqlalchemy as sa
 
-revision = "030_add_member_grades"
-down_revision = "029_add_teacher_grading"
+revision = "030_grades"
+down_revision = "029_grading"
 branch_labels = None
 depends_on = None
 

@@ -12,8 +12,8 @@ import sqlalchemy as sa
 from sqlalchemy import inspect
 
 
-revision = '033_ensure_assignment_columns'
-down_revision = '032_add_peer_review_times'
+revision = '033_assign_col'
+down_revision = '032_pr_times'
 branch_labels = None
 depends_on = None
 

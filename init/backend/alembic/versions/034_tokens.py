@@ -9,8 +9,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers
-revision = "034_add_tokens_used"
-down_revision = "033_ensure_assignment_columns"
+revision = "034_tokens"
+down_revision = "033_assign_col"
 branch_labels = None
 depends_on = None
 
