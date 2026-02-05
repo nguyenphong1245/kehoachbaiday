@@ -31,14 +31,12 @@ def get_password_hash(password: str) -> str:
         password = str(password)
     pw_bytes = password.encode("utf-8")
     if len(pw_bytes) > 72:
-        pw_candidate = pw_bytes[:72].decode("utf-8", errors="ignore")
-    else:
-        pw_candidate = password
+        raise ValueError("Mật khẩu quá dài (tối đa 72 bytes)")
 
     try:
-        return pwd_context.hash(pw_candidate)
+        return pwd_context.hash(password)
     except Exception:
-        return pwd_context.hash(pw_candidate, scheme="pbkdf2_sha256")
+        return pwd_context.hash(password, scheme="pbkdf2_sha256")
 
 
 def verify_password(plain_password: str, password: str) -> bool:
@@ -47,10 +45,20 @@ def verify_password(plain_password: str, password: str) -> bool:
     except Exception:
         return False
 
+def create_refresh_token() -> str:
+    """Generate a cryptographically random refresh token."""
+    return secrets.token_urlsafe(48)
+
+
+def hash_refresh_token(token: str) -> str:
+    """Hash a refresh token for storage (SHA-256)."""
+    import hashlib
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
 def generate_secure_token(length: int = 32) -> str:
     return secrets.token_urlsafe(length)
 
 def generate_otp_code(length: int = 6) -> str:
-    """Generate a numeric OTP code"""
-    import random
-    return ''.join([str(random.randint(0, 9)) for _ in range(length)])
+    """Generate a numeric OTP code using cryptographically secure random"""
+    return ''.join([str(secrets.randbelow(10)) for _ in range(length)])

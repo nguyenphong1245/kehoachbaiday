@@ -28,8 +28,8 @@ def upgrade() -> None:
         sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False),
         sa.Column("theme", sa.String(length=20), nullable=False, server_default="system"),
         sa.Column("language", sa.String(length=10), nullable=False, server_default="en"),
-        sa.Column("marketing_emails_enabled", sa.Boolean(), nullable=False, server_default=sa.text("1")),
-        sa.Column("push_notifications_enabled", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("marketing_emails_enabled", sa.Boolean(), nullable=False, server_default=sa.text("true")),
+        sa.Column("push_notifications_enabled", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("timezone", sa.String(length=50), nullable=True),
     )
     op.create_index("ix_user_settings_id", "user_settings", ["id"], unique=False)

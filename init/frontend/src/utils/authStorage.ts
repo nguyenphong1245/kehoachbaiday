@@ -1,12 +1,18 @@
 import type { User } from "@/types/auth";
 
-const TOKEN_STORAGE_KEY = "access_token";
 const USER_STORAGE_KEY = "auth_user";
 
-export const getStoredAccessToken = (): string | null => localStorage.getItem(TOKEN_STORAGE_KEY);
+/**
+ * @deprecated Token is now in httpOnly cookie — not accessible from JS.
+ * Kept for backward compatibility during migration; always returns null.
+ */
+export const getStoredAccessToken = (): string | null => null;
 
-export const setStoredAccessToken = (token: string) => {
-  localStorage.setItem(TOKEN_STORAGE_KEY, token);
+/**
+ * @deprecated Token is now in httpOnly cookie — do not store in localStorage.
+ */
+export const setStoredAccessToken = (_token: string) => {
+  // no-op: access token is managed via httpOnly cookies
 };
 
 export const getStoredAuthUser = (): User | null => {
@@ -25,6 +31,6 @@ export const setStoredAuthUser = (user: User) => {
 };
 
 export const clearStoredAuth = () => {
-  localStorage.removeItem(TOKEN_STORAGE_KEY);
+  localStorage.removeItem("access_token"); // clean up legacy key if present
   localStorage.removeItem(USER_STORAGE_KEY);
 };

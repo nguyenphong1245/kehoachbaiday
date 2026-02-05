@@ -1,5 +1,7 @@
 {
   "dependencies": {
-    "@google/genai": "^1.29.1"
+    "@google/genai": "^1.29.1",
+    "@splinetool/react-spline": "^4.1.0",
+    "@splinetool/runtime": "^1.12.38"
   }
 }

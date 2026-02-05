@@ -10,15 +10,16 @@ from app.models.role import Role
 from app.schemas import PermissionCreate, PermissionRead, RoleCreate, RolePermissionUpdate, RoleRead
 
 router = APIRouter(dependencies=[Depends(require_admin)])
+permissions_router = APIRouter(dependencies=[Depends(require_admin)])
 
 
-@router.get("/roles", response_model=list[RoleRead])
+@router.get("", response_model=list[RoleRead])
 async def list_roles(session: AsyncSession = Depends(get_db)) -> list[Role]:
     result = await session.execute(select(Role).options(selectinload(Role.permissions)))
     return result.scalars().unique().all()
 
 
-@router.post("/roles", response_model=RoleRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=RoleRead, status_code=status.HTTP_201_CREATED)
 async def create_role(role_in: RoleCreate, session: AsyncSession = Depends(get_db)) -> Role:
     existing = await session.execute(select(Role).where(Role.name == role_in.name))
     if existing.scalar_one_or_none():
@@ -31,7 +32,7 @@ async def create_role(role_in: RoleCreate, session: AsyncSession = Depends(get_d
     return role
 
 
-@router.post("/roles/{role_id}/permissions", response_model=RoleRead)
+@router.post("/{role_id}/permissions", response_model=RoleRead)
 async def set_role_permissions(
     role_id: int,
     payload: RolePermissionUpdate,
@@ -57,13 +58,13 @@ async def set_role_permissions(
     return role
 
 
-@router.get("/permissions", response_model=list[PermissionRead])
+@permissions_router.get("", response_model=list[PermissionRead])
 async def list_permissions(session: AsyncSession = Depends(get_db)) -> list[Permission]:
     result = await session.execute(select(Permission))
     return result.scalars().all()
 
 
-@router.post("/permissions", response_model=PermissionRead, status_code=status.HTTP_201_CREATED)
+@permissions_router.post("", response_model=PermissionRead, status_code=status.HTTP_201_CREATED)
 async def create_permission(permission_in: PermissionCreate, session: AsyncSession = Depends(get_db)) -> Permission:
     existing = await session.execute(select(Permission).where(Permission.name == permission_in.name))
     if existing.scalar_one_or_none():

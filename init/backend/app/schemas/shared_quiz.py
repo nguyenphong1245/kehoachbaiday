@@ -7,11 +7,12 @@ from pydantic import BaseModel, Field
 
 
 class QuizQuestion(BaseModel):
-    """Câu hỏi trắc nghiệm"""
+    """Câu hỏi trắc nghiệm - chỉ hỗ trợ chọn 1 đáp án đúng"""
     id: str
     question: str
-    options: Dict[str, str]  # {"A": "Đáp án A", "B": "Đáp án B", ...}
-    correct_answer: str  # "A", "B", "C", "D"
+    type: str = "multiple_choice"  # Luôn là multiple_choice
+    options: Dict[str, str]  # {A: "...", B: "...", C: "...", D: "..."}
+    correct_answer: str  # 1 chữ cái: A, B, C, hoặc D
 
 
 class QuizQuestionInput(BaseModel):
@@ -21,7 +22,7 @@ class QuizQuestionInput(BaseModel):
     B: str
     C: str
     D: str
-    answer: str
+    answer: str  # Chỉ 1 chữ cái: "A", "B", "C", hoặc "D"
 
 
 class CreateSharedQuizRequest(BaseModel):
@@ -34,6 +35,15 @@ class CreateSharedQuizRequest(BaseModel):
     expires_in_days: int = Field(default=30, ge=1, le=365)
     show_correct_answers: bool = False
     allow_multiple_attempts: bool = False
+    lesson_info: Optional[Dict] = None  # Thông tin bài học liên kết
+
+
+class UpdateQuizRequest(BaseModel):
+    """Request cập nhật quiz"""
+    title: Optional[str] = None
+    questions: Optional[List[QuizQuestion]] = None
+    time_limit: Optional[int] = None
+    show_correct_answers: Optional[bool] = None
 
 
 class CreateSharedQuizResponse(BaseModel):
@@ -60,6 +70,7 @@ class SharedQuizResponse(BaseModel):
     show_correct_answers: bool
     allow_multiple_attempts: bool
     response_count: int
+    lesson_info: Optional[Dict] = None
 
     class Config:
         from_attributes = True
@@ -74,13 +85,26 @@ class QuizPublicResponse(BaseModel):
     questions: List[QuizQuestion]  # Không bao gồm đáp án đúng
 
 
+class StartSessionRequest(BaseModel):
+    """Request để bắt đầu phiên làm bài"""
+    student_name: str = Field(..., min_length=1, max_length=200)
+    student_class: str = Field(..., min_length=1, max_length=100)
+
+
+class StartSessionResponse(BaseModel):
+    """Response trả về session token"""
+    session_token: str
+
+
 class SubmitQuizRequest(BaseModel):
     """Request nộp bài quiz"""
     student_name: str = Field(..., min_length=1, max_length=200)
     student_class: str = Field(..., min_length=1, max_length=100)
+    student_group: Optional[str] = Field(None, max_length=100, description="Nhóm (nếu có)")
     student_email: Optional[str] = None
     answers: Dict[str, str]  # {"question_1": "A", "question_2": "B", ...}
     time_spent: Optional[int] = None  # Giây
+    session_token: str = Field(..., description="Token phiên làm bài từ start-session")
 
 
 class SubmitQuizResponse(BaseModel):
@@ -115,3 +139,13 @@ class QuizResponsesListResponse(BaseModel):
     quiz_title: str
     total_responses: int
     responses: List[QuizResponseItem]
+
+
+class QuizStatisticsResponse(BaseModel):
+    """Thống kê quiz"""
+    total_responses: int
+    average_score: float
+    highest_score: float
+    lowest_score: float
+    average_time_spent: Optional[int] = None
+    score_distribution: Dict[str, int]  # {"0-20": 1, "21-40": 3, ...}

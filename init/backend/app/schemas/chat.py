@@ -10,7 +10,7 @@ class MessageRole(str, Enum):
     system = "system"
 
 
-# Chat Message Schemas
+# ============== Chat Message Schemas ==============
 class ChatMessageBase(BaseModel):
     content: str = Field(..., min_length=1, max_length=100000)
     role: MessageRole

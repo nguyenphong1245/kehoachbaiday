@@ -1,611 +1,884 @@
 /**
- * LessonPlanOutput - Hiển thị kết quả kế hoạch bài dạy với các ô có thể chỉnh sửa
+ * LessonPlanOutput - Hiển thị kết quả kế hoạch bài dạy dạng WYSIWYG editor
+ * - Giao diện giống Word: toolbar cố định, trang A4 bên dưới
+ * - Nút lưu, xuất PDF trong toolbar
+ * - Nút chia sẻ gộp thành 1 dropdown
  */
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
+
 import {
-  Edit2,
-  Check,
-  X,
   Download,
-  FileText,
-  Target,
-  Wrench,
-  Lightbulb,
-  BookOpen,
-  PenTool,
-  Rocket,
-  ClipboardList,
-  HelpCircle,
-  ChevronDown,
-  ChevronUp,
   Copy,
   CheckCircle,
   Info,
   Save,
   Loader2,
-  Bold,
-  Italic,
-  Underline,
-  List,
-  ListOrdered,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
-  Heading1,
-  Heading2,
-  Heading3,
-  Undo,
-  Redo,
-  Sparkles,
-  MessageSquare,
   Share2,
-  Link,
   ExternalLink,
-  Code,
+  ChevronDown,
+  ChevronRight,
+  Printer,
+  Code2,
+  GitBranch,
+  X,
 } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import type { LessonPlanSection, GenerateLessonPlanResponse, ActivityConfig } from "@/types/lessonBuilder";
-import { exportToPDF, saveLessonPlan, improveWithAI, type RelatedAppendix } from "@/services/lessonBuilderService";
+import { exportToPDF, saveLessonPlan } from "@/services/lessonBuilderService";
 import { createSharedWorksheet } from "@/services/worksheetService";
 import { createSharedQuiz } from "@/services/sharedQuizService";
-import { AI_PROMPTS } from "./aiPrompts";
-import { ShareCodeExerciseModal } from "./ShareCodeExerciseModal";
+import { extractCodeExercisesFromLesson } from "@/services/codeExerciseService";
+import RichTextEditor from "@/components/common/RichTextEditor";
+import MindMapRenderer from "@/components/lesson-builder/MindMapRenderer";
+import WorksheetRenderer from "@/components/lesson-builder/WorksheetRenderer";
+import { Transformer } from "markmap-lib";
+import { Markmap } from "markmap-view";
+import { marked } from "marked";
+import TurndownService from "turndown";
 
 interface LessonPlanOutputProps {
   result: GenerateLessonPlanResponse;
   onSectionUpdate: (sectionId: string, newContent: string) => void;
-  onExportPDF: () => void;
+  onExportPDF?: () => void;
   activities?: ActivityConfig[];
+  onBack?: () => void;
 }
 
-// Icon mapping for section types
-const SECTION_ICONS: Record<string, React.ElementType> = {
-  thong_tin_chung: Info,
-  muc_tieu: Target,
-  thiet_bi: Wrench,
-  khoi_dong: Lightbulb,
-  hinh_thanh_kien_thuc: BookOpen,
-  luyen_tap: PenTool,
-  van_dung: Rocket,
-  phieu_hoc_tap: ClipboardList,
-  trac_nghiem: HelpCircle,
-  full: FileText,
+// ============== Turndown helpers ==============
+const createTurndownService = () => {
+  const td = new TurndownService({
+    headingStyle: "atx",
+    bulletListMarker: "-",
+    codeBlockStyle: "fenced",
+  });
+  td.addRule("tableCell", {
+    filter: ["th", "td"],
+    replacement: (content) => ` ${content.trim()} |`,
+  });
+  td.addRule("tableRow", {
+    filter: "tr",
+    replacement: (content) => `|${content}\n`,
+  });
+  td.addRule("table", {
+    filter: "table",
+    replacement: (_content, node) => {
+      const el = node as HTMLTableElement;
+      const rows = Array.from(el.rows);
+      if (rows.length === 0) return "";
+      const lines: string[] = [];
+      rows.forEach((row, i) => {
+        const cells = Array.from(row.cells).map(c => ` ${c.textContent?.trim() || ""} `);
+        lines.push(`|${cells.join("|")}|`);
+        if (i === 0) {
+          lines.push(`|${cells.map(() => "---").join("|")}|`);
+        }
+      });
+      return `\n${lines.join("\n")}\n`;
+    },
+  });
+  td.addRule("strikethrough", {
+    filter: ["del", "s"],
+    replacement: (content) => `~~${content}~~`,
+  });
+  return td;
 };
 
-// Màu chủ đạo: Xanh dương (Blue) - đồng bộ với nút Kết quả
-const SECTION_COLORS: Record<string, { border: string; bg: string; icon: string }> = {
-  thong_tin_chung: { 
-    border: "border-blue-500", 
-    bg: "bg-blue-50 dark:bg-blue-900/20",
-    icon: "text-blue-600 dark:text-blue-400"
-  },
-  muc_tieu: { 
-    border: "border-blue-500", 
-    bg: "bg-blue-50 dark:bg-blue-900/20",
-    icon: "text-blue-600 dark:text-blue-400"
-  },
-  thiet_bi: { 
-    border: "border-blue-500", 
-    bg: "bg-blue-50 dark:bg-blue-900/20",
-    icon: "text-blue-600 dark:text-blue-400"
-  },
-  khoi_dong: { 
-    border: "border-blue-500", 
-    bg: "bg-blue-50 dark:bg-blue-900/20",
-    icon: "text-blue-600 dark:text-blue-400"
-  },
-  hinh_thanh_kien_thuc: { 
-    border: "border-blue-500", 
-    bg: "bg-blue-50 dark:bg-blue-900/20",
-    icon: "text-blue-600 dark:text-blue-400"
-  },
-  luyen_tap: { 
-    border: "border-blue-500", 
-    bg: "bg-blue-50 dark:bg-blue-900/20",
-    icon: "text-blue-600 dark:text-blue-400"
-  },
-  van_dung: { 
-    border: "border-blue-500", 
-    bg: "bg-blue-50 dark:bg-blue-900/20",
-    icon: "text-blue-600 dark:text-blue-400"
-  },
-  phieu_hoc_tap: { 
-    border: "border-blue-500", 
-    bg: "bg-blue-50 dark:bg-blue-900/20",
-    icon: "text-blue-600 dark:text-blue-400"
-  },
-  trac_nghiem: { 
-    border: "border-blue-500", 
-    bg: "bg-blue-50 dark:bg-blue-900/20",
-    icon: "text-blue-600 dark:text-blue-400"
-  },
-  full: { 
-    border: "border-blue-500", 
-    bg: "bg-blue-50 dark:bg-blue-900/20",
-    icon: "text-blue-600 dark:text-blue-400"
-  },
-};
+/**
+ * Simple Python syntax highlighter for code blocks.
+ * Adds colored spans to code inside <pre><code> blocks.
+ * This runs on the HTML string before setting it into the editor.
+ */
+const highlightCodeBlocks = (html: string): string => {
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html;
 
-// ============== HELPER FUNCTION: Tách Hình thành kiến thức thành các hoạt động con ==============
-interface SubActivity {
-  id: string;
-  title: string;
-  content: string;
-}
+  const codeBlocks = tempDiv.querySelectorAll('pre code');
+  codeBlocks.forEach(codeEl => {
+    const code = codeEl.textContent || '';
+    // Process each line
+    const highlighted = code.split('\n').map(line => {
+      // Preserve leading whitespace (indentation)
+      const leadingSpaces = line.match(/^(\s*)/)?.[0] || '';
+      let rest = line.substring(leadingSpaces.length);
 
-const splitHinhThanhKienThuc = (content: string): SubActivity[] => {
-  // Pattern để tìm các hoạt động con: "Hoạt động 2.1:", "Hoạt động 2.2:", etc.
-  // Hoặc "#### Hoạt động 2.1:", "**Hoạt động 2.1:**"
-  const activityPattern = /(?:^|\n)(?:#{1,4}\s*)?(?:\*\*)?Hoạt động\s*2\.(\d+)[:\s]*([^\n*]+?)(?:\*\*)?\s*(?:\([\d\s]+phút\))?\s*\n/gi;
-  
-  const activities: SubActivity[] = [];
-  let lastIndex = 0;
-  let match;
-  
-  // Reset regex lastIndex
-  activityPattern.lastIndex = 0;
-  
-  // Collect all matches first
-  const matches: Array<{ index: number; fullMatch: string; number: string; name: string }> = [];
-  
-  while ((match = activityPattern.exec(content)) !== null) {
-    matches.push({
-      index: match.index,
-      fullMatch: match[0],
-      number: match[1],
-      name: match[2].trim()
-    });
-  }
-  
-  // If no sub-activities found, return empty (will render as single section)
-  if (matches.length === 0) {
-    return [];
-  }
-  
-  // Extract content for each activity
-  for (let i = 0; i < matches.length; i++) {
-    const current = matches[i];
-    const startIndex = current.index + current.fullMatch.length;
-    const endIndex = i < matches.length - 1 ? matches[i + 1].index : content.length;
-    
-    const activityContent = content.slice(startIndex, endIndex).trim();
-    
-    activities.push({
-      id: `hinh_thanh_kien_thuc_${current.number}`,
-      title: `Hoạt động 2.${current.number}: ${current.name}`,
-      content: activityContent
-    });
-  }
-  
-  return activities;
-};
+      // Comment lines
+      if (rest.trimStart().startsWith('#')) {
+        return leadingSpaces + `<span style="color:#008000;font-style:italic;">${escapeHtml(rest)}</span>`;
+      }
 
-// ============== RICH TEXT EDITOR COMPONENT ==============
-interface RichTextEditorProps {
-  content: string;
-  onChange: (content: string) => void;
-  onSave: () => void;
-  onCancel: () => void;
-}
+      // Tokenize and highlight
+      let result = '';
+      const tokenRegex = /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\d+\.?\d*|\w+|[^\s\w]+|\s+)/g;
+      let match;
+      const keywords = ['if', 'else', 'elif', 'for', 'while', 'def', 'class', 'return', 'import', 'from', 'as', 'try', 'except', 'finally', 'with', 'lambda', 'and', 'or', 'not', 'in', 'is', 'True', 'False', 'None', 'pass', 'break', 'continue', 'yield', 'raise', 'del', 'global', 'nonlocal', 'assert'];
+      const builtins = ['print', 'input', 'int', 'str', 'float', 'list', 'dict', 'range', 'len', 'type', 'set', 'tuple', 'abs', 'max', 'min', 'sum', 'sorted', 'enumerate', 'zip', 'map', 'filter', 'open', 'round'];
 
-const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange, onSave, onCancel }) => {
-  const editorRef = useRef<HTMLDivElement>(null);
-  const initializedRef = useRef(false);
-
-  // Convert markdown to HTML for editing
-  const markdownToHtml = (md: string): string => {
-    let html = md
-      // Headers - xử lý từ nhiều # đến ít #
-      .replace(/^#{4,}\s+(.+)$/gm, '<h4>$1</h4>')
-      .replace(/^###\s+(.+)$/gm, '<h3>$1</h3>')
-      .replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
-      .replace(/^#\s+(.+)$/gm, '<h1>$1</h1>')
-      // Bold
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      // Italic (nhưng không match ** đã xử lý)
-      .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>')
-      // Underline (custom)
-      .replace(/__(.+?)__/g, '<u>$1</u>')
-      // Ordered lists (1. 2. 3. etc) - có thể có khoảng trắng đầu dòng
-      .replace(/^(\s*)\d+\.\s+(.+)$/gm, '$1<oli>$2</oli>')
-      // Unordered lists - có thể có khoảng trắng đầu dòng
-      .replace(/^(\s*)[-•]\s*(.+)$/gm, '$1<uli>$2</uli>');
-    
-    // Xử lý nested lists trước khi wrap
-    // Convert indented oli/uli thành nested structure
-    const processNestedLists = (text: string): string => {
-      const lines = text.split('\n');
-      const result: string[] = [];
-      
-      for (const line of lines) {
-        // Check indent level
-        const indentMatch = line.match(/^(\s*)/);
-        const indent = indentMatch ? indentMatch[1].length : 0;
-        
-        if (line.includes('<oli>') || line.includes('<uli>')) {
-          // Remove leading spaces from the tag
-          const cleanLine = line.trim();
-          if (indent >= 2) {
-            // Nested item - thêm marker để xử lý sau
-            result.push(`{{INDENT${Math.floor(indent/2)}}}${cleanLine}`);
-          } else {
-            result.push(cleanLine);
-          }
+      while ((match = tokenRegex.exec(rest)) !== null) {
+        const token = match[0];
+        if (/^["']/.test(token)) {
+          result += `<span style="color:#a31515;">${escapeHtml(token)}</span>`;
+        } else if (/^\d+\.?\d*$/.test(token)) {
+          result += `<span style="color:#098658;">${escapeHtml(token)}</span>`;
+        } else if (keywords.includes(token)) {
+          result += `<span style="color:#0000ff;font-weight:bold;">${escapeHtml(token)}</span>`;
+        } else if (builtins.includes(token)) {
+          result += `<span style="color:#0086b3;">${escapeHtml(token)}</span>`;
+        } else if (/^\w+$/.test(token) && rest.substring(match.index! + token.length).startsWith('(')) {
+          result += `<span style="color:#795e26;">${escapeHtml(token)}</span>`;
         } else {
-          result.push(line);
+          result += escapeHtml(token);
         }
       }
-      
-      return result.join('\n');
-    };
-    
-    html = processNestedLists(html);
-    
-    // Line breaks
-    html = html
-      .replace(/\n\n/g, '</p><p>')
-      .replace(/\n/g, '<br>');
-    
-    // Wrap in paragraph if not already wrapped
-    if (!html.startsWith('<') && !html.startsWith('{{')) {
-      html = `<p>${html}</p>`;
+
+      return leadingSpaces.replace(/ /g, '&nbsp;').replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;') + result;
+    }).join('\n');
+
+    codeEl.innerHTML = highlighted;
+  });
+
+  return tempDiv.innerHTML;
+};
+
+const escapeHtml = (text: string): string => {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+};
+
+/**
+ * Format quiz answer keys into tables.
+ * Detects patterns like "Câu 1: A Câu 2: B Câu 3: C ..."
+ * and converts them into a structured table with columns.
+ * Also handles "Kết quả mong đợi:" and "Dự kiến câu trả lời:" prefixes.
+ * Works on HTML string after marked.parse().
+ */
+const formatQuizAnswersToTable = (html: string): string => {
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html;
+
+  const processNode = (node: Element) => {
+    const text = (node.textContent || '').trim();
+
+    // Pattern: "Câu X: Y" where Y is a single letter A-D
+    const answerPattern = /Câu\s*(\d+)\s*[:\.]\s*([A-Da-d])\b/g;
+    const matches = [...text.matchAll(answerPattern)];
+
+    if (matches.length < 3) return; // Need at least 3 answer pairs
+
+    // Find where the answer keys start
+    const firstMatchIdx = matches[0].index!;
+
+    // Get the original HTML content and find the split point
+    const nodeHtml = node.innerHTML || node.textContent || '';
+
+    // Extract prefix: everything before first "Câu X: Y"
+    // Try to split at "Dự kiến câu trả lời:" or "Kết quả mong đợi:" if present
+    let prefixText = text.substring(0, firstMatchIdx).trim();
+    // Clean trailing colon/whitespace
+    prefixText = prefixText.replace(/[:]\s*$/, '').trim();
+
+    // Build answer pairs
+    const answers: { num: number; answer: string }[] = matches.map(m => ({
+      num: parseInt(m[1], 10),
+      answer: m[2].toUpperCase(),
+    }));
+
+    // Calculate layout: 5 pairs per row
+    const totalQuestions = answers.length;
+    const cols = Math.min(5, totalQuestions);
+    const rows = Math.ceil(totalQuestions / cols);
+
+    // Build replacement HTML
+    let tableHtml = '';
+
+    // Preserve prefix text as a paragraph
+    if (prefixText) {
+      // Reconstruct with original HTML formatting for the prefix part
+      // Find the prefix in the original HTML
+      const prefixHtmlMatch = nodeHtml.match(
+        new RegExp(`^([\\s\\S]*?)(?=Câu\\s*\\d+\\s*[:\\.]\\s*[A-Da-d])`)
+      );
+      const prefixHtml = prefixHtmlMatch
+        ? prefixHtmlMatch[1].replace(/[:]\s*$/, '').trim()
+        : prefixText;
+
+      if (prefixHtml) {
+        // Wrap in same tag type as original node
+        const tag = node.tagName.toLowerCase();
+        if (tag === 'li') {
+          tableHtml += `<li>${prefixHtml}:</li>`;
+        } else {
+          tableHtml += `<p>${prefixHtml}:</p>`;
+        }
+      }
     }
-    
-    // Wrap consecutive oli elements in ol
-    html = html.replace(/(<oli>.*?<\/oli>(?:<br>)?)+/gs, (match) => {
-      const items = match.replace(/<br>/g, '').replace(/<oli>/g, '<li>').replace(/<\/oli>/g, '</li>');
-      return `<ol>${items}</ol>`;
+
+    const cellStyle = 'border:1px solid #ccc;padding:6px 10px;text-align:center;';
+    const headerStyle = cellStyle + 'background:#f0f4ff;font-weight:bold;';
+
+    tableHtml += '<table style="width:auto;border-collapse:collapse;border:1px solid #ccc;margin:8px 0;">';
+    tableHtml += '<thead><tr>';
+    for (let c = 0; c < cols; c++) {
+      tableHtml += `<th style="${headerStyle}">Câu</th>`;
+      tableHtml += `<th style="${headerStyle}">Đáp án</th>`;
+    }
+    tableHtml += '</tr></thead><tbody>';
+
+    for (let r = 0; r < rows; r++) {
+      tableHtml += '<tr>';
+      for (let c = 0; c < cols; c++) {
+        const idx = r * cols + c;
+        if (idx < answers.length) {
+          tableHtml += `<td style="${cellStyle}">${answers[idx].num}</td>`;
+          tableHtml += `<td style="${cellStyle}font-weight:bold;">${answers[idx].answer}</td>`;
+        } else {
+          tableHtml += `<td style="${cellStyle}">&nbsp;</td>`;
+          tableHtml += `<td style="${cellStyle}">&nbsp;</td>`;
+        }
+      }
+      tableHtml += '</tr>';
+    }
+    tableHtml += '</tbody></table>';
+
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = tableHtml;
+    node.replaceWith(...Array.from(wrapper.childNodes));
+  };
+
+  // Find elements containing "Câu X: Y" patterns (process in reverse)
+  const candidates = Array.from(tempDiv.querySelectorAll('p, div, li, span')).reverse();
+  for (const candidate of candidates) {
+    if (candidate.closest('table')) continue; // Skip if already in a table
+    processNode(candidate);
+  }
+
+  return tempDiv.innerHTML;
+};
+
+/**
+ * Split answer parts (a, b, c, d, e) that appear on the same line onto separate lines.
+ * E.g. "Question text a) Answer A  b) Answer B  c) Answer C" → each on its own line.
+ */
+const formatSanPhamAnswers = (html: string): string => {
+  const tempDiv = document.createElement("div");
+  tempDiv.innerHTML = html;
+
+  const processTextNode = (node: Text) => {
+    const text = node.textContent || "";
+    // Check if text contains 2+ answer markers like a) b) c) d) e)
+    const matches = text.match(/[a-eA-E]\)\s/g);
+    if (!matches || matches.length < 2) return;
+
+    // Split at each a), b), c), d), e) marker — puts a) on its own line too
+    const fragment = document.createDocumentFragment();
+    const parts = text.split(/(?=[a-eA-E]\)\s)/);
+    parts.forEach((part, idx) => {
+      if (idx > 0) {
+        fragment.appendChild(document.createElement("br"));
+      }
+      if (part) {
+        fragment.appendChild(document.createTextNode(part));
+      }
     });
-    
-    // Wrap consecutive uli elements in ul
-    html = html.replace(/(<uli>.*?<\/uli>(?:<br>)?)+/gs, (match) => {
-      const items = match.replace(/<br>/g, '').replace(/<uli>/g, '<li>').replace(/<\/uli>/g, '</li>');
-      return `<ul>${items}</ul>`;
-    });
-    
-    // Handle nested items with indent markers
-    html = html.replace(/\{\{INDENT(\d+)\}\}<li>/g, '<li class="ml-$1">');
-    
-    // Clean up any remaining markers
-    html = html.replace(/\{\{INDENT\d+\}\}/g, '');
-    
+    node.replaceWith(fragment);
+  };
+
+  // Walk through text nodes that contain multiple answer markers
+  const walker = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) => {
+      const text = node.textContent || "";
+      const matches = text.match(/[a-eA-E]\)\s/g);
+      return matches && matches.length >= 2
+        ? NodeFilter.FILTER_ACCEPT
+        : NodeFilter.FILTER_REJECT;
+    },
+  });
+  const textNodes: Text[] = [];
+  while (walker.nextNode()) textNodes.push(walker.currentNode as Text);
+  textNodes.forEach(processTextNode);
+
+  return tempDiv.innerHTML;
+};
+
+/**
+ * Replace long dot sequences (10+) with clean CSS-based dotted lines.
+ * - Standalone dot paragraphs → full-width dotted line div
+ * - Inline dots (e.g. "Họ tên: ............") → inline dotted span
+ */
+const formatWorksheetDotLines = (html: string): string => {
+  const tempDiv = document.createElement("div");
+  tempDiv.innerHTML = html;
+
+  const processTextNode = (node: Text) => {
+    const text = node.textContent || "";
+    if (!/\.{6,}/.test(text)) return;
+
+    const fragment = document.createDocumentFragment();
+    const parts = text.split(/(\.{6,})/);
+    for (const part of parts) {
+      if (/^\.{6,}$/.test(part)) {
+        const span = document.createElement("span");
+        span.style.cssText =
+          "display:inline-block;min-width:40%;border-bottom:1px dotted #6b7280;height:1.1em;vertical-align:bottom;";
+        span.innerHTML = "&nbsp;";
+        fragment.appendChild(span);
+      } else if (part) {
+        fragment.appendChild(document.createTextNode(part));
+      }
+    }
+    node.replaceWith(fragment);
+  };
+
+  // Check paragraphs that contain ONLY dots
+  const paragraphs = tempDiv.querySelectorAll("p");
+  paragraphs.forEach((p) => {
+    const text = (p.textContent || "").trim();
+    if (/^\.{6,}$/.test(text)) {
+      const line = document.createElement("div");
+      line.className = "worksheet-line";
+      p.replaceWith(line);
+      return;
+    }
+  });
+
+  // Process remaining text nodes with inline dots
+  const walker = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) =>
+      /\.{6,}/.test(node.textContent || "")
+        ? NodeFilter.FILTER_ACCEPT
+        : NodeFilter.FILTER_REJECT,
+  });
+  const textNodes: Text[] = [];
+  while (walker.nextNode()) textNodes.push(walker.currentNode as Text);
+  textNodes.forEach(processTextNode);
+
+  // Add blank dotted lines between consecutive answer parts (a, b, c, d, e)
+  // in worksheet questions to give space for student answers
+  const children = Array.from(tempDiv.children);
+  const answerPartRegex = /^\s*[a-eA-E][)\.]\s/;
+  for (let i = children.length - 1; i > 0; i--) {
+    const currText = (children[i].textContent || "").trim();
+    const prevText = (children[i - 1].textContent || "").trim();
+    // Both current and previous elements start with answer markers
+    if (answerPartRegex.test(currText) && answerPartRegex.test(prevText)) {
+      // Check if previous element contains a dotted line (inline span or worksheet-line)
+      const prevEl = children[i - 1] as HTMLElement;
+      const hasDots = prevEl.querySelector('span[style*="border-bottom"]') ||
+        prevEl.classList?.contains("worksheet-line") ||
+        /\.{6,}/.test(prevText);
+      if (hasDots) {
+        const blankLine = document.createElement("div");
+        blankLine.className = "worksheet-line";
+        children[i].parentNode?.insertBefore(blankLine, children[i]);
+      }
+    }
+  }
+
+  return tempDiv.innerHTML;
+};
+
+// ============== Mind map inline rendering ==============
+const mmTransformer = new Transformer();
+
+/**
+ * Convert Markmap SVG for print: replace <foreignObject> (HTML text) with native
+ * SVG <text> elements. foreignObject content doesn't render in print/iframe contexts,
+ * but SVG <text> works universally.
+ */
+const serializeSvgForPrint = (origSvg: Element): string => {
+  const clone = origSvg.cloneNode(true) as SVGElement;
+
+  // Read computed styles from original live DOM foreignObjects
+  const origFOs = Array.from(origSvg.querySelectorAll('foreignObject'));
+  const cloneFOs = Array.from(clone.querySelectorAll('foreignObject'));
+
+  cloneFOs.forEach((fo, index) => {
+    const textContent = (fo.textContent || '').trim();
+    if (!textContent) {
+      fo.remove();
+      return;
+    }
+
+    const x = parseFloat(fo.getAttribute('x') || '0');
+    const y = parseFloat(fo.getAttribute('y') || '0');
+    const height = parseFloat(fo.getAttribute('height') || '20');
+
+    // Get font-size & color from the live DOM element's computed style
+    let fontSize = '14px';
+    let color = '#333';
+    const origFO = origFOs[index];
+    if (origFO) {
+      const div = origFO.querySelector('div, span');
+      if (div) {
+        const cs = window.getComputedStyle(div);
+        if (cs.fontSize) fontSize = cs.fontSize;
+        if (cs.color) color = cs.color;
+      }
+    }
+
+    const svgText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    svgText.setAttribute('x', String(x + 4));
+    svgText.setAttribute('y', String(y + height / 2));
+    svgText.setAttribute('font-size', fontSize);
+    svgText.setAttribute('font-family', 'Arial, sans-serif');
+    svgText.setAttribute('fill', color);
+    svgText.setAttribute('dominant-baseline', 'central');
+    svgText.textContent = textContent;
+
+    fo.parentNode?.replaceChild(svgText, fo);
+  });
+
+  // Set proper viewBox from the original SVG's rendered dimensions so it scales for print
+  try {
+    const bbox = (origSvg as SVGSVGElement).getBBox();
+    const pad = 20;
+    clone.setAttribute('viewBox',
+      `${bbox.x - pad} ${bbox.y - pad} ${bbox.width + pad * 2} ${bbox.height + pad * 2}`);
+    clone.setAttribute('width', '100%');
+    clone.setAttribute('height', String(Math.round(bbox.height + pad * 2)));
+    clone.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    // Remove CSS width/height that override the attributes
+    clone.style.removeProperty('width');
+    clone.style.removeProperty('height');
+  } catch {
+    clone.setAttribute('width', '100%');
+    clone.setAttribute('height', '400');
+  }
+
+  return new XMLSerializer().serializeToString(clone);
+};
+
+// ============== Print PHT block model ==============
+interface WorksheetBlock {
+  id: string;
+  type: 'content' | 'dotted-line';
+  html?: string;
+}
+
+let _blockIdCounter = 0;
+const newBlockId = () => `wb-${++_blockIdCounter}`;
+
+// ============== Worksheet Data to HTML ==============
+import type { WorksheetData, WorksheetQuestion } from "@/types/lessonBuilder";
+
+const renderWorksheetDataToMarkdown = (data: WorksheetData, title?: string): string => {
+  const worksheetTitle = title || `Phiếu học tập số ${data.worksheet_number}`;
+  const isGroup = data.type === "group";
+
+  let md = `**${worksheetTitle.toUpperCase()}**\n\n`;
+
+  if (isGroup) {
+    md += `**NHÓM:** ....................................\n\n`;
+  } else {
+    md += `**HỌ VÀ TÊN:** ....................................\n\n`;
+  }
+
+  if (data.task) {
+    md += `**Nhiệm vụ:** ${data.task}\n\n`;
+  }
+
+  for (const q of data.questions) {
+    md += `**Câu ${q.id}:** ${q.text}\n\n`;
+
+    // KWL table
+    if (q.kwl_table) {
+      md += `| K (Đã biết) | W (Muốn biết) | L (Đã học được) |\n`;
+      md += `|-------------|---------------|------------------|\n`;
+      md += `| | | |\n\n`;
+    }
+
+    // Code block
+    if (q.code) {
+      md += "```python\n" + q.code + "\n```\n\n";
+    }
+
+    // Sub items
+    if (q.sub_items && q.sub_items.length > 0) {
+      for (const item of q.sub_items) {
+        md += `${item.id}) ${item.text}\n\n`;
+      }
+    }
+
+    // Answer lines (dotted lines)
+    const lines = q.answer_lines || 3;
+    for (let i = 0; i < lines; i++) {
+      md += `......................................................................................................................................................\n\n`;
+    }
+  }
+
+  return md;
+};
+
+const renderWorksheetDataToHtml = (data: WorksheetData, title?: string): string => {
+  const worksheetTitle = title || `Phiếu học tập số ${data.worksheet_number}`;
+  const isGroup = data.type === "group";
+
+  const renderBlank = () => {
+    return `<span style="display:inline-block;border-bottom:1px dotted #000;flex:1;height:1.2em;margin-left:4px;"></span>`;
+  };
+
+  const renderDottedLines = (count: number) => {
+    return Array.from({ length: count })
+      .map(() => '<div style="border-bottom:1px dotted #000;height:1.8em;margin:0.3em 0;width:100%;"></div>')
+      .join("");
+  };
+
+  const renderQuestion = (q: WorksheetQuestion): string => {
+    let html = `<div style="margin-bottom:16px;">`;
+    html += `<div style="font-weight:500;margin-bottom:8px;"><strong>Câu ${q.id}:</strong> ${q.text}</div>`;
+
+    // KWL table
+    if (q.kwl_table) {
+      html += `<table style="width:100%;border-collapse:collapse;border:1px solid #000;margin:12px 0;">
+        <thead><tr style="background:#f5f5f5;">
+          <th style="border:1px solid #000;padding:8px;width:33.33%;font-weight:bold;">K (Đã biết)</th>
+          <th style="border:1px solid #000;padding:8px;width:33.33%;font-weight:bold;">W (Muốn biết)</th>
+          <th style="border:1px solid #000;padding:8px;width:33.33%;font-weight:bold;">L (Đã học được)</th>
+        </tr></thead>
+        <tbody><tr>
+          <td style="border:1px solid #000;padding:8px;height:120px;vertical-align:top;">${renderDottedLines(4)}</td>
+          <td style="border:1px solid #000;padding:8px;height:120px;vertical-align:top;">${renderDottedLines(4)}</td>
+          <td style="border:1px solid #000;padding:8px;height:120px;vertical-align:top;">${renderDottedLines(4)}</td>
+        </tr></tbody>
+      </table>`;
+    }
+
+    // Code template (with blanks)
+    if (q.code_template) {
+      const codeHtml = q.code_template.split("____").map((part, i, arr) =>
+        i < arr.length - 1
+          ? `${escapeHtml(part)}<span style="display:inline-block;border-bottom:2px dotted #3b82f6;background:#eff6ff;min-width:60px;height:1.2em;margin:0 4px;"></span>`
+          : escapeHtml(part)
+      ).join("");
+      html += `<pre style="background:#f8f8f8;border:1px solid #ddd;border-radius:4px;padding:10px;font-family:Consolas,Monaco,monospace;font-size:10pt;white-space:pre-wrap;margin:8px 0 8px 16px;">${codeHtml}</pre>`;
+    }
+
+    // Simple code block (type 3 question)
+    if (q.code && !q.code_template) {
+      html += `<pre style="background:#f8f8f8;border:1px solid #ddd;border-radius:4px;padding:10px;font-family:Consolas,Monaco,monospace;font-size:10pt;white-space:pre-wrap;margin:8px 0 8px 16px;">${escapeHtml(q.code)}</pre>`;
+    }
+
+    // Fill blanks
+    if (q.fill_blanks && q.fill_blanks.length > 0) {
+      html += `<div style="margin-left:16px;margin-top:8px;">`;
+      for (const fb of q.fill_blanks) {
+        html += `<div style="display:flex;align-items:baseline;margin-bottom:8px;"><span>${fb.before}</span>${renderBlank()}<span>${fb.after || ""}</span></div>`;
+      }
+      html += `</div>`;
+    }
+
+    // Inline blanks
+    if (q.blanks && q.blanks.length > 0) {
+      html += `<div style="margin-left:16px;margin-top:8px;">`;
+      for (const blank of q.blanks) {
+        html += `<div style="display:flex;align-items:baseline;margin-bottom:4px;"><span style="flex-shrink:0;">${blank.label}:</span>${renderBlank()}</div>`;
+      }
+      html += `</div>`;
+    }
+
+    // Sub items
+    if (q.sub_items && q.sub_items.length > 0) {
+      html += `<div style="margin-left:16px;margin-top:8px;">`;
+      for (const item of q.sub_items) {
+        html += `<div style="margin-bottom:12px;">`;
+        html += `<div style="margin-bottom:4px;"><strong>${item.id})</strong> ${item.text}</div>`;
+        if (item.blanks && item.blanks.length > 0) {
+          html += `<div style="margin-left:16px;">`;
+          for (const blank of item.blanks) {
+            html += `<div style="display:flex;align-items:baseline;margin-bottom:4px;"><span style="flex-shrink:0;">${blank.label}:</span>${renderBlank()}</div>`;
+          }
+          html += `</div>`;
+        }
+        if (item.answer_lines && item.answer_lines > 0) {
+          html += `<div style="margin-left:16px;">${renderDottedLines(item.answer_lines)}</div>`;
+        }
+        html += `</div>`;
+      }
+      html += `</div>`;
+    }
+
+    // Answer lines (main question - only for simple questions without code/sub_items)
+    if (!q.sub_items && !q.blanks && !q.fill_blanks && !q.code_template && !q.code && !q.kwl_table && q.answer_lines && q.answer_lines > 0) {
+      html += `<div style="margin-left:16px;margin-top:8px;">${renderDottedLines(q.answer_lines)}</div>`;
+    }
+
+    // Answer lines after code block (for code questions)
+    if (q.code && !q.code_template && q.answer_lines && q.answer_lines > 0) {
+      html += `<div style="margin-left:16px;margin-top:8px;">${renderDottedLines(q.answer_lines)}</div>`;
+    }
+
+    // Answer lines after sub_items (placed AFTER all sub-items)
+    if (q.sub_items && q.sub_items.length > 0 && q.answer_lines && q.answer_lines > 0) {
+      html += `<div style="margin-left:16px;margin-top:8px;">${renderDottedLines(q.answer_lines)}</div>`;
+    }
+
+    // Answer lines after code template
+    if (q.code_template && q.answer_lines && q.answer_lines > 0) {
+      html += `<div style="margin-left:16px;margin-top:8px;">${renderDottedLines(q.answer_lines)}</div>`;
+    }
+
+    html += `</div>`;
     return html;
   };
 
-  // Convert HTML back to markdown
-  const htmlToMarkdown = (html: string): string => {
-    // Đánh dấu ol và ul trước khi xử lý
-    let md = html
-      // Đánh dấu ordered list items
-      .replace(/<ol[^>]*>([\s\S]*?)<\/ol>/gi, (match, content) => {
-        let counter = 1;
-        return content.replace(/<li[^>]*>(.*?)<\/li>/gi, () => `{{OL${counter++}}}$1{{/OL}}`);
-      })
-      // Đánh dấu unordered list items  
-      .replace(/<ul[^>]*>([\s\S]*?)<\/ul>/gi, (match, content) => {
-        return content.replace(/<li[^>]*>(.*?)<\/li>/gi, '{{UL}}$1{{/UL}}');
-      });
-    
-    md = md
-      // Headers - từ nhỏ đến lớn
-      .replace(/<h4[^>]*>(.*?)<\/h4>/gi, '#### $1\n')
-      .replace(/<h3[^>]*>(.*?)<\/h3>/gi, '### $1\n')
-      .replace(/<h2[^>]*>(.*?)<\/h2>/gi, '## $1\n')
-      .replace(/<h1[^>]*>(.*?)<\/h1>/gi, '# $1\n')
-      // Bold
-      .replace(/<strong>(.*?)<\/strong>/gi, '**$1**')
-      .replace(/<b>(.*?)<\/b>/gi, '**$1**')
-      // Italic
-      .replace(/<em>(.*?)<\/em>/gi, '*$1*')
-      .replace(/<i>(.*?)<\/i>/gi, '*$1*')
-      // Underline
-      .replace(/<u>(.*?)<\/u>/gi, '__$1__')
-      // Convert markers back to markdown
-      .replace(/\{\{OL(\d+)\}\}(.*?)\{\{\/OL\}\}/gi, '$1. $2\n')
-      .replace(/\{\{UL\}\}(.*?)\{\{\/UL\}\}/gi, '- $1\n')
-      // Fallback for any remaining list items
-      .replace(/<li[^>]*>(.*?)<\/li>/gi, '- $1\n')
-      // Paragraphs and line breaks
-      .replace(/<\/p><p>/gi, '\n\n')
-      .replace(/<p[^>]*>/gi, '')
-      .replace(/<\/p>/gi, '\n')
-      .replace(/<br\s*\/?>/gi, '\n')
-      // Remove other HTML tags
-      .replace(/<div[^>]*>/gi, '')
-      .replace(/<\/div>/gi, '\n')
-      .replace(/<[^>]+>/g, '')
-      // Decode HTML entities
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      // Clean up whitespace
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-    
-    return md;
-  };
+  let html = `<div style="font-family:'Times New Roman',Times,serif;font-size:13pt;line-height:1.6;">`;
 
-  // Initialize editor content only once
-  React.useEffect(() => {
-    if (editorRef.current && !initializedRef.current) {
-      editorRef.current.innerHTML = markdownToHtml(content);
-      initializedRef.current = true;
-    }
-  }, [content]);
+  // Header
+  html += `<div style="text-align:center;margin-bottom:16px;">`;
+  html += `<h3 style="font-size:14pt;font-weight:bold;text-transform:uppercase;margin:0 0 8px 0;">${worksheetTitle}</h3>`;
+  if (isGroup) {
+    html += `<div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;">`;
+    html += `<span style="font-weight:500;">NHÓM:</span>`;
+    html += `<span style="display:inline-block;border-bottom:1px dotted #000;width:150px;height:1.2em;"></span>`;
+    html += `</div>`;
+  }
+  html += `</div>`;
 
-  const execCommand = (command: string, value?: string) => {
-    document.execCommand(command, false, value);
-    editorRef.current?.focus();
-  };
+  // Task
+  if (data.task) {
+    html += `<div style="margin-bottom:16px;"><strong>Nhiệm vụ:</strong> ${data.task}</div>`;
+  }
 
-  // Get current content from editor
-  const getCurrentContent = (): string => {
-    if (editorRef.current) {
-      return htmlToMarkdown(editorRef.current.innerHTML);
-    }
-    return content;
-  };
+  // Questions
+  for (const q of data.questions) {
+    html += renderQuestion(q);
+  }
 
-  // Handle save - get content from DOM directly
-  const handleSave = () => {
-    const newContent = getCurrentContent();
-    onChange(newContent);
-    onSave();
-  };
-
-  const ToolbarButton: React.FC<{
-    onClick: () => void;
-    icon: React.ElementType;
-    title: string;
-  }> = ({ onClick, icon: Icon, title }) => (
-    <button
-      type="button"
-      onMouseDown={(e) => e.preventDefault()} // Prevent losing focus
-      onClick={onClick}
-      className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors text-gray-600 dark:text-gray-300"
-      title={title}
-    >
-      <Icon className="w-4 h-4" />
-    </button>
-  );
-
-  const ToolbarDivider = () => (
-    <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
-  );
-
-  return (
-    <div className="border border-gray-300 dark:border-gray-600 overflow-hidden bg-white dark:bg-gray-800">
-      {/* Toolbar - Giống Word */}
-      <div className="flex flex-wrap items-center gap-0.5 p-2 bg-gray-100 dark:bg-gray-700 border-b border-gray-300 dark:border-gray-600">
-        {/* Undo/Redo */}
-        <ToolbarButton onClick={() => execCommand('undo')} icon={Undo} title="Hoàn tác (Ctrl+Z)" />
-        <ToolbarButton onClick={() => execCommand('redo')} icon={Redo} title="Làm lại (Ctrl+Y)" />
-        
-        <ToolbarDivider />
-        
-        {/* Text formatting */}
-        <ToolbarButton onClick={() => execCommand('bold')} icon={Bold} title="In đậm (Ctrl+B)" />
-        <ToolbarButton onClick={() => execCommand('italic')} icon={Italic} title="In nghiêng (Ctrl+I)" />
-        <ToolbarButton onClick={() => execCommand('underline')} icon={Underline} title="Gạch chân (Ctrl+U)" />
-        
-        <ToolbarDivider />
-        
-        {/* Headers */}
-        <ToolbarButton onClick={() => execCommand('formatBlock', 'h1')} icon={Heading1} title="Tiêu đề 1" />
-        <ToolbarButton onClick={() => execCommand('formatBlock', 'h2')} icon={Heading2} title="Tiêu đề 2" />
-        <ToolbarButton onClick={() => execCommand('formatBlock', 'h3')} icon={Heading3} title="Tiêu đề 3" />
-        
-        <ToolbarDivider />
-        
-        {/* Lists */}
-        <ToolbarButton onClick={() => execCommand('insertUnorderedList')} icon={List} title="Danh sách" />
-        <ToolbarButton onClick={() => execCommand('insertOrderedList')} icon={ListOrdered} title="Danh sách đánh số" />
-        
-        <ToolbarDivider />
-        
-        {/* Alignment */}
-        <ToolbarButton onClick={() => execCommand('justifyLeft')} icon={AlignLeft} title="Căn trái" />
-        <ToolbarButton onClick={() => execCommand('justifyCenter')} icon={AlignCenter} title="Căn giữa" />
-        <ToolbarButton onClick={() => execCommand('justifyRight')} icon={AlignRight} title="Căn phải" />
-      </div>
-      
-      {/* Editor content - Uncontrolled để tránh lag */}
-      <div
-        ref={editorRef}
-        contentEditable
-        suppressContentEditableWarning
-        className="min-h-[300px] max-h-[500px] overflow-y-auto p-4 focus:outline-none text-gray-900 dark:text-gray-100
-          [&_h1]:text-xl [&_h1]:font-bold [&_h1]:mb-3 [&_h1]:mt-4
-          [&_h2]:text-lg [&_h2]:font-bold [&_h2]:mb-2 [&_h2]:mt-3
-          [&_h3]:text-base [&_h3]:font-semibold [&_h3]:mb-2 [&_h3]:mt-3
-          [&_h4]:text-base [&_h4]:font-semibold [&_h4]:mb-2 [&_h4]:mt-3 [&_h4]:text-blue-700 [&_h4]:dark:text-blue-400
-          [&_ul]:list-disc [&_ul]:ml-5 [&_ul]:my-2
-          [&_ul_ul]:list-[circle] [&_ul_ul]:ml-5
-          [&_ul_ul_ul]:list-square [&_ul_ul_ul]:ml-5
-          [&_ol]:list-decimal [&_ol]:ml-5 [&_ol]:my-2
-          [&_ol_ol]:list-[lower-alpha] [&_ol_ol]:ml-5
-          [&_ol_ol_ol]:list-[lower-roman] [&_ol_ol_ol]:ml-5
-          [&_li]:my-1 [&_li.ml-1]:ml-4 [&_li.ml-2]:ml-8 [&_li.ml-3]:ml-12
-          [&_p]:my-2
-          [&_strong]:font-bold
-          [&_em]:italic
-          [&_u]:underline
-        "
-        style={{ minHeight: '300px' }}
-      />
-      
-      {/* Action buttons */}
-      <div className="flex justify-end gap-2 p-3 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-600">
-        <button
-          onClick={onCancel}
-          className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2 border border-gray-300 dark:border-gray-500"
-        >
-          <X className="w-4 h-4" />
-          Hủy
-        </button>
-        <button
-          onClick={handleSave}
-          className="px-4 py-2 text-sm bg-blue-500 text-white hover:bg-blue-600 flex items-center gap-2 shadow-sm"
-        >
-          <Check className="w-4 h-4" />
-          Lưu thay đổi
-        </button>
-      </div>
-    </div>
-  );
+  html += `</div>`;
+  return html;
 };
 
-// ============== HELPER: Tìm phụ lục liên quan ==============
-const findRelatedAppendices = (
-  content: string,
-  allSections: LessonPlanSection[]
-): RelatedAppendix[] => {
-  const appendices: RelatedAppendix[] = [];
-  
-  // Tìm các phiếu học tập được đề cập
-  const phtMatches = content.match(/Phiếu\s*học\s*tập\s*(số)?\s*(\d+)/gi);
-  if (phtMatches) {
-    const phtSection = allSections.find(s => s.section_type === "phieu_hoc_tap");
-    if (phtSection) {
-      appendices.push({
-        section_id: phtSection.section_id,
-        section_type: phtSection.section_type,
-        title: phtSection.title,
-        content: phtSection.content
-      });
-    }
-  }
-  
-  // Tìm các câu hỏi trắc nghiệm được đề cập
-  const tnMatches = content.match(/trắc\s*nghiệm|câu\s*hỏi\s*kiểm\s*tra/gi);
-  if (tnMatches) {
-    const tnSection = allSections.find(s => s.section_type === "trac_nghiem");
-    if (tnSection) {
-      appendices.push({
-        section_id: tnSection.section_id,
-        section_type: tnSection.section_type,
-        title: tnSection.title,
-        content: tnSection.content
-      });
-    }
-  }
-  
-  return appendices;
-};
-
-// ============== SECTION CARD COMPONENT ==============
-interface SectionCardProps {
-  section: LessonPlanSection;
-  onUpdate: (newContent: string) => void;
-  defaultExpanded?: boolean;
-  lessonInfo?: { book_type?: string; grade?: string; topic?: string; lesson_name?: string };
-  allSections?: LessonPlanSection[];
-  onUpdateMultiple?: (updates: { sectionId: string; content: string }[]) => void;
-}
-
-const SectionCard: React.FC<SectionCardProps> = ({ 
-  section, 
-  onUpdate, 
-  defaultExpanded = true, 
-  lessonInfo,
-  allSections = [],
-  onUpdateMultiple
+// ============== MAIN COMPONENT ==============
+export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
+  result,
+  onSectionUpdate,
+  activities,
+  onBack,
 }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editContent, setEditContent] = useState(section.content);
-  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
-  const [copied, setCopied] = useState(false);
-  
-  // AI enhancement states
-  const [showAIDialog, setShowAIDialog] = useState(false);
-  const [aiRequest, setAiRequest] = useState("");
-  const [isAILoading, setIsAILoading] = useState(false);
-  
-  // Share worksheet states
+  const [sections, setSections] = useState<LessonPlanSection[]>(result.sections);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [materialsCreated, setMaterialsCreated] = useState(false);
+  const [editContent, setEditContent] = useState("");
+
+  // Share
+  const [showShareDropdown, setShowShareDropdown] = useState(false);
   const [showShareDialog, setShowShareDialog] = useState(false);
+  const [shareSection, setShareSection] = useState<LessonPlanSection | null>(null);
   const [isSharing, setIsSharing] = useState(false);
   const [shareResult, setShareResult] = useState<{ url: string; code: string } | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
-  
-  // Share code exercise states
-  const [showCodeExerciseModal, setShowCodeExerciseModal] = useState(false);
 
-  const Icon = SECTION_ICONS[section.section_type] || FileText;
-  const colors = SECTION_COLORS[section.section_type] || SECTION_COLORS.full;
-  const aiPrompts = AI_PROMPTS[section.section_type];
-  
-  // Chỉ hiển thị nút AI cho các section từ khởi động trở xuống
-  const showAIButton = ['khoi_dong', 'hinh_thanh_kien_thuc', 'luyen_tap', 'van_dung', 'muc_tieu', 'thiet_bi'].includes(section.section_type);
-  
-  // Hiển thị nút chia sẻ cho phiếu học tập và trắc nghiệm
-  const showShareButton = section.section_type === 'phieu_hoc_tap' || section.section_type === 'trac_nghiem';
-  const isQuizShare = section.section_type === 'trac_nghiem';
-  
-  // Hiển thị nút chia sẻ bài tập code nếu section có code_exercises (được sinh tự động từ LLM)
-  const hasCodeExercises = section.code_exercises && section.code_exercises.length > 0;
-  
-  // Tìm phụ lục liên quan dựa trên nội dung
-  const relatedAppendices = findRelatedAppendices(section.content, allSections);
-  const hasRelatedAppendices = relatedAppendices.length > 0;
+  // Code extraction
+  const [isExtractingCode, setIsExtractingCode] = useState(false);
+  const [codeExtractionResult, setCodeExtractionResult] = useState<{
+    found: boolean;
+    message: string;
+    exercises?: { title: string; url: string; share_code: string }[];
+  } | null>(null);
+  const codeExtractionRef = useRef<HTMLDivElement>(null);
 
-  const handleSave = () => {
-    onUpdate(editContent);
-    setIsEditing(false);
+  // Mindmap modal
+  const [showMindmapModal, setShowMindmapModal] = useState(false);
+  const [mindmapEditorData, setMindmapEditorData] = useState("");
+  const [selectedMindmapSectionId, setSelectedMindmapSectionId] = useState("");
+
+  // Print PHT modal
+  const [showPrintPHTModal, setShowPrintPHTModal] = useState(false);
+  const [printWorksheetBlocks, setPrintWorksheetBlocks] = useState<WorksheetBlock[][]>([]);
+  const [activePHTIndex, setActivePHTIndex] = useState(0);
+
+  // Insert mindmap placeholder before "d) Tổ chức thực hiện" in section content
+  const insertMindmapPlaceholder = (sectionContent: string, sectionId: string): string => {
+    const placeholder = `\n\n<div class="mindmap-inline" data-section-id="${sectionId}"></div>\n`;
+    // Look for "d)" or "**d)" at the start of a line
+    const match = sectionContent.match(/\n(\*{0,2})d[\)\.]\s/);
+    if (match && match.index !== undefined) {
+      return sectionContent.slice(0, match.index) + placeholder + sectionContent.slice(match.index);
+    }
+    // Fallback: append at end
+    return sectionContent + placeholder;
   };
 
-  const handleCancel = () => {
-    setEditContent(section.content);
-    setIsEditing(false);
-  };
+  // Ghép toàn bộ sections thành 1 chuỗi markdown liên tục
+  const getFullMarkdown = useCallback(() => {
+    const mainSections = sections.filter(
+      (s) => !["thong_tin_chung", "phieu_hoc_tap", "trac_nghiem"].includes(s.section_type)
+    );
+    const worksheetSections = sections.filter(s => s.section_type === "phieu_hoc_tap");
+    const quizSections = sections.filter(s => s.section_type === "trac_nghiem");
 
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(section.content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-  
-  // Xử lý chia sẻ phiếu học tập hoặc trắc nghiệm
-  const handleShare = async () => {
-    setIsSharing(true);
-    setShareError(null);
-    try {
-      if (isQuizShare) {
-        // Share trắc nghiệm - gửi questions array nếu có
-        const result = await createSharedQuiz({
-          title: lessonInfo?.lesson_name ? `Trắc nghiệm: ${lessonInfo.lesson_name}` : section.title || "Bài trắc nghiệm",
-          description: `${lessonInfo?.topic || ''} - ${lessonInfo?.grade || ''} - ${lessonInfo?.book_type || ''}`.trim(),
-          content: section.content,
-          questions: section.questions, // Gửi questions array trực tiếp
-          show_correct_answers: true,
-          allow_multiple_attempts: true,
-        });
-        setShareResult({
-          url: result.share_url,
-          code: result.share_code,
-        });
-      } else {
-        // Share phiếu học tập
-        const result = await createSharedWorksheet({
-          title: section.title || "Phiếu học tập",
-          content: section.content,
-          lesson_info: lessonInfo,
-        });
-        setShareResult({
-          url: result.share_url,
-          code: result.share_code,
+    let content = mainSections.map(s => {
+      let sectionContent = s.content;
+      if (s.mindmap_data?.trim()) {
+        sectionContent = insertMindmapPlaceholder(sectionContent, s.section_id);
+      }
+      return sectionContent;
+    }).join("\n\n");
+
+    if (worksheetSections.length > 0 || quizSections.length > 0) {
+      content += "\n\n## **IV. PHỤ LỤC**\n\n";
+      if (worksheetSections.length > 0) {
+        content += "### **1. Phiếu học tập**\n\n";
+        worksheetSections.forEach(s => {
+          // Prefer worksheet_data, fall back to content
+          if (s.worksheet_data) {
+            content += renderWorksheetDataToMarkdown(s.worksheet_data, s.title) + "\n\n";
+          } else if (s.content) {
+            content += `${s.content}\n\n`;
+          }
         });
       }
+      if (quizSections.length > 0) {
+        content += "### **2. Trắc nghiệm**\n\n";
+        quizSections.forEach(s => {
+          const cleanedContent = s.content.replace(/\n---\n/g, '\n');
+          content += `${cleanedContent}\n\n`;
+        });
+      }
+    }
+
+    return content;
+  }, [sections]);
+
+  // Tự động khởi tạo editor khi component mount
+  useEffect(() => {
+    let cancelled = false;
+
+    const init = async () => {
+      const fullMd = getFullMarkdown();
+      let html = marked.parse(fullMd) as string;
+      // Auto-format quiz answer keys into tables
+      html = formatQuizAnswersToTable(html);
+      // Apply syntax highlighting to code blocks
+      html = highlightCodeBlocks(html);
+      // Split answer parts (a, b, c, d) on the same line onto separate lines
+      html = formatSanPhamAnswers(html);
+      // Replace long dot sequences with CSS dotted lines
+      html = formatWorksheetDotLines(html);
+
+      // Replace mindmap placeholders with container divs for post-render Markmap injection
+      // (SVG is NOT embedded in the HTML string — it's rendered directly into the DOM
+      // after DOMPurify processes the HTML, so foreignObject text labels are preserved)
+      const mindmapSections = sections.filter(s => s.mindmap_data?.trim());
+      if (mindmapSections.length > 0) {
+        const tempDiv = document.createElement("div");
+        tempDiv.innerHTML = html;
+        const placeholders = tempDiv.querySelectorAll(".mindmap-inline");
+
+        for (const ph of Array.from(placeholders)) {
+          const sectionId = ph.getAttribute("data-section-id");
+          const section = mindmapSections.find(s => s.section_id === sectionId);
+          if (section?.mindmap_data) {
+            const wrapper = document.createElement("div");
+            wrapper.setAttribute("contenteditable", "false");
+            wrapper.className = "mindmap-inline-container";
+            wrapper.setAttribute("data-section-id", sectionId || "");
+            wrapper.style.cssText = "margin:16px 0;page-break-inside:avoid;border:1px solid #d1d5db;border-radius:8px;overflow:hidden;background:#fff;height:380px;";
+            wrapper.innerHTML = '<p style="padding:40px;color:#9ca3af;text-align:center;font-style:italic;">Đang tải sơ đồ tư duy...</p>';
+            ph.replaceWith(wrapper);
+          }
+        }
+
+        html = tempDiv.innerHTML;
+      }
+
+      if (!cancelled) {
+        setEditContent(html);
+      }
+    };
+
+    init();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Render Markmap directly into DOM containers AFTER DOMPurify has processed the HTML.
+  // This bypasses DOMPurify entirely for the SVG, preserving foreignObject text labels.
+  const renderedMindmapIds = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const mindmapSecs = sections.filter(s => s.mindmap_data?.trim());
+    if (mindmapSecs.length === 0) return;
+
+    const timer = setTimeout(() => {
+      const containers = document.querySelectorAll('.mindmap-inline-container[data-section-id]');
+      containers.forEach(container => {
+        const sectionId = container.getAttribute('data-section-id');
+        if (!sectionId) return;
+        // Skip if already rendered with a Markmap SVG
+        if (container.querySelector('svg.markmap-live')) return;
+
+        const section = mindmapSecs.find(s => s.section_id === sectionId);
+        if (!section?.mindmap_data) return;
+
+        try {
+          const { root } = mmTransformer.transform(section.mindmap_data);
+          container.innerHTML = '';
+          const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          svg.classList.add('markmap-live');
+          svg.style.width = '100%';
+          svg.style.height = '100%';
+          container.appendChild(svg);
+          const mm = Markmap.create(svg, { autoFit: true, duration: 0, paddingX: 16 }, root);
+          // Fit after layout settles
+          setTimeout(() => { mm.fit(); }, 200);
+          renderedMindmapIds.current.add(sectionId);
+        } catch (err) {
+          console.error("Mindmap DOM render error:", err);
+          container.innerHTML = '<p style="color:#ef4444;font-style:italic;text-align:center;padding:12px;">Không thể tạo sơ đồ tư duy</p>';
+        }
+      });
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [editContent, sections]);
+
+  // Share handlers
+  const shareableSections = sections.filter(
+    s => s.section_type === 'phieu_hoc_tap' || s.section_type === 'trac_nghiem'
+  );
+
+  const handleOpenShare = (section: LessonPlanSection) => {
+    setShareSection(section);
+    setShowShareDialog(true);
+    setShowShareDropdown(false);
+    setShareResult(null);
+    setShareError(null);
+  };
+
+  const handleShare = async () => {
+    if (!shareSection) return;
+    setIsSharing(true);
+    setShareError(null);
+    const isQuizShare = shareSection.section_type === 'trac_nghiem';
+    try {
+      if (isQuizShare) {
+        const res = await createSharedQuiz({
+          title: result.lesson_info?.lesson_name ? `Trắc nghiệm: ${result.lesson_info.lesson_name}` : shareSection.title || "Bài trắc nghiệm",
+          description: `${result.lesson_info?.topic || ''} - ${result.lesson_info?.grade || ''} - ${result.lesson_info?.book_type || ''}`.trim(),
+          content: shareSection.content,
+          questions: shareSection.questions,
+          show_correct_answers: true,
+          allow_multiple_attempts: true,
+          lesson_info: result.lesson_info,
+        });
+        setShareResult({ url: res.share_url, code: res.share_code });
+      } else {
+        const res = await createSharedWorksheet({
+          title: shareSection.title || "Phiếu học tập",
+          content: shareSection.content,
+          lesson_info: result.lesson_info,
+        });
+        setShareResult({ url: res.share_url, code: res.share_code });
+      }
     } catch (error: any) {
-      console.error("Share failed:", error);
       setShareError(error.response?.data?.detail || "Lỗi khi tạo link chia sẻ. Vui lòng thử lại.");
     } finally {
       setIsSharing(false);
     }
   };
-  
+
   const handleCopyShareLink = async () => {
     if (shareResult) {
       await navigator.clipboard.writeText(shareResult.url);
@@ -613,762 +886,882 @@ const SectionCard: React.FC<SectionCardProps> = ({
       setTimeout(() => setShareCopied(false), 2000);
     }
   };
-  
-  const handleAIImprove = async (request: string) => {
-    if (!request.trim()) return;
-    
-    setIsAILoading(true);
+
+  // Code extraction handler
+  const handleExtractCodeExercises = async () => {
+    setIsExtractingCode(true);
+    setCodeExtractionResult(null);
     try {
-      // Gửi kèm phụ lục liên quan nếu có
-      const result = await improveWithAI(
-        section.section_type,
-        section.title,
-        section.content,
-        request,
-        lessonInfo,
-        hasRelatedAppendices ? relatedAppendices : undefined
+      // Ghép các section chính (KHÔNG lấy phiếu học tập, trắc nghiệm)
+      const mainSections = sections.filter(
+        (s) => !["thong_tin_chung", "phieu_hoc_tap", "trac_nghiem"].includes(s.section_type)
       );
-      
-      // Cập nhật nội dung section chính
-      setEditContent(result.improved_content);
-      onUpdate(result.improved_content);
-      
-      // Cập nhật các phụ lục liên quan nếu có
-      if (result.updated_appendices && result.updated_appendices.length > 0 && onUpdateMultiple) {
-        const updates = result.updated_appendices.map(ua => ({
-          sectionId: ua.section_id,
-          content: ua.improved_content
+      const lessonContent = mainSections.map(s => s.content).join("\n\n");
+
+      const res = await extractCodeExercisesFromLesson({
+        lesson_plan_content: lessonContent,
+        lesson_info: result.lesson_info,
+        auto_create: true,
+        expires_in_days: 30,
+      });
+
+      if (res.found && res.created_exercises && res.created_exercises.length > 0) {
+        const exercises = res.created_exercises.map((e, idx) => ({
+          title: res.exercises[idx]?.title || e.title,
+          url: e.share_url,
+          share_code: e.share_code,
         }));
-        onUpdateMultiple(updates);
+        setCodeExtractionResult({
+          found: true,
+          message: `Tìm thấy ${res.exercises.length} bài tập lập trình và đã tạo thành công!`,
+          exercises,
+        });
+      } else if (res.found && res.exercises.length > 0) {
+        setCodeExtractionResult({
+          found: true,
+          message: `Tìm thấy ${res.exercises.length} bài tập lập trình nhưng chưa tạo được link.`,
+        });
+      } else {
+        setCodeExtractionResult({
+          found: false,
+          message: res.reason || "Không tìm thấy bài tập lập trình trong KHBD này.",
+        });
       }
-      
-      setShowAIDialog(false);
-      setAiRequest("");
-    } catch (error) {
-      console.error("AI improvement failed:", error);
+    } catch (error: any) {
+      setCodeExtractionResult({
+        found: false,
+        message: error.response?.data?.detail || "Lỗi khi trích xuất bài tập code.",
+      });
     } finally {
-      setIsAILoading(false);
+      setIsExtractingCode(false);
+      setTimeout(() => {
+        codeExtractionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }, 100);
     }
   };
 
-  return (
-    <div
-      className={`border-l-4 ${colors.border} ${colors.bg} border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow overflow-hidden relative`}
-    >
-      {/* AI Dialog Overlay */}
-      {showAIDialog && (
-        <div className="absolute inset-0 bg-black/50 z-10 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 p-5 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-2 mb-4">
-              <Sparkles className="w-5 h-5 text-purple-500" />
-              <h3 className="font-semibold text-gray-900 dark:text-white">
-                {aiPrompts?.title || "Cải thiện với AI"}
-              </h3>
-            </div>
-            
-            {/* Thông báo phụ lục liên quan */}
-            {hasRelatedAppendices && (
-              <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-                <div className="flex items-start gap-2">
-                  <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                  <div className="text-xs text-blue-700 dark:text-blue-300">
-                    <p className="font-medium">Phụ lục liên quan sẽ được cập nhật:</p>
-                    <ul className="mt-1 list-disc list-inside">
-                      {relatedAppendices.map((ap) => (
-                        <li key={ap.section_id}>{ap.title}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {/* Gợi ý nhanh */}
-            {aiPrompts?.suggestions && (
-              <div className="mb-4">
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Gợi ý nhanh:</p>
-                <div className="flex flex-wrap gap-2">
-                  {aiPrompts.suggestions.map((suggestion, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => setAiRequest(suggestion)}
-                      className="text-xs px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            {/* Input */}
-            <textarea
-              value={aiRequest}
-              onChange={(e) => setAiRequest(e.target.value)}
-              placeholder="Nhập yêu cầu cải thiện của bạn..."
-              className="w-full h-24 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none focus:ring-2 focus:ring-purple-500"
-            />
-            
-            {/* Actions */}
-            <div className="flex justify-end gap-2 mt-4">
-              <button
-                onClick={() => {
-                  setShowAIDialog(false);
-                  setAiRequest("");
-                }}
-                className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                disabled={isAILoading}
-              >
-                Hủy
-              </button>
-              <button
-                onClick={() => handleAIImprove(aiRequest)}
-                disabled={!aiRequest.trim() || isAILoading}
-                className="px-4 py-2 text-sm bg-purple-500 text-white hover:bg-purple-600 rounded-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isAILoading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Đang xử lý...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    Cải thiện
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Header */}
-      <div
-        className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-        onClick={() => setIsExpanded(!isExpanded)}
-      >
-        <div className="flex items-center gap-3">
-          <div className={`p-2 bg-white dark:bg-gray-800 shadow-sm`}>
-            <Icon className={`w-5 h-5 ${colors.icon}`} />
-          </div>
-          <h4 className="font-semibold text-gray-900 dark:text-white">
-            {section.title}
-          </h4>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* Nút Chia sẻ bài tập Code - hiển thị khi có code_exercises từ LLM */}
-          {hasCodeExercises && !isEditing && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowCodeExerciseModal(true);
-              }}
-              className="p-2 transition-colors shadow-sm text-emerald-500 hover:text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900/30"
-              title={`Chia sẻ ${section.code_exercises!.length} bài tập code cho học sinh`}
-            >
-              <Code className="w-4 h-4" />
-            </button>
-          )}
-          {/* Nút Chia sẻ - cho phiếu học tập và trắc nghiệm */}
-          {showShareButton && !isEditing && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowShareDialog(true);
-              }}
-              className={`p-2 transition-colors shadow-sm ${
-                isQuizShare 
-                  ? 'text-purple-500 hover:text-purple-600 hover:bg-purple-100 dark:hover:bg-purple-900/30' 
-                  : 'text-green-500 hover:text-green-600 hover:bg-green-100 dark:hover:bg-green-900/30'
-              }`}
-              title={isQuizShare ? "Chia sẻ bài trắc nghiệm" : "Chia sẻ cho học sinh"}
-            >
-              <Share2 className="w-4 h-4" />
-            </button>
-          )}
-          {/* Nút AI */}
-          {showAIButton && section.editable && !isEditing && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowAIDialog(true);
-                setIsExpanded(true);
-              }}
-              className="p-2 text-purple-500 hover:text-purple-600 hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors shadow-sm"
-              title="Cải thiện với AI"
-            >
-              <Sparkles className="w-4 h-4" />
-            </button>
-          )}
-          {section.editable && !isEditing && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsEditing(true);
-                setIsExpanded(true);
-              }}
-              className="p-2 text-gray-500 hover:text-blue-600 hover:bg-white dark:hover:bg-gray-700 transition-colors shadow-sm"
-              title="Chỉnh sửa"
-            >
-              <Edit2 className="w-4 h-4" />
-            </button>
-          )}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleCopy();
-            }}
-            className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
-            title="Sao chép"
-          >
-            {copied ? (
-              <CheckCircle className="w-4 h-4 text-green-500" />
-            ) : (
-              <Copy className="w-4 h-4" />
-            )}
-          </button>
-          {isExpanded ? (
-            <ChevronUp className="w-5 h-5 text-gray-400" />
-          ) : (
-            <ChevronDown className="w-5 h-5 text-gray-400" />
-          )}
-        </div>
-      </div>
+  // ============== MINDMAP MODAL HANDLERS ==============
 
-      {/* Content */}
-      {isExpanded && (
-        <div className="px-5 pb-5 pt-2">
-          {isEditing ? (
-            <RichTextEditor
-              content={editContent}
-              onChange={setEditContent}
-              onSave={handleSave}
-              onCancel={handleCancel}
-            />
-          ) : (
-            <div className="bg-white dark:bg-gray-800 p-4 border border-gray-100 dark:border-gray-700">
-              <div className="lesson-plan-content">
-                <ReactMarkdown 
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    // Custom table component for Công văn 5512 format
-                    table: ({ children }) => (
-                      <div className="overflow-x-auto my-4">
-                        <table className="w-full border-collapse border border-gray-400 dark:border-gray-500 text-sm">
-                          {children}
-                        </table>
-                      </div>
-                    ),
-                    thead: ({ children }) => (
-                      <thead className="bg-blue-100 dark:bg-blue-900/40">{children}</thead>
-                    ),
-                    th: ({ children }) => (
-                      <th className="border border-gray-400 dark:border-gray-500 px-3 py-2 text-left font-bold text-gray-900 dark:text-white">
-                        {children}
-                      </th>
-                    ),
-                    td: ({ children }) => (
-                      <td className="border border-gray-400 dark:border-gray-500 px-3 py-2 text-gray-700 dark:text-gray-300 align-top">
-                        {children}
-                      </td>
-                    ),
-                    tr: ({ children }) => (
-                      <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/50">{children}</tr>
-                    ),
-                    // Headers
-                    h1: ({ children }) => (
-                      <h1 className="text-xl font-bold text-gray-900 dark:text-white mt-6 mb-3 pb-2 border-b-2 border-blue-500">{children}</h1>
-                    ),
-                    h2: ({ children }) => (
-                      <h2 className="text-lg font-bold text-gray-900 dark:text-white mt-5 mb-2">{children}</h2>
-                    ),
-                    h3: ({ children }) => (
-                      <h3 className="text-base font-semibold text-gray-800 dark:text-gray-100 mt-4 mb-2">{children}</h3>
-                    ),
-                    h4: ({ children }) => (
-                      <h4 className="text-base font-semibold text-blue-700 dark:text-blue-400 mt-4 mb-2">{children}</h4>
-                    ),
-                    // Paragraphs & text
-                    p: ({ children }) => (
-                      <p className="text-gray-700 dark:text-gray-300 mb-2 leading-relaxed">{children}</p>
-                    ),
-                    strong: ({ children }) => (
-                      <strong className="font-bold text-gray-900 dark:text-white">{children}</strong>
-                    ),
-                    em: ({ children }) => (
-                      <em className="italic text-gray-700 dark:text-gray-300">{children}</em>
-                    ),
-                    // Lists - CSS sẽ xử lý nested list styles
-                    ul: ({ children }) => (
-                      <ul className="list-disc space-y-1 text-gray-700 dark:text-gray-300 mb-3 ml-5 [&_ul]:list-[circle] [&_ul]:ml-5 [&_ul_ul]:list-square">{children}</ul>
-                    ),
-                    ol: ({ children }) => (
-                      <ol className="list-decimal space-y-1 text-gray-700 dark:text-gray-300 mb-3 ml-5 [&_ol]:list-[lower-alpha] [&_ol]:ml-5 [&_ol_ol]:list-[lower-roman]">{children}</ol>
-                    ),
-                    li: ({ children }) => (
-                      <li className="leading-relaxed">{children}</li>
-                    ),
-                    // Horizontal rule
-                    hr: () => (
-                      <hr className="my-4 border-gray-300 dark:border-gray-600" />
-                    ),
-                  }}
-                >
-                  {section.content}
-                </ReactMarkdown>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-      
-      {/* Share Dialog */}
-      {showShareDialog && (
-        <div 
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]"
-          onClick={() => {
-            setShowShareDialog(false);
-            setShareResult(null);
-          }}
-        >
-          <div 
-            className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-md mx-4 overflow-hidden"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="px-5 py-4 text-white bg-blue-600 rounded-t-lg">
-              <div className="flex items-center gap-3">
-                <Share2 className="w-6 h-6" />
-                <h3 className="text-lg font-semibold">
-                  {isQuizShare ? 'Chia sẻ Bài trắc nghiệm' : 'Chia sẻ Phiếu học tập'}
-                </h3>
-              </div>
-              <p className="text-sm mt-1 text-blue-100">
-                {isQuizShare ? 'Tạo link để học sinh làm bài trắc nghiệm online' : 'Tạo link để học sinh làm bài trực tuyến'}
-              </p>
-            </div>
-            
-            <div className="p-5">
-              {shareError && (
-                <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800">
-                  <p className="text-sm text-red-600 dark:text-red-400">{shareError}</p>
-                </div>
-              )}
-              
-              {!shareResult ? (
-                <>
-                  <div className="mb-4">
-                    <p className="text-sm text-gray-600 dark:text-gray-300">
-                      {isQuizShare ? 'Khi chia sẻ, học sinh có thể:' : 'Khi chia sẻ, học sinh có thể:'}
-                    </p>
-                    <ul className="mt-2 space-y-1 text-sm text-gray-500 dark:text-gray-400">
-                      {isQuizShare ? (
-                        <>
-                          <li className="flex items-center gap-2">
-                            <CheckCircle className="w-4 h-4 text-blue-500" />
-                            Làm bài trắc nghiệm trực tuyến
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <CheckCircle className="w-4 h-4 text-blue-500" />
-                            Xem điểm ngay sau khi nộp bài
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <CheckCircle className="w-4 h-4 text-blue-500" />
-                            Xem đáp án đúng (nếu được phép)
-                          </li>
-                        </>
-                      ) : (
-                        <>
-                          <li className="flex items-center gap-2">
-                            <CheckCircle className="w-4 h-4 text-blue-500" />
-                            Xem nội dung phiếu học tập
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <CheckCircle className="w-4 h-4 text-blue-500" />
-                            Điền câu trả lời trực tuyến
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <CheckCircle className="w-4 h-4 text-blue-500" />
-                            Nộp bài cho giáo viên
-                          </li>
-                        </>
-                      )}
-                    </ul>
-                  </div>
-                  
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => {
-                        setShowShareDialog(false);
-                        setShareError(null);
-                      }}
-                      className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                      disabled={isSharing}
-                    >
-                      Hủy
-                    </button>
-                    <button
-                      onClick={handleShare}
-                      disabled={isSharing}
-                      className="px-4 py-2 text-sm text-white flex items-center gap-2 disabled:opacity-50 bg-blue-600 hover:bg-blue-700 rounded-lg"
-                    >
-                      {isSharing ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Đang tạo link...
-                        </>
-                      ) : (
-                        <>
-                          <Share2 className="w-4 h-4" />
-                          Tạo link chia sẻ
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="mb-4">
-                    <p className="text-sm font-medium mb-3 text-blue-600 dark:text-blue-400">
-                      ✓ Link chia sẻ đã được tạo!
-                    </p>
-                    
-                    <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg mb-3">
-                      <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">Link chia sẻ:</label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={shareResult.url}
-                          readOnly
-                          className="flex-1 text-sm bg-white dark:bg-gray-600 border border-gray-200 dark:border-gray-500 rounded-lg px-2 py-1.5 text-gray-700 dark:text-gray-200"
-                        />
-                        <button
-                          onClick={handleCopyShareLink}
-                          className="p-2 text-white rounded-lg transition-colors bg-blue-600 hover:bg-blue-700"
-                          title="Sao chép link"
-                        >
-                          {shareCopied ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-                    
-                    <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
-                      <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">Mã chia sẻ:</label>
-                      <p className="text-lg font-mono font-bold text-gray-800 dark:text-gray-100">{shareResult.code}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <a
-                      href={shareResult.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm flex items-center gap-1 text-blue-600 hover:text-blue-700 dark:text-blue-400"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                      {isQuizShare ? 'Mở trang trắc nghiệm' : 'Mở trang chia sẻ'}
-                    </a>
-                    <button
-                      onClick={() => {
-                        setShowShareDialog(false);
-                        setShareResult(null);
-                        setShareError(null);
-                      }}
-                      className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg"
-                    >
-                      Đóng
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Code Exercise Share Modal */}
-      {hasCodeExercises && (
-        <ShareCodeExerciseModal
-          isOpen={showCodeExerciseModal}
-          onClose={() => setShowCodeExerciseModal(false)}
-          exercises={section.code_exercises!}
-          lessonTitle={lessonInfo?.lesson_name}
-        />
-      )}
-    </div>
-  );
-};
+  // Sections that already have mindmap_data (generated by AI during SSE)
+  const mindmapSections = sections.filter(s => s.mindmap_data?.trim());
 
-export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
-  result,
-  onSectionUpdate,
-  onExportPDF,
-  activities,
-}) => {
-  const [sections, setSections] = useState<LessonPlanSection[]>(result.sections);
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
-  const handleSectionUpdate = (sectionId: string, newContent: string) => {
-    const updatedSections = sections.map((s) =>
-      s.section_id === sectionId ? { ...s, content: newContent } : s
-    );
-    setSections(updatedSections);
-    onSectionUpdate(sectionId, newContent);
+  const handleOpenMindmapModal = () => {
+    if (mindmapSections.length === 0) return;
+    const firstSection = mindmapSections[0];
+    setSelectedMindmapSectionId(firstSection.section_id);
+    setMindmapEditorData(firstSection.mindmap_data || "");
+    setShowMindmapModal(true);
   };
 
-  // Cập nhật nhiều sections cùng lúc (cho phụ lục liên quan)
-  const handleMultipleSectionUpdate = (updates: { sectionId: string; content: string }[]) => {
-    const updatedSections = sections.map((s) => {
-      const update = updates.find(u => u.sectionId === s.section_id);
-      if (update) {
-        return { ...s, content: update.content };
-      }
-      return s;
-    });
+  const handleDownloadMindmap = () => {
+    const svg = document.querySelector('.mindmap-modal-preview svg');
+    if (!svg) return;
+    const serializer = new XMLSerializer();
+    let svgString = serializer.serializeToString(svg);
+    svgString = '<?xml version="1.0" encoding="UTF-8"?>\n' + svgString;
+    const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `so_do_tu_duy_${result.lesson_info.lesson_name || 'mindmap'}.svg`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleInsertMindmap = () => {
+    if (!mindmapEditorData.trim() || !selectedMindmapSectionId) return;
+
+    const targetSectionId = selectedMindmapSectionId;
+
+    const updatedSections = sections.map(s =>
+      s.section_id === targetSectionId
+        ? { ...s, mindmap_data: mindmapEditorData }
+        : s
+    );
     setSections(updatedSections);
-    updates.forEach(update => {
-      onSectionUpdate(update.sectionId, update.content);
-    });
+    setShowMindmapModal(false);
+
+    // Re-render the editor with new mindmap data
+    const reinit = async () => {
+      const mainSections = updatedSections.filter(
+        (s) => !["thong_tin_chung", "phieu_hoc_tap", "trac_nghiem"].includes(s.section_type)
+      );
+      let content = mainSections.map(s => {
+        let sc = s.content;
+        if (s.mindmap_data?.trim()) {
+          sc = insertMindmapPlaceholder(sc, s.section_id);
+        }
+        return sc;
+      }).join("\n\n");
+
+      const worksheetSections = updatedSections.filter(s => s.section_type === "phieu_hoc_tap");
+      const quizSections = updatedSections.filter(s => s.section_type === "trac_nghiem");
+      if (worksheetSections.length > 0 || quizSections.length > 0) {
+        content += "\n\n## **IV. PHỤ LỤC**\n\n";
+        if (worksheetSections.length > 0) {
+          content += "### **1. Phiếu học tập**\n\n";
+          worksheetSections.forEach(s => {
+            if (s.worksheet_data) {
+              content += renderWorksheetDataToMarkdown(s.worksheet_data, s.title) + "\n\n";
+            } else if (s.content) {
+              content += `${s.content}\n\n`;
+            }
+          });
+        }
+        if (quizSections.length > 0) {
+          content += "### **2. Trắc nghiệm**\n\n";
+          quizSections.forEach(s => {
+            content += `${s.content.replace(/\n---\n/g, '\n')}\n\n`;
+          });
+        }
+      }
+
+      let html = marked.parse(content) as string;
+      html = formatQuizAnswersToTable(html);
+      html = highlightCodeBlocks(html);
+      html = formatWorksheetDotLines(html);
+
+      // Replace mindmap placeholders with container divs for post-render Markmap injection
+      const mindmapSecs = updatedSections.filter(s => s.mindmap_data?.trim());
+      if (mindmapSecs.length > 0) {
+        const tempDiv = document.createElement("div");
+        tempDiv.innerHTML = html;
+        const placeholders = tempDiv.querySelectorAll(".mindmap-inline");
+        for (const ph of Array.from(placeholders)) {
+          const sectionId = ph.getAttribute("data-section-id");
+          const section = mindmapSecs.find(s => s.section_id === sectionId);
+          if (section?.mindmap_data) {
+            const wrapper = document.createElement("div");
+            wrapper.setAttribute("contenteditable", "false");
+            wrapper.className = "mindmap-inline-container";
+            wrapper.setAttribute("data-section-id", sectionId || "");
+            wrapper.style.cssText = "margin:16px 0;page-break-inside:avoid;border:1px solid #d1d5db;border-radius:8px;overflow:hidden;background:#fff;height:380px;";
+            wrapper.innerHTML = '<p style="padding:40px;color:#9ca3af;text-align:center;font-style:italic;">Đang tải sơ đồ tư duy...</p>';
+            ph.replaceWith(wrapper);
+          }
+        }
+        html = tempDiv.innerHTML;
+      }
+      // Clear rendered tracking so the useEffect re-renders new containers
+      renderedMindmapIds.current.clear();
+
+      setEditContent(html);
+    };
+    reinit();
   };
 
   const handleExportPDF = () => {
-    // Combine all sections markdown content
-    const fullContent = sections
-      .map((s) => {
-        // Chỉ truyền markdown content, không wrap HTML
-        return `## ${s.title}\n\n${s.content}\n\n`;
-      })
-      .join("\n---\n\n");
-    
-    exportToPDF(fullContent, `KHBD_${result.lesson_info.lesson_name}`, result.lesson_info);
+    // Read from the actual editor DOM (which includes Markmap SVGs rendered post-sanitization)
+    const editorEl = document.querySelector('[contenteditable="true"]');
+    if (!editorEl) return;
+
+    const cleanDiv = document.createElement('div');
+    cleanDiv.innerHTML = editorEl.innerHTML;
+
+    // Fix SVGs: replace foreignObject (HTML text) with native SVG <text> for print
+    // foreignObject content doesn't render in print/iframe contexts
+    const origContainers = editorEl.querySelectorAll('.mindmap-inline-container');
+    const clonedContainers = cleanDiv.querySelectorAll('.mindmap-inline-container');
+    origContainers.forEach((origContainer, index) => {
+      const svg = origContainer.querySelector('svg');
+      if (svg && clonedContainers[index]) {
+        clonedContainers[index].innerHTML = serializeSvgForPrint(svg);
+        // Fix container styles for print: remove overflow:hidden, let SVG determine height
+        const el = clonedContainers[index] as HTMLElement;
+        el.style.overflow = 'visible';
+        el.style.height = 'auto';
+        el.style.border = 'none';
+      }
+    });
+
+    // Convert <font color="..."> to <span style="color:..."> for PDF compatibility
+    cleanDiv.querySelectorAll('font[color]').forEach(el => {
+      const color = el.getAttribute('color');
+      if (color) {
+        const span = document.createElement('span');
+        span.style.color = color;
+        span.innerHTML = el.innerHTML;
+        el.replaceWith(span);
+      }
+    });
+
+    // Ensure images have print-friendly styles
+    cleanDiv.querySelectorAll('img').forEach(el => {
+      (el as HTMLElement).style.maxWidth = '100%';
+      (el as HTMLElement).style.height = 'auto';
+    });
+
+    // Also generate markdown for fallback/content param
+    const td = createTurndownService();
+    let mdContent = td.turndown(cleanDiv.innerHTML);
+    mdContent = mdContent.replace(/(\d+)\\\./g, '$1.');
+
+    // Pass HTML directly so formatting (alignment, colors, highlights, etc.) is preserved
+    exportToPDF(mdContent, `KHBD_${result.lesson_info.lesson_name}`, result.lesson_info, cleanDiv.innerHTML);
   };
 
   const handleSave = async () => {
     setIsSaving(true);
     setSaveMessage(null);
-    
     try {
-      const fullContent = sections
+      const td = createTurndownService();
+      const markdown = td.turndown(editContent);
+      const saveSections: LessonPlanSection[] = [{
+        section_id: sections[0]?.section_id || "full_content",
+        section_type: "full",
+        title: "Kế hoạch bài dạy",
+        content: markdown,
+        editable: true,
+      }];
+
+      const fullContent = saveSections
         .map((s) => `## ${s.title}\n\n${s.content}\n\n`)
-        .join("\n---\n\n");
-      
+        .join("\n");
+
       const response = await saveLessonPlan({
         title: `KHBD - ${result.lesson_info.lesson_name}`,
         lesson_info: result.lesson_info,
-        sections: sections,
+        sections: saveSections,
         full_content: fullContent,
         activities: activities,
         is_printed: false,
       });
-      
+
+      // Auto-create shared materials (worksheets + quizzes) — only on first save
+      if (!materialsCreated) {
+        const worksheetSections = sections.filter(s => s.section_type === "phieu_hoc_tap");
+        const quizSections = sections.filter(s => s.section_type === "trac_nghiem");
+
+        for (const ws of worksheetSections) {
+          try {
+            await createSharedWorksheet({
+              title: ws.title || "Phiếu học tập",
+              content: ws.content,
+              lesson_info: result.lesson_info,
+            });
+          } catch {
+            // Skip if error
+          }
+        }
+
+        for (const qz of quizSections) {
+          try {
+            await createSharedQuiz({
+              title: result.lesson_info?.lesson_name
+                ? `Trắc nghiệm: ${result.lesson_info.lesson_name}`
+                : qz.title || "Bài trắc nghiệm",
+              description: `${result.lesson_info?.topic || ""} - ${result.lesson_info?.grade || ""} - ${result.lesson_info?.book_type || ""}`.trim(),
+              content: qz.content,
+              questions: qz.questions,
+              show_correct_answers: true,
+              allow_multiple_attempts: true,
+              lesson_info: result.lesson_info,
+            });
+          } catch {
+            // Skip if error
+          }
+        }
+
+        if (worksheetSections.length > 0 || quizSections.length > 0) {
+          setMaterialsCreated(true);
+        }
+      }
+
       setSaveMessage({ type: "success", text: response.message });
       setTimeout(() => setSaveMessage(null), 3000);
     } catch (error: any) {
-      setSaveMessage({ 
-        type: "error", 
-        text: error.response?.data?.detail || "Lỗi khi lưu giáo án" 
+      setSaveMessage({
+        type: "error",
+        text: error.response?.data?.detail || "Lỗi khi lưu KHBD"
       });
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Group sections for better display
-  const getDefaultExpanded = (sectionType: string) => {
-    // Mặc định mở rộng các section chính, thu gọn phụ lục
-    return !["phieu_hoc_tap", "trac_nghiem"].includes(sectionType);
+  // Open print PHT modal with editable worksheet blocks
+  const handlePrintWorksheets = () => {
+    const worksheetSections = sections.filter(s => s.section_type === "phieu_hoc_tap");
+
+    if (worksheetSections.length === 0) {
+      setSaveMessage({ type: "error", text: "Không tìm thấy phiếu học tập nào trong nội dung" });
+      setTimeout(() => setSaveMessage(null), 3000);
+      return;
+    }
+
+    // Convert markdown → HTML → blocks for each worksheet
+    // Use worksheet_data if available for better formatting
+    const allBlocks: WorksheetBlock[][] = worksheetSections.map(section => {
+      let html: string;
+
+      // Prefer worksheet_data if exists
+      if (section.worksheet_data) {
+        html = renderWorksheetDataToHtml(section.worksheet_data, section.title);
+      } else {
+        // Fallback to markdown content
+        html = marked.parse(section.content) as string;
+        html = formatWorksheetDotLines(html);
+      }
+
+      // Convert <font color="..."> to <span style="color:...">
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = html;
+      tempDiv.querySelectorAll('font[color]').forEach(el => {
+        const color = el.getAttribute('color');
+        if (color) {
+          const span = document.createElement('span');
+          span.style.color = color;
+          span.innerHTML = el.innerHTML;
+          el.replaceWith(span);
+        }
+      });
+
+      return parseWorksheetBlocks(tempDiv.innerHTML);
+    });
+
+    setPrintWorksheetBlocks(allBlocks);
+    setActivePHTIndex(0);
+    setShowPrintPHTModal(true);
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Header - Đơn giản với màu xanh dương đồng bộ */}
-      <div className="bg-blue-600 dark:bg-blue-700 p-4 shadow-md rounded-lg">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-white">
-              Kế hoạch bài dạy
-            </h2>
-            <p className="text-blue-100 text-sm mt-0.5">
-              {result.lesson_info.lesson_name} • Lớp {result.lesson_info.grade} •{" "}
-              {result.lesson_info.book_type}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white rounded-md flex items-center gap-1.5 transition-colors text-sm font-medium disabled:opacity-50 border border-white/30"
-            >
-              {isSaving ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Save className="w-4 h-4" />
-              )}
-              {isSaving ? "Đang lưu..." : "Lưu giáo án"}
-            </button>
-            <button
-              onClick={handleExportPDF}
-              className="px-3 py-1.5 bg-white text-blue-600 hover:bg-blue-50 rounded-md flex items-center gap-1.5 transition-colors text-sm font-medium shadow-sm"
-            >
-              <Download className="w-4 h-4" />
-              Xuất PDF
-            </button>
-          </div>
-        </div>
-      </div>
+  // Actually print worksheets from the edited blocks
+  const handleActualPrint = () => {
+    const worksheets = printWorksheetBlocks.map(blocks => blocksToHtml(blocks));
 
+    const worksheetPages = worksheets.map((ws, i) => `
+      <div class="worksheet-section" ${i > 0 ? 'style="page-break-before:always;"' : ''}>
+        <table class="worksheet-border"><tr><td>
+          ${ws}
+        </td></tr></table>
+      </div>
+    `).join('\n');
+
+    const printHtml = `<!DOCTYPE html>
+    <html lang="vi">
+    <head>
+      <meta charset="UTF-8">
+      <title>Phiếu học tập - ${result.lesson_info.lesson_name}</title>
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/vs.min.css">
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"><\/script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"><\/script>
+      <style>
+        @page { size: A4; margin: 1.5cm 2cm; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Times New Roman', Times, serif; font-size: 13pt; line-height: 1.5; color: #000; }
+
+        .worksheet-section { width: 100%; }
+        table.worksheet-border { width: 100%; border-collapse: collapse; border: 2px solid #000; }
+        table.worksheet-border > tr > td,
+        table.worksheet-border > tbody > tr > td { padding: 20px 25px; border: none; vertical-align: top; }
+
+        .worksheet-section h1, .worksheet-section h2, .worksheet-section h3, .worksheet-section h4 { text-align: center; margin: 8px 0 12px; }
+        .worksheet-section h2, .worksheet-section h3 { font-size: 14pt; font-weight: bold; text-transform: uppercase; }
+        .worksheet-section p { margin: 6px 0; text-align: left; overflow-wrap: anywhere; word-break: break-word; }
+        .worksheet-section hr { border: none; border-bottom: 1px dotted #000; margin: 12px 5px; }
+        .worksheet-line { border-bottom: 1px dotted #000; height: 1.5em; margin: 0.5em 0; width: 100%; }
+
+        .worksheet-section table:not(.worksheet-border) { width: 100%; border-collapse: collapse; margin: 10px 0; }
+        .worksheet-section table:not(.worksheet-border) th,
+        .worksheet-section table:not(.worksheet-border) td { border: 1px solid #000; padding: 8px 10px; vertical-align: top; }
+        .worksheet-section table:not(.worksheet-border) th { background: #f5f5f5; font-weight: bold; text-align: center; }
+
+        ul, ol { margin: 6px 0; padding-left: 25px; }
+        li { margin: 4px 0; }
+        strong { font-weight: bold; }
+        em { font-style: italic; }
+
+        pre, .code-block { background-color: #f8f8f8; border: 1px solid #ddd; border-radius: 4px; padding: 8px 10px; margin: 8px 0; overflow-x: auto; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 10pt; line-height: 1.4; white-space: pre; tab-size: 4; }
+        pre code, .code-block code { background: none; padding: 0; border: none; font-size: inherit; white-space: pre; display: block; }
+        code { background-color: #f0f0f0; padding: 1px 4px; border-radius: 3px; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 10pt; }
+
+        .hljs-keyword { color: #0000ff; font-weight: bold; }
+        .hljs-built_in { color: #0086b3; }
+        .hljs-string { color: #a31515; }
+        .hljs-number { color: #098658; }
+        .hljs-comment { color: #008000; font-style: italic; }
+        .hljs-function { color: #795e26; }
+        .hljs-params { color: #001080; }
+        .hljs-title { color: #795e26; }
+
+        @media print {
+          body { margin: 0; }
+          .worksheet-section { page-break-after: always; }
+          .worksheet-section:last-child { page-break-after: auto; }
+          .no-print { display: none !important; }
+          h1, h2, h3, h4 { page-break-after: avoid; }
+          pre, .code-block { background-color: #f8f8f8 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .hljs-keyword, .hljs-built_in, .hljs-string, .hljs-number,
+          .hljs-comment, .hljs-function, .hljs-params, .hljs-title { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          span[style*="color"], span[style*="background"] { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+      </style>
+    </head>
+    <body>${worksheetPages}
+      <script>
+        document.addEventListener('DOMContentLoaded', function() {
+          if (typeof hljs !== 'undefined') {
+            document.querySelectorAll('pre code').forEach(function(block) {
+              hljs.highlightElement(block);
+            });
+          }
+        });
+      <\/script>
+    </body>
+    </html>`;
+
+    const printFrame = document.createElement('iframe');
+    printFrame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:none;visibility:hidden;';
+    document.body.appendChild(printFrame);
+    const frameDoc = printFrame.contentWindow?.document;
+    if (frameDoc) {
+      frameDoc.open();
+      frameDoc.write(printHtml);
+      frameDoc.close();
+      printFrame.onload = () => {
+        setTimeout(() => {
+          printFrame.contentWindow?.focus();
+          printFrame.contentWindow?.print();
+          setTimeout(() => document.body.removeChild(printFrame), 1000);
+        }, 800);
+      };
+    }
+    setShowPrintPHTModal(false);
+  };
+
+  // Check if worksheets exist in content
+  const hasWorksheets = sections.some(s => s.section_type === 'phieu_hoc_tap');
+
+  // Parse worksheet HTML into structured blocks for interactive editing
+  const parseWorksheetBlocks = (html: string): WorksheetBlock[] => {
+    const tempDiv = document.createElement("div");
+    tempDiv.innerHTML = html;
+    const blocks: WorksheetBlock[] = [];
+    for (const child of Array.from(tempDiv.children)) {
+      const el = child as HTMLElement;
+      if (el.classList?.contains("worksheet-line") ||
+          (el.tagName === "DIV" && !el.textContent?.trim() && el.querySelector('span[style*="border-bottom"]'))) {
+        blocks.push({ id: newBlockId(), type: 'dotted-line' });
+      } else {
+        blocks.push({ id: newBlockId(), type: 'content', html: el.outerHTML });
+      }
+    }
+    return blocks;
+  };
+
+  // Convert blocks back to HTML string for printing
+  const blocksToHtml = (blocks: WorksheetBlock[]): string => {
+    return blocks.map(b =>
+      b.type === 'dotted-line'
+        ? '<div class="worksheet-line"></div>'
+        : (b.html || '')
+    ).join('\n');
+  };
+
+  // Add a dotted line block at a specific position
+  const handleAddDottedLine = (worksheetIdx: number, afterBlockIdx: number) => {
+    setPrintWorksheetBlocks(prev => {
+      const updated = [...prev];
+      const ws = [...updated[worksheetIdx]];
+      ws.splice(afterBlockIdx + 1, 0, { id: newBlockId(), type: 'dotted-line' });
+      updated[worksheetIdx] = ws;
+      return updated;
+    });
+  };
+
+  // Remove a dotted line block
+  const handleRemoveDottedLine = (worksheetIdx: number, blockId: string) => {
+    setPrintWorksheetBlocks(prev => {
+      const updated = [...prev];
+      updated[worksheetIdx] = updated[worksheetIdx].filter(b => b.id !== blockId);
+      return updated;
+    });
+  };
+
+  // Toolbar action buttons - rendered inside the RichTextEditor toolbar
+  const toolbarActions = (
+    <>
+      {/* Print worksheets button */}
+      {hasWorksheets && (
+        <button
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={handlePrintWorksheets}
+          className="px-2.5 py-1 text-xs bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50 rounded flex items-center gap-1 transition-colors border border-purple-200 dark:border-purple-700"
+          title="In phiếu học tập riêng"
+        >
+          <Printer className="w-3.5 h-3.5" />
+          In PHT
+        </button>
+      )}
+
+      {/* Extract code exercises button */}
+      <button
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={handleExtractCodeExercises}
+        disabled={isExtractingCode}
+        className="px-2.5 py-1 text-xs bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 hover:bg-teal-100 dark:hover:bg-teal-900/50 rounded flex items-center gap-1 transition-colors disabled:opacity-50 border border-teal-200 dark:border-teal-700"
+        title="Trích xuất bài tập lập trình từ KHBD và tạo test cases tự động"
+      >
+        {isExtractingCode ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Code2 className="w-3.5 h-3.5" />}
+        {isExtractingCode ? "Đang trích xuất..." : "Bài tập code"}
+      </button>
+
+      {/* Mindmap button - only enabled when mindmap data exists */}
+      <button
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={handleOpenMindmapModal}
+        disabled={mindmapSections.length === 0}
+        className="px-2.5 py-1 text-xs bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 rounded flex items-center gap-1 transition-colors border border-emerald-200 dark:border-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed"
+        title={mindmapSections.length === 0 ? "Chưa có sơ đồ tư duy (chọn kỹ thuật Sơ đồ tư duy khi sinh KHBD)" : "Chỉnh sửa sơ đồ tư duy"}
+      >
+        <GitBranch className="w-3.5 h-3.5" />
+        Sơ đồ tư duy
+      </button>
+
+      <div className="w-px h-5 bg-gray-300 dark:bg-gray-600" />
+
+      {/* Save button */}
+      <button
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={handleSave}
+        disabled={isSaving}
+        className="px-2.5 py-1 text-xs bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 rounded flex items-center gap-1 transition-colors disabled:opacity-50 border border-green-200 dark:border-green-700"
+        title="Lưu KHBD (Ctrl+S)"
+      >
+        {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+        {isSaving ? "Đang lưu..." : "Lưu"}
+      </button>
+
+      {/* Export PDF button */}
+      <button
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={handleExportPDF}
+        className="px-2.5 py-1 text-xs bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/50 rounded flex items-center gap-1 transition-colors border border-orange-200 dark:border-orange-700"
+        title="Xuất PDF"
+      >
+        <Download className="w-3.5 h-3.5" />
+        Xuất PDF
+      </button>
+    </>
+  );
+
+  return (
+    <div>
       {/* Save Message */}
       {saveMessage && (
-        <div className={`p-4 flex items-center gap-3 ${
-          saveMessage.type === "success" 
+        <div className={`px-4 py-3 flex items-center gap-3 rounded-lg mb-3 ${
+          saveMessage.type === "success"
             ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200"
             : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200"
         }`}>
           {saveMessage.type === "success" ? (
-            <CheckCircle className="w-5 h-5 flex-shrink-0" />
+            <CheckCircle className="w-4 h-4 flex-shrink-0" />
           ) : (
-            <X className="w-5 h-5 flex-shrink-0" />
+            <Info className="w-4 h-4 flex-shrink-0" />
           )}
-          <span>{saveMessage.text}</span>
+          <span className="text-sm">{saveMessage.text}</span>
         </div>
       )}
 
-      {/* Instructions */}
-      <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4 flex items-start gap-3">
-        <Lightbulb className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-        <div className="text-sm text-amber-800 dark:text-amber-200">
-          <p className="font-medium">Hướng dẫn chỉnh sửa:</p>
-          <p className="mt-1">Nhấn vào nút <Edit2 className="w-3.5 h-3.5 inline mx-1" /> ở mỗi ô để chỉnh sửa nội dung. Sau khi chỉnh sửa xong, nhấn "Lưu giáo án" để lưu lại và "Xuất PDF" để tải về.</p>
+      {/* Code Extraction Result */}
+      {codeExtractionResult && (
+        <div ref={codeExtractionRef} className={`px-4 py-3 flex items-start gap-3 rounded-lg mb-3 ${
+          codeExtractionResult.found
+            ? "bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-200"
+            : "bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300"
+        }`}>
+          {codeExtractionResult.found ? (
+            <Code2 className="w-4 h-4 flex-shrink-0 mt-0.5" />
+          ) : (
+            <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
+          )}
+          <div className="flex-1">
+            <span className="text-sm">{codeExtractionResult.message}</span>
+            {codeExtractionResult.exercises && codeExtractionResult.exercises.length > 0 && (
+              <div className="mt-2 space-y-1.5">
+                {codeExtractionResult.exercises.map((ex, i) => (
+                  <button
+                    key={i}
+                    onClick={() => window.open(ex.url, '_blank')}
+                    className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-md text-xs font-medium bg-teal-100 dark:bg-teal-800/40 text-teal-700 dark:text-teal-300 hover:bg-teal-200 dark:hover:bg-teal-800/60 transition-colors"
+                  >
+                    <Code2 className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span className="flex-1 truncate">{ex.title}</span>
+                    <ExternalLink className="w-3 h-3 flex-shrink-0 opacity-60" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button
+            onClick={() => setCodeExtractionResult(null)}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xs"
+          >
+            ×
+          </button>
         </div>
-      </div>
+      )}
 
-      {/* Sections Grid */}
-      <div className="space-y-4">
-        {(() => {
-          // Tách các sections thành nhóm
-          const mainSections = sections.filter(
-            (s) => !["thong_tin_chung", "phieu_hoc_tap", "trac_nghiem"].includes(s.section_type)
-          );
-          const appendixSections = sections.filter(
-            (s) => ["phieu_hoc_tap", "trac_nghiem"].includes(s.section_type)
-          );
+      {/* Editor with toolbar + A4 content */}
+      <RichTextEditor
+        value={editContent}
+        onChange={setEditContent}
+        placeholder="Nhập nội dung kế hoạch bài dạy..."
+        minHeight="1400px"
+        toolbarActions={toolbarActions}
+        lessonTitle={result.lesson_info.lesson_name}
+        lessonSubtitle={`Lớp ${result.lesson_info.grade} - ${result.lesson_info.book_type}`}
+        onBack={onBack}
+      />
 
-          return (
-            <>
-              {/* Render các sections chính */}
-              {mainSections.map((section) => {
-                // Hình thành kiến thức: Box lớn bao bọc các hoạt động con
-                if (section.section_type === "hinh_thanh_kien_thuc") {
-                  const subActivities = splitHinhThanhKienThuc(section.content);
-                  const Icon = SECTION_ICONS[section.section_type] || FileText;
-                  const colors = SECTION_COLORS[section.section_type] || SECTION_COLORS.full;
-                  
-                  if (subActivities.length > 0) {
-                    return (
-                      <div 
-                        key={section.section_id}
-                        className={`bg-white dark:bg-gray-800 border-l-4 ${colors.border} border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden`}
-                      >
-                        {/* Header của box lớn */}
-                        <div className={`${colors.bg} px-4 py-3 border-b border-gray-200 dark:border-gray-700`}>
-                          <div className="flex items-center gap-3">
-                            <Icon className={`w-5 h-5 ${colors.icon}`} />
-                            <h3 className="font-semibold text-gray-900 dark:text-white">
-                              Hoạt động 2: Hình thành kiến thức mới
-                            </h3>
-                          </div>
-                        </div>
-                        
-                        {/* Các hoạt động con bên trong */}
-                        <div className="p-4 space-y-4">
-                          {subActivities.map((subActivity) => (
-                            <SectionCard
-                              key={subActivity.id}
-                              section={{
-                                section_id: subActivity.id,
-                                section_type: "hinh_thanh_kien_thuc",
-                                title: subActivity.title,
-                                content: subActivity.content,
-                                editable: true,
-                              }}
-                              onUpdate={(content) => {
-                                const allSubActivities = splitHinhThanhKienThuc(section.content);
-                                const updatedSubActivities = allSubActivities.map((sa) =>
-                                  sa.id === subActivity.id ? { ...sa, content } : sa
-                                );
-                                const newFullContent = updatedSubActivities
-                                  .map((sa) => `**${sa.title}**\n\n${sa.content}`)
-                                  .join("\n\n");
-                                handleSectionUpdate(section.section_id, newFullContent);
-                              }}
-                              defaultExpanded={true}
-                              allSections={sections}
-                              onUpdateMultiple={handleMultipleSectionUpdate}
-                              lessonInfo={result.lesson_info}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  }
-                }
-                
-                // Các section khác render bình thường
-                return (
-                  <SectionCard
-                    key={section.section_id}
-                    section={section}
-                    onUpdate={(content) => handleSectionUpdate(section.section_id, content)}
-                    defaultExpanded={getDefaultExpanded(section.section_type)}
-                    allSections={sections}
-                    onUpdateMultiple={handleMultipleSectionUpdate}
-                    lessonInfo={result.lesson_info}
-                  />
-                );
-              })}
+      {/* Mindmap Modal */}
+      {showMindmapModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl flex flex-col" style={{ width: "95vw", maxWidth: "1400px", height: "90vh" }}>
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <GitBranch className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Sơ đồ tư duy</h3>
+                {selectedMindmapSectionId && (
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    — {sections.find(s => s.section_id === selectedMindmapSectionId)?.title || ""}
+                  </span>
+                )}
+                {mindmapSections.length > 1 && (
+                  <select
+                    value={selectedMindmapSectionId}
+                    onChange={(e) => {
+                      setSelectedMindmapSectionId(e.target.value);
+                      const sec = sections.find(s => s.section_id === e.target.value);
+                      setMindmapEditorData(sec?.mindmap_data || "");
+                    }}
+                    className="ml-2 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
+                  >
+                    {mindmapSections.map(s => (
+                      <option key={s.section_id} value={s.section_id}>{s.title}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleDownloadMindmap}
+                  disabled={!mindmapEditorData.trim()}
+                  className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  title="Tải về file SVG"
+                >
+                  <Download className="w-4 h-4" />
+                  Tải về
+                </button>
+                <button
+                  onClick={handleInsertMindmap}
+                  disabled={!mindmapEditorData.trim()}
+                  className="px-3 py-1.5 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  Chèn vào KHBD
+                </button>
+                <button
+                  onClick={() => setShowMindmapModal(false)}
+                  className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+            </div>
 
-              {/* Box Phụ lục bao bọc Phiếu học tập và Trắc nghiệm */}
-              {appendixSections.length > 0 && (
-                <div className="bg-white dark:bg-gray-800 border-l-4 border-blue-500 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-                  {/* Header của box Phụ lục */}
-                  <div className="bg-blue-50 dark:bg-blue-900/20 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center gap-3">
-                      <ClipboardList className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                      <h3 className="font-semibold text-gray-900 dark:text-white">
-                        Phụ lục
-                      </h3>
-                    </div>
-                  </div>
-                  
-                  {/* Các phụ lục bên trong */}
-                  <div className="p-4 space-y-4">
-                    {appendixSections.map((section) => {
-                      // Bỏ "Phụ lục: " khỏi tiêu đề để tránh lặp
-                      const cleanTitle = section.title.replace(/^Phụ lục:\s*/i, "");
-                      return (
-                        <SectionCard
-                          key={section.section_id}
-                          section={{
-                            ...section,
-                            title: cleanTitle
-                          }}
-                          onUpdate={(content) => handleSectionUpdate(section.section_id, content)}
-                          defaultExpanded={false}
-                          allSections={sections}
-                          onUpdateMultiple={handleMultipleSectionUpdate}
-                          lessonInfo={result.lesson_info}
-                        />
-                      );
-                    })}
-                  </div>
+            {/* Content: Editor (35%) + Preview (65%) */}
+            <div className="flex-1 overflow-hidden flex min-h-0">
+              {/* Left: Markdown editor */}
+              <div className="w-[35%] flex flex-col border-r border-gray-200 dark:border-gray-700">
+                <div className="px-4 py-2 bg-gray-50 dark:bg-gray-700/50 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide flex-shrink-0">
+                  Markdown Headings
                 </div>
-              )}
-            </>
-          );
-        })()}
-      </div>
+                <textarea
+                  value={mindmapEditorData}
+                  onChange={(e) => setMindmapEditorData(e.target.value)}
+                  placeholder={"# Tên bài học\n## 1. Mục đầu tiên\n### Khái niệm\n### Đặc điểm\n## 2. Mục thứ hai\n### Nội dung A\n### Nội dung B"}
+                  className="flex-1 p-4 text-sm font-mono bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 resize-none focus:outline-none"
+                  spellCheck={false}
+                />
+              </div>
+
+              {/* Right: Live preview */}
+              <div className="w-[65%] flex flex-col">
+                <div className="px-4 py-2 bg-gray-50 dark:bg-gray-700/50 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide flex-shrink-0">
+                  Xem trước
+                </div>
+                <div className="flex-1 overflow-auto mindmap-modal-preview">
+                  {mindmapEditorData.trim() ? (
+                    <MindMapRenderer data={mindmapEditorData} height="calc(90vh - 130px)" />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-sm text-gray-400 dark:text-gray-500">
+                      Chưa có dữ liệu sơ đồ tư duy
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Print PHT Modal — edit dotted lines before printing */}
+      {showPrintPHTModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl flex flex-col" style={{ width: "90vw", maxWidth: "800px", height: "90vh" }}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <Printer className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">In Phiếu Học Tập</h3>
+              </div>
+              <button
+                onClick={() => setShowPrintPHTModal(false)}
+                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Tabs if multiple worksheets */}
+            {printWorksheetBlocks.length > 1 && (
+              <div className="flex gap-1 px-6 py-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 bg-gray-50 dark:bg-gray-700/50">
+                {printWorksheetBlocks.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setActivePHTIndex(idx)}
+                    className={`px-3 py-1 text-sm rounded-lg transition-colors ${
+                      activePHTIndex === idx
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-white dark:bg-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-500 border border-gray-300 dark:border-gray-500'
+                    }`}
+                  >
+                    PHT {idx + 1}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Preview area */}
+            <div className="flex-1 overflow-auto p-6 bg-gray-100 dark:bg-gray-900">
+              <div
+                className="worksheet-preview mx-auto bg-white dark:bg-gray-800 shadow-lg rounded dark:text-gray-100"
+                style={{
+                  maxWidth: '650px',
+                  padding: '30px 35px',
+                  fontFamily: "'Times New Roman', Times, serif",
+                  fontSize: '13pt',
+                  lineHeight: '1.5',
+                }}
+              >
+                {printWorksheetBlocks[activePHTIndex]?.map((block, blockIdx) => (
+                  <div key={block.id} className="relative group/block">
+                    {/* Add line button between blocks */}
+                    {blockIdx > 0 && (
+                      <div className="relative h-0 flex justify-center">
+                        <button
+                          onClick={() => handleAddDottedLine(activePHTIndex, blockIdx - 1)}
+                          className="absolute -top-2.5 z-10 w-5 h-5 bg-green-500 hover:bg-green-600 text-white rounded-full flex items-center justify-center text-xs font-bold opacity-0 group-hover/block:opacity-100 transition-opacity shadow"
+                          title="Thêm dòng chấm"
+                        >
+                          +
+                        </button>
+                      </div>
+                    )}
+
+                    {block.type === 'dotted-line' ? (
+                      <div className="relative group/line">
+                        <div
+                          className="border-b border-dotted border-gray-800 dark:border-gray-400"
+                          style={{
+                            height: '1.5em',
+                            margin: '0.5em 0',
+                            width: '100%',
+                          }}
+                        />
+                        <button
+                          onClick={() => handleRemoveDottedLine(activePHTIndex, block.id)}
+                          className="absolute -right-3 top-0 w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-xs font-bold opacity-0 group-hover/line:opacity-100 transition-opacity shadow"
+                          title="Xóa dòng"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ) : (
+                      <div dangerouslySetInnerHTML={{ __html: block.html || '' }} />
+                    )}
+                  </div>
+                ))}
+              </div>
+              {/* Dark mode overrides for worksheet inline styles */}
+              <style>{`
+                .dark .worksheet-preview [style*="border-bottom:1px dotted #000"],
+                .dark .worksheet-preview [style*="border-bottom: 1px dotted #000"] {
+                  border-bottom-color: #9ca3af !important;
+                }
+                .dark .worksheet-preview [style*="border:1px solid #000"],
+                .dark .worksheet-preview [style*="border: 1px solid #000"] {
+                  border-color: #6b7280 !important;
+                }
+                .dark .worksheet-preview [style*="background:#f8f8f8"],
+                .dark .worksheet-preview [style*="background: #f8f8f8"] {
+                  background: #374151 !important;
+                }
+                .dark .worksheet-preview [style*="background:#f5f5f5"],
+                .dark .worksheet-preview [style*="background: #f5f5f5"] {
+                  background: #4b5563 !important;
+                }
+                .dark .worksheet-preview pre {
+                  background: #374151 !important;
+                  border-color: #4b5563 !important;
+                  color: #e5e7eb !important;
+                }
+                .dark .worksheet-preview table {
+                  border-color: #6b7280 !important;
+                }
+                .dark .worksheet-preview th,
+                .dark .worksheet-preview td {
+                  border-color: #6b7280 !important;
+                }
+                .dark .worksheet-preview th {
+                  background: #4b5563 !important;
+                }
+              `}</style>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                Di chuột vào nội dung để thêm (+) hoặc xóa (×) dòng chấm
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleAddDottedLine(activePHTIndex, (printWorksheetBlocks[activePHTIndex]?.length || 1) - 1)}
+                  className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                >
+                  + Thêm dòng
+                </button>
+                <button
+                  onClick={() => setShowPrintPHTModal(false)}
+                  className="px-4 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                >
+                  Đóng
+                </button>
+                <button
+                  onClick={handleActualPrint}
+                  className="px-4 py-1.5 text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors shadow-sm flex items-center gap-1.5"
+                >
+                  <Printer className="w-4 h-4" />
+                  In
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

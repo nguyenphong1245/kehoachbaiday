@@ -1,9 +1,14 @@
 # Python
 __pycache__/
 *.py[cod]
-*.sqlite3
-.env
 .venv/
+
+# Environment files - CRITICAL: Never commit secrets!
+.env
+.env.local
+.env.*.local
+backend/.env
+frontend/.env
 
 # Node
 node_modules/
@@ -11,9 +16,8 @@ dist/
 frontend/node_modules/
 frontend/dist/
 
-# Alembic
-backend/app.db
-backend/.env
+# Backend
+*.db
 
 # ChromaDB
 backend/app/chromadb/
@@ -28,6 +32,11 @@ logs/
 # MacOS
 .DS_Store
 
-# Others
-scripts/
-.github/
+# IDE
+.idea/
+*.swp
+*.swo
+
+# Backups
+backups/
+*.sql

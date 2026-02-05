@@ -1,70 +1,72 @@
 """
-Model cho Code Exercise - Bài tập Ghép thẻ code và Viết code
+Models cho bài tập lập trình (Code Exercises)
 """
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, JSON, Float
+from datetime import datetime
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Text, JSON
 from sqlalchemy.orm import relationship
-from datetime import datetime, timezone
-
 from app.db.base import Base
 
 
-class SharedCodeExercise(Base):
-    """Bài tập code đã share"""
-    __tablename__ = "shared_code_exercises"
-    
+class CodeExercise(Base):
+    """Bài tập lập trình được chia sẻ cho học sinh"""
+    __tablename__ = "code_exercises"
+
     id = Column(Integer, primary_key=True, index=True)
     share_code = Column(String(8), unique=True, index=True, nullable=False)
-    
-    # Thông tin bài tập
-    exercise_type = Column(String(20), nullable=False)  # "parsons" hoặc "coding"
     title = Column(String(500), nullable=False)
     description = Column(Text, nullable=True)
-    language = Column(String(20), default="python")
-    difficulty = Column(String(20), default="medium")  # easy, medium, hard
-    
-    # Dữ liệu bài tập (JSON)
-    # Parsons: { blocks: [], correct_order: [], distractors: [] }
-    # Coding: { starter_code, solution_code, test_code, test_cases: [], hints: [] }
-    exercise_data = Column(JSON, nullable=False)
-    
-    # Liên kết
-    creator_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    lesson_plan_id = Column(Integer, ForeignKey("saved_lesson_plans.id"), nullable=True)
-    
+    language = Column(String(50), default="python", nullable=False)
+
+    # Đề bài và test cases
+    problem_statement = Column(Text, nullable=False)  # Đề bài chi tiết
+    starter_code = Column(Text, nullable=True)  # Code mẫu ban đầu
+    test_cases = Column(JSON, nullable=False)  # [{"input": "...", "expected_output": "...", "is_hidden": false}]
+
+    # Giới hạn
+    time_limit_seconds = Column(Integer, default=5)  # Giới hạn thời gian chạy code (giây)
+    memory_limit_mb = Column(Integer, default=128)  # Giới hạn bộ nhớ (MB)
+
+    # Thông tin bài học liên kết
+    lesson_info = Column(JSON, nullable=True)
+
     # Metadata
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    expires_at = Column(DateTime(timezone=True), nullable=True)
+    creator_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=True)
     is_active = Column(Boolean, default=True)
-    
+
     # Relationships
     creator = relationship("User", back_populates="code_exercises")
-    submissions = relationship("CodeExerciseSubmission", back_populates="exercise", cascade="all, delete-orphan")
+    submissions = relationship("CodeSubmission", back_populates="exercise", cascade="all, delete-orphan")
 
 
-class CodeExerciseSubmission(Base):
-    """Bài nộp của học sinh"""
-    __tablename__ = "code_exercise_submissions"
-    
+class CodeSubmission(Base):
+    """Bài nộp code của học sinh"""
+    __tablename__ = "code_submissions"
+
     id = Column(Integer, primary_key=True, index=True)
-    exercise_id = Column(Integer, ForeignKey("shared_code_exercises.id"), nullable=False)
-    
-    # Thông tin học sinh (không cần đăng nhập)
+    exercise_id = Column(Integer, ForeignKey("code_exercises.id", ondelete="CASCADE"), nullable=False)
+
+    # Thông tin học sinh
     student_name = Column(String(200), nullable=False)
-    
-    # Bài làm
-    submitted_code = Column(Text, nullable=True)  # Cho coding
-    submitted_order = Column(JSON, nullable=True)  # Cho parsons: ["b1", "b2", "b3"]
-    
-    # Kết quả
-    score = Column(Integer, default=0)  # 0-100
-    is_correct = Column(Boolean, default=False)
-    test_results = Column(JSON, nullable=True)  # Chi tiết kết quả từng test
-    feedback = Column(Text, nullable=True)  # Feedback từ LLM
-    
-    # Metadata
-    submitted_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    student_class = Column(String(100), nullable=False)
+    student_group = Column(String(100), nullable=True)
+
+    # Code và kết quả
+    code = Column(Text, nullable=False)
+    language = Column(String(50), default="python", nullable=False)
+
+    # Kết quả chấm
+    status = Column(String(50), default="pending")  # pending, running, passed, failed, error, timeout
+    total_tests = Column(Integer, default=0)
+    passed_tests = Column(Integer, default=0)
+    test_results = Column(JSON, nullable=True)  # [{"input": "...", "expected": "...", "actual": "...", "passed": true}]
+    error_message = Column(Text, nullable=True)
     execution_time_ms = Column(Integer, nullable=True)
-    
+
+    # Metadata
+    submitted_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
     # Relationship
-    exercise = relationship("SharedCodeExercise", back_populates="submissions")
+    exercise = relationship("CodeExercise", back_populates="submissions")

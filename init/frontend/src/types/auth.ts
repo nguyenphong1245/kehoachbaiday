@@ -5,6 +5,11 @@ export interface LoginPayload {
 
 export interface RegisterPayload extends LoginPayload {}
 
+export interface StudentLoginPayload {
+  username: string;
+  password: string;
+}
+
 export interface TokenResponse {
   access_token: string;
   token_type: string;
@@ -38,6 +43,9 @@ export interface UserSettings {
   marketing_emails_enabled: boolean;
   push_notifications_enabled: boolean;
   timezone?: string | null;
+  teaching_tools?: string[] | null;
+  custom_tools?: string[] | null;
+  teaching_style?: string | null;
 }
 
 export interface User {
@@ -45,6 +53,8 @@ export interface User {
   email: string;
   is_active: boolean;
   is_verified: boolean;
+  token_balance: number;
+  tokens_used: number;
   created_at: string;
   roles: Role[];
   profile?: UserProfile | null;
@@ -68,9 +78,17 @@ export interface UserSettingsUpdatePayload {
   marketing_emails_enabled?: boolean;
   push_notifications_enabled?: boolean;
   timezone?: string | null;
+  teaching_tools?: string[] | null;
+  custom_tools?: string[] | null;
+  teaching_style?: string | null;
 }
 
 export interface AuthResponse extends TokenResponse {
+  user: User;
+}
+
+/** Login response — tokens are sent via httpOnly cookies, only user data in body. */
+export interface LoginResponse {
   user: User;
 }
 
@@ -79,6 +97,7 @@ export interface AuthMessage {
 }
 
 export interface EmailVerificationConfirmPayload {
+  email: string;
   token: string;
 }
 
@@ -91,6 +110,7 @@ export interface PasswordResetRequestPayload {
 }
 
 export interface PasswordResetConfirmPayload {
+  email: string;
   token: string;
   password: string;
 }

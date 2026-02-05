@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user, require_admin, user_has_role
+from app.core.rate_limiter import limiter
 from app.db.session import get_db
 from app.models.profile import UserProfile
 from app.models.role import Role
@@ -180,7 +181,9 @@ async def update_user_settings(
 
 
 @router.post("/users/me/change-password", response_model=AuthMessage)
+@limiter.limit("5/minute")
 async def change_password(
+    request: Request,
     payload: ChangePassword,
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -192,18 +195,11 @@ async def change_password(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Mật khẩu cũ không đúng"
         )
-    
-    # Validate new password length
-    if len(payload.new_password) < 6:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Mật khẩu mới phải có ít nhất 6 ký tự"
-        )
-    
-    # Update password
+
+    # Update password (validation handled by ChangePassword schema)
     current_user.hashed_password = get_password_hash(payload.new_password)
     await session.commit()
-    
+
     return AuthMessage(message="Đổi mật khẩu thành công")
 
 

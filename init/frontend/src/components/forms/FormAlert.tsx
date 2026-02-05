@@ -6,8 +6,8 @@ interface FormAlertProps {
 }
 
 const variants = {
-  error: "bg-red-50 text-red-700 border-red-200",
-  success: "bg-green-50 text-green-700 border-green-200",
+  error: "bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800",
+  success: "bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800",
 };
 
 const FormAlert = ({ variant = "error", children }: FormAlertProps) => {

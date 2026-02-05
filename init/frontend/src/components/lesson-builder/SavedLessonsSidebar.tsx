@@ -17,7 +17,8 @@ import {
 } from "lucide-react";
 import { getSavedLessonPlans } from "@/services/lessonBuilderService";
 import type { SavedLessonPlanListItem } from "@/types/lessonBuilder";
-import { getStoredAuthUser, clearStoredAuth } from "@/utils/authStorage";
+import { getStoredAuthUser } from "@/utils/authStorage";
+import { logoutUser } from "@/services/authService";
 
 interface SavedLessonsSidebarProps {
   isOpen: boolean;
@@ -66,8 +67,8 @@ export const SavedLessonsSidebar: React.FC<SavedLessonsSidebarProps> = ({
     }
   };
 
-  const handleLogout = () => {
-    clearStoredAuth();
+  const handleLogout = async () => {
+    await logoutUser();
     navigate("/login");
   };
 
@@ -147,7 +148,7 @@ export const SavedLessonsSidebar: React.FC<SavedLessonsSidebarProps> = ({
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-slate-800 dark:text-white flex items-center gap-2">
                 <FileText className="w-4 h-4 text-blue-500" />
-                Giáo án đã lưu
+                KHBD đã lưu
               </h3>
               <Link
                 to="/lesson-builder/saved"
@@ -166,7 +167,7 @@ export const SavedLessonsSidebar: React.FC<SavedLessonsSidebarProps> = ({
               <div className="text-center py-8">
                 <FolderOpen className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
                 <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Chưa có giáo án nào được lưu
+                  Chưa có KHBD nào được lưu
                 </p>
               </div>
             ) : (

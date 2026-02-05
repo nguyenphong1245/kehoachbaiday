@@ -17,7 +17,7 @@ def upgrade() -> None:
         sa.Column("id", sa.String(), primary_key=True),
         sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
         sa.Column("title", sa.String(), nullable=True),
-        sa.Column("is_archived", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_archived", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
     )

@@ -19,7 +19,8 @@ class SharedQuiz(Base):
     questions = Column(JSON, nullable=False)  # List câu hỏi đã parse
     total_questions = Column(Integer, default=0)
     time_limit = Column(Integer, nullable=True)  # Thời gian làm bài (phút), null = không giới hạn
-    
+    lesson_info = Column(JSON, nullable=True)  # Thông tin bài học liên kết
+
     # Metadata
     creator_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -46,6 +47,7 @@ class QuizResponse(Base):
     # Thông tin học sinh
     student_name = Column(String(200), nullable=False)
     student_class = Column(String(100), nullable=False)
+    student_group = Column(String(100), nullable=True)
     student_email = Column(String(255), nullable=True)
     
     # Đáp án

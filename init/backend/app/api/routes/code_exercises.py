@@ -1,737 +1,736 @@
 """
-API Routes cho Code Exercises - Bài tập Ghép thẻ code và Viết code
+API Routes cho bài tập lập trình (Code Exercises)
 """
-import logging
 import secrets
-import random
-from datetime import datetime, timezone, timedelta
-from typing import Optional, List
-
-from fastapi import APIRouter, Depends, HTTPException, status
+import logging
+from datetime import datetime, timedelta
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.rate_limiter import limiter
 
-from app.api.deps import get_current_user_optional, get_current_user
-from app.db.session import get_db
+from app.api.deps import get_db, get_current_user
 from app.models.user import User
-from app.models.code_exercise import SharedCodeExercise, CodeExerciseSubmission
-from app.core.config import get_settings
+from app.models.code_exercise import CodeExercise, CodeSubmission
+from app.models.submission_session import SubmissionSession
+from app.schemas.shared_quiz import StartSessionRequest, StartSessionResponse
 from app.schemas.code_exercise import (
     CreateCodeExerciseRequest,
     CreateCodeExerciseResponse,
-    PublicCodeExerciseResponse,
-    SubmitParsonsRequest,
-    SubmitCodingRequest,
-    SubmitCodeExerciseResponse,
-    TestResult,
-    SubmissionListResponse,
-    SubmissionListItem,
-    SubmissionDetail,
-    MyCodeExercisesResponse,
-    MyCodeExerciseItem,
-    ParsonsBlock,
-    GenerateCodeExerciseRequest,
-    GenerateCodeExerciseResponse,
-    GeneratedParsonsExercise,
-    GeneratedCodingExercise,
-    TestCase,
+    CodeExerciseResponse,
+    CodeExercisePublic,
+    CodeExerciseTeacherView,
+    UpdateCodeExerciseRequest,
+    TestCasePublic,
+    TestCaseInput,
+    RunCodeRequest,
+    RunCodeResponse,
+    SubmitCodeRequest,
+    SubmitCodeResponse,
+    TestResultItem,
+    SubmissionItem,
+    SubmissionsListResponse,
+    ExtractCodeExercisesRequest,
+    ExtractedExerciseItem,
+    ExtractCodeExercisesResponse,
+    HintRequest,
+    HintResponse,
 )
+from app.services.piston_service import execute_code, run_test_cases
+from app.services.code_extraction_service import get_code_extraction_service
+from app.services.hint_service import get_hint_service
+from app.core.config import get_settings
 
-router = APIRouter()
+router = APIRouter(prefix="/code-exercises", tags=["Code Exercises"])
 logger = logging.getLogger(__name__)
 
 
-def generate_share_code(length: int = 8) -> str:
-    """Tạo share code ngẫu nhiên"""
-    alphabet = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-    return ''.join(secrets.choice(alphabet) for _ in range(length))
+def generate_share_code() -> str:
+    """Generate random 8-character share code"""
+    return secrets.token_urlsafe(6)[:8]
 
 
-# ============== GIÁO VIÊN: Tạo/Share bài tập ==============
+# ============== GV Endpoints (Authenticated) ==============
 
-@router.post("/", response_model=CreateCodeExerciseResponse)
+@router.post("/", response_model=CreateCodeExerciseResponse, status_code=status.HTTP_201_CREATED)
 async def create_code_exercise(
     request: CreateCodeExerciseRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Tạo và share bài tập code"""
-    logger.info(f"Creating {request.exercise_type} exercise: {request.title}")
-    
-    # Validate exercise data
-    if request.exercise_type == "parsons":
-        if not request.parsons_data:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="parsons_data is required for parsons exercise"
-            )
-        exercise_data = request.parsons_data.model_dump()
-    elif request.exercise_type == "coding":
-        if not request.coding_data:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="coding_data is required for coding exercise"
-            )
-        exercise_data = request.coding_data.model_dump()
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="exercise_type must be 'parsons' or 'coding'"
-        )
-    
+    """Tạo bài tập lập trình mới"""
+    logger.info(f"Creating code exercise for user {current_user.id}: {request.title}")
+
     # Generate unique share code
     share_code = generate_share_code()
     while True:
         result = await db.execute(
-            select(SharedCodeExercise).where(SharedCodeExercise.share_code == share_code)
+            select(CodeExercise).where(CodeExercise.share_code == share_code)
         )
         if not result.scalar_one_or_none():
             break
         share_code = generate_share_code()
-    
-    # Calculate expiration
-    expires_at = datetime.now(timezone.utc) + timedelta(days=request.expires_in_days)
-    
-    # Create exercise
-    exercise = SharedCodeExercise(
+
+    expires_at = datetime.utcnow() + timedelta(days=request.expires_in_days)
+
+    exercise = CodeExercise(
         share_code=share_code,
-        exercise_type=request.exercise_type,
         title=request.title,
         description=request.description,
         language=request.language,
-        difficulty=request.difficulty,
-        exercise_data=exercise_data,
+        problem_statement=request.problem_statement,
+        starter_code=request.starter_code,
+        test_cases=[tc.dict() for tc in request.test_cases],
+        time_limit_seconds=request.time_limit_seconds,
+        memory_limit_mb=request.memory_limit_mb,
+        lesson_info=request.lesson_info,
         creator_id=current_user.id,
-        lesson_plan_id=request.lesson_plan_id,
         expires_at=expires_at,
     )
-    
+
     db.add(exercise)
     await db.commit()
     await db.refresh(exercise)
-    
+
     settings = get_settings()
-    share_url = f"{settings.frontend_base_url}/code/{request.exercise_type}/{share_code}"
-    
-    logger.info(f"✅ Created exercise {exercise.id} with code {share_code}")
-    
+    share_url = f"{settings.frontend_base_url}/code/{share_code}"
+
     return CreateCodeExerciseResponse(
         exercise_id=exercise.id,
         share_code=share_code,
         share_url=share_url,
         title=exercise.title,
-        exercise_type=exercise.exercise_type,
+        total_test_cases=len(request.test_cases),
         expires_at=expires_at,
     )
 
 
-# ============== PUBLIC: Lấy bài tập (cho học sinh) ==============
-
-@router.get("/public/{share_code}", response_model=PublicCodeExerciseResponse)
-async def get_public_exercise(
-    share_code: str,
-    db: AsyncSession = Depends(get_db),
-):
-    """Lấy bài tập để học sinh làm (đã ẩn đáp án)"""
-    from sqlalchemy.orm import selectinload
-    from app.models.profile import Profile
-    
-    result = await db.execute(
-        select(SharedCodeExercise)
-        .options(
-            selectinload(SharedCodeExercise.creator).selectinload(User.profile)
-        )
-        .where(
-            SharedCodeExercise.share_code == share_code,
-            SharedCodeExercise.is_active == True
-        )
-    )
-    exercise = result.scalar_one_or_none()
-    
-    if not exercise:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy bài tập hoặc bài tập đã hết hạn"
-        )
-    
-    # Check expiration - handle both naive and aware datetimes
-    if exercise.expires_at:
-        expires_at = exercise.expires_at
-        # Convert naive datetime to UTC if needed
-        if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
-        if expires_at < datetime.now(timezone.utc):
-            raise HTTPException(
-                status_code=status.HTTP_410_GONE,
-                detail="Bài tập đã hết hạn"
-            )
-    
-    # Get creator name
-    creator_name = None
-    if exercise.creator:
-        if exercise.creator.profile and exercise.creator.profile.full_name:
-            creator_name = exercise.creator.profile.full_name
-        else:
-            creator_name = exercise.creator.email.split("@")[0]
-    
-    # Prepare public data (hide answers)
-    exercise_data = exercise.exercise_data
-    
-    if exercise.exercise_type == "parsons":
-        # Xáo trộn blocks + thêm distractors, ẩn correct_order
-        blocks = [ParsonsBlock(**b) for b in exercise_data.get("blocks", [])]
-        distractors = [ParsonsBlock(**d) for d in exercise_data.get("distractors", [])]
-        
-        # Trộn blocks với distractors
-        all_blocks = blocks + distractors
-        random.shuffle(all_blocks)
-        
-        parsons_data = {
-            "blocks": [b.model_dump() for b in all_blocks]
-            # KHÔNG có correct_order
-        }
-        coding_data = None
-    else:
-        # Ẩn solution_code và test_code
-        parsons_data = None
-        test_cases = exercise_data.get("test_cases", [])
-        # Chỉ hiện test cases không hidden
-        visible_test_cases = [tc for tc in test_cases if not tc.get("hidden", False)]
-        
-        coding_data = {
-            "starter_code": exercise_data.get("starter_code", ""),
-            "test_cases": visible_test_cases,
-            "hints": exercise_data.get("hints", [])
-            # KHÔNG có solution_code, test_code
-        }
-    
-    return PublicCodeExerciseResponse(
-        share_code=share_code,
-        exercise_type=exercise.exercise_type,
-        title=exercise.title,
-        description=exercise.description or "",
-        language=exercise.language,
-        difficulty=exercise.difficulty,
-        parsons_data=parsons_data,
-        coding_data=coding_data,
-        creator_name=creator_name,
-        created_at=exercise.created_at,
-    )
-
-
-# ============== PUBLIC: Nộp bài ==============
-
-@router.post("/public/{share_code}/submit/parsons", response_model=SubmitCodeExerciseResponse)
-async def submit_parsons(
-    share_code: str,
-    request: SubmitParsonsRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    """Nộp bài ghép thẻ"""
-    result = await db.execute(
-        select(SharedCodeExercise).where(
-            SharedCodeExercise.share_code == share_code,
-            SharedCodeExercise.is_active == True,
-            SharedCodeExercise.exercise_type == "parsons"
-        )
-    )
-    exercise = result.scalar_one_or_none()
-    
-    if not exercise:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy bài tập"
-        )
-    
-    # Check expiration
-    if exercise.expires_at and exercise.expires_at < datetime.now(timezone.utc):
-        raise HTTPException(
-            status_code=status.HTTP_410_GONE,
-            detail="Bài tập đã hết hạn"
-        )
-    
-    # Chấm điểm
-    exercise_data = exercise.exercise_data
-    correct_order = exercise_data.get("correct_order", [])
-    submitted_order = request.submitted_order
-    
-    # So sánh thứ tự
-    is_correct = submitted_order == correct_order
-    
-    # Tính điểm từng phần
-    if is_correct:
-        score = 100
-    else:
-        # Đếm số vị trí đúng
-        correct_positions = 0
-        for i, block_id in enumerate(submitted_order):
-            if i < len(correct_order) and correct_order[i] == block_id:
-                correct_positions += 1
-        
-        score = int((correct_positions / max(len(correct_order), 1)) * 100)
-    
-    # Tạo feedback
-    if is_correct:
-        feedback = "🎉 Xuất sắc! Bạn đã sắp xếp đúng tất cả các dòng code!"
-    elif score >= 70:
-        feedback = f"👍 Tốt lắm! Bạn đã đúng {score}% vị trí. Hãy kiểm tra lại thứ tự các dòng."
-    elif score >= 40:
-        feedback = f"💪 Cố gắng thêm! Bạn đúng {score}% vị trí. Chú ý logic của chương trình."
-    else:
-        feedback = f"📚 Hãy xem lại kiến thức! Bạn chỉ đúng {score}% vị trí."
-    
-    # Lưu submission
-    submission = CodeExerciseSubmission(
-        exercise_id=exercise.id,
-        student_name=request.student_name,
-        submitted_order=submitted_order,
-        score=score,
-        is_correct=is_correct,
-        feedback=feedback,
-    )
-    
-    db.add(submission)
-    await db.commit()
-    await db.refresh(submission)
-    
-    logger.info(f"Parsons submission: {request.student_name} - Score: {score}")
-    
-    return SubmitCodeExerciseResponse(
-        submission_id=submission.id,
-        is_correct=is_correct,
-        score=score,
-        feedback=feedback,
-        submitted_at=submission.submitted_at,
-    )
-
-
-@router.post("/public/{share_code}/submit/coding", response_model=SubmitCodeExerciseResponse)
-async def submit_coding(
-    share_code: str,
-    request: SubmitCodingRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    """Nộp bài viết code - chấm bằng cách chạy test"""
-    result = await db.execute(
-        select(SharedCodeExercise).where(
-            SharedCodeExercise.share_code == share_code,
-            SharedCodeExercise.is_active == True,
-            SharedCodeExercise.exercise_type == "coding"
-        )
-    )
-    exercise = result.scalar_one_or_none()
-    
-    if not exercise:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy bài tập"
-        )
-    
-    # Check expiration
-    if exercise.expires_at and exercise.expires_at < datetime.now(timezone.utc):
-        raise HTTPException(
-            status_code=status.HTTP_410_GONE,
-            detail="Bài tập đã hết hạn"
-        )
-    
-    exercise_data = exercise.exercise_data
-    test_cases = exercise_data.get("test_cases", [])
-    test_code = exercise_data.get("test_code", "")
-    
-    # Chạy code với test cases
-    test_results = []
-    passed_count = 0
-    total_count = len(test_cases)
-    
-    # Sử dụng exec để chạy code (CẨN THẬN - nên dùng sandbox trong production)
-    # Ở đây ta sẽ trả về kết quả đơn giản và để frontend chạy Pyodide
-    # Backend chỉ lưu submission và tính điểm dựa trên input từ frontend
-    
-    # Với implementation đơn giản, ta gửi test_code về cho frontend chạy
-    # Hoặc ta có thể dùng LLM để đánh giá code
-    
-    # Tạm thời: Chỉ lưu submission, điểm sẽ được cập nhật sau khi frontend chạy test
-    submission = CodeExerciseSubmission(
-        exercise_id=exercise.id,
-        student_name=request.student_name,
-        submitted_code=request.submitted_code,
-        score=0,  # Sẽ được cập nhật
-        is_correct=False,
-        feedback="Đang chấm bài...",
-    )
-    
-    db.add(submission)
-    await db.commit()
-    await db.refresh(submission)
-    
-    logger.info(f"Coding submission received: {request.student_name}")
-    
-    # Trả về test_code để frontend chạy
-    return SubmitCodeExerciseResponse(
-        submission_id=submission.id,
-        is_correct=False,
-        score=0,
-        total_tests=total_count,
-        passed_tests=0,
-        test_results=[],
-        feedback="Đang chờ kết quả từ trình chạy code...",
-        submitted_at=submission.submitted_at,
-    )
-
-
-@router.put("/public/submission/{submission_id}/result")
-async def update_submission_result(
-    submission_id: int,
-    score: int,
-    is_correct: bool,
-    passed_tests: int,
-    total_tests: int,
-    test_results: List[dict],
-    feedback: Optional[str] = None,
-    db: AsyncSession = Depends(get_db),
-):
-    """Cập nhật kết quả submission sau khi frontend chạy test"""
-    result = await db.execute(
-        select(CodeExerciseSubmission).where(CodeExerciseSubmission.id == submission_id)
-    )
-    submission = result.scalar_one_or_none()
-    
-    if not submission:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy bài nộp"
-        )
-    
-    submission.score = score
-    submission.is_correct = is_correct
-    submission.test_results = test_results
-    
-    # Tạo feedback
-    if is_correct:
-        submission.feedback = "🎉 Xuất sắc! Code của bạn vượt qua tất cả test cases!"
-    elif score >= 70:
-        submission.feedback = f"👍 Tốt lắm! Đạt {passed_tests}/{total_tests} test cases."
-    elif score >= 40:
-        submission.feedback = f"💪 Cố gắng thêm! Chỉ đạt {passed_tests}/{total_tests} test cases."
-    else:
-        submission.feedback = f"📚 Hãy xem lại code! Chỉ đạt {passed_tests}/{total_tests} test cases."
-    
-    if feedback:
-        submission.feedback = feedback
-    
-    await db.commit()
-    
-    return {"message": "Cập nhật kết quả thành công", "score": score}
-
-
-# ============== GIÁO VIÊN: Quản lý bài tập ==============
-
-@router.get("/my", response_model=MyCodeExercisesResponse)
+@router.get("/my-exercises", response_model=list[CodeExerciseResponse])
 async def get_my_exercises(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Lấy danh sách bài tập của giáo viên"""
+    """Lấy danh sách bài tập đã tạo"""
     result = await db.execute(
-        select(SharedCodeExercise)
-        .where(SharedCodeExercise.creator_id == current_user.id)
-        .order_by(SharedCodeExercise.created_at.desc())
+        select(CodeExercise, func.count(CodeSubmission.id).label("submission_count"))
+        .outerjoin(CodeSubmission)
+        .where(CodeExercise.creator_id == current_user.id)
+        .group_by(CodeExercise.id)
+        .order_by(CodeExercise.created_at.desc())
     )
-    exercises = result.scalars().all()
-    
-    items = []
-    for ex in exercises:
-        # Đếm submissions
-        sub_result = await db.execute(
-            select(func.count(CodeExerciseSubmission.id))
-            .where(CodeExerciseSubmission.exercise_id == ex.id)
-        )
-        submission_count = sub_result.scalar() or 0
-        
-        # Tính điểm trung bình
-        avg_result = await db.execute(
-            select(func.avg(CodeExerciseSubmission.score))
-            .where(CodeExerciseSubmission.exercise_id == ex.id)
-        )
-        average_score = avg_result.scalar()
-        
-        items.append(MyCodeExerciseItem(
-            id=ex.id,
-            share_code=ex.share_code,
-            exercise_type=ex.exercise_type,
-            title=ex.title,
-            difficulty=ex.difficulty,
+
+    exercises = []
+    for exercise, submission_count in result.all():
+        test_cases = exercise.test_cases or []
+        exercises.append(CodeExerciseResponse(
+            id=exercise.id,
+            share_code=exercise.share_code,
+            title=exercise.title,
+            description=exercise.description,
+            language=exercise.language,
+            total_test_cases=len(test_cases),
+            created_at=exercise.created_at,
+            expires_at=exercise.expires_at,
+            is_active=exercise.is_active,
             submission_count=submission_count,
-            average_score=round(average_score, 1) if average_score else None,
-            is_active=ex.is_active,
-            created_at=ex.created_at,
-            expires_at=ex.expires_at,
+            lesson_info=exercise.lesson_info,
         ))
-    
-    return MyCodeExercisesResponse(
-        exercises=items,
-        total=len(items),
-    )
+
+    return exercises
 
 
-@router.get("/{share_code}/submissions", response_model=SubmissionListResponse)
+@router.get("/{exercise_id}/submissions", response_model=SubmissionsListResponse)
 async def get_exercise_submissions(
-    share_code: str,
+    exercise_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Xem danh sách bài nộp của một bài tập"""
+    """Lấy danh sách bài nộp của học sinh"""
     result = await db.execute(
-        select(SharedCodeExercise).where(
-            SharedCodeExercise.share_code == share_code,
-            SharedCodeExercise.creator_id == current_user.id
+        select(CodeExercise).where(
+            CodeExercise.id == exercise_id,
+            CodeExercise.creator_id == current_user.id,
         )
     )
     exercise = result.scalar_one_or_none()
-    
     if not exercise:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy bài tập hoặc bạn không có quyền xem"
-        )
-    
-    # Get submissions
-    sub_result = await db.execute(
-        select(CodeExerciseSubmission)
-        .where(CodeExerciseSubmission.exercise_id == exercise.id)
-        .order_by(CodeExerciseSubmission.submitted_at.desc())
+        raise HTTPException(status_code=404, detail="Bài tập không tồn tại")
+
+    subs_result = await db.execute(
+        select(CodeSubmission)
+        .where(CodeSubmission.exercise_id == exercise_id)
+        .order_by(CodeSubmission.submitted_at.desc())
     )
-    submissions = sub_result.scalars().all()
-    
-    items = [
-        SubmissionListItem(
-            id=s.id,
-            student_name=s.student_name,
-            score=s.score,
-            is_correct=s.is_correct,
-            submitted_at=s.submitted_at,
-        )
-        for s in submissions
-    ]
-    
-    # Calculate average
-    scores = [s.score for s in submissions]
-    average_score = sum(scores) / len(scores) if scores else 0
-    
-    return SubmissionListResponse(
+    submissions = subs_result.scalars().all()
+
+    return SubmissionsListResponse(
         exercise_title=exercise.title,
-        exercise_type=exercise.exercise_type,
-        submissions=items,
-        total=len(items),
-        average_score=round(average_score, 1),
+        total_submissions=len(submissions),
+        submissions=[
+            SubmissionItem(
+                id=s.id,
+                student_name=s.student_name,
+                student_class=s.student_class,
+                student_group=s.student_group,
+                status=s.status,
+                total_tests=s.total_tests,
+                passed_tests=s.passed_tests,
+                percentage=round(s.passed_tests / s.total_tests * 100, 1) if s.total_tests > 0 else 0,
+                code=s.code,
+                submitted_at=s.submitted_at,
+                execution_time_ms=s.execution_time_ms,
+            )
+            for s in submissions
+        ],
     )
 
 
-@router.delete("/{share_code}")
+@router.delete("/{exercise_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_exercise(
-    share_code: str,
+    exercise_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Xóa/hủy bài tập"""
+    """Xóa bài tập"""
     result = await db.execute(
-        select(SharedCodeExercise).where(
-            SharedCodeExercise.share_code == share_code,
-            SharedCodeExercise.creator_id == current_user.id
+        select(CodeExercise).where(
+            CodeExercise.id == exercise_id,
+            CodeExercise.creator_id == current_user.id,
         )
     )
     exercise = result.scalar_one_or_none()
-    
     if not exercise:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy bài tập"
-        )
-    
+        raise HTTPException(status_code=404, detail="Bài tập không tồn tại")
+
     await db.delete(exercise)
     await db.commit()
-    
-    return {"message": "Đã xóa bài tập thành công"}
 
 
-@router.put("/{share_code}/toggle")
+@router.patch("/{exercise_id}/toggle-active")
 async def toggle_exercise_active(
-    share_code: str,
+    exercise_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Bật/tắt bài tập"""
     result = await db.execute(
-        select(SharedCodeExercise).where(
-            SharedCodeExercise.share_code == share_code,
-            SharedCodeExercise.creator_id == current_user.id
+        select(CodeExercise).where(
+            CodeExercise.id == exercise_id,
+            CodeExercise.creator_id == current_user.id,
         )
     )
     exercise = result.scalar_one_or_none()
-    
     if not exercise:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy bài tập"
-        )
-    
+        raise HTTPException(status_code=404, detail="Bài tập không tồn tại")
+
     exercise.is_active = not exercise.is_active
     await db.commit()
-    
-    status_text = "bật" if exercise.is_active else "tắt"
-    return {"message": f"Đã {status_text} bài tập", "is_active": exercise.is_active}
+
+    return {"message": "Đã cập nhật", "is_active": exercise.is_active}
 
 
-# ============== TẠO BÀI TẬP BẰNG AI ==============
-
-@router.post("/generate", response_model=GenerateCodeExerciseResponse)
-async def generate_code_exercise(
-    request: GenerateCodeExerciseRequest,
+@router.get("/{exercise_id}/statistics")
+async def get_exercise_statistics(
+    exercise_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Tạo bài tập code (Parsons hoặc Coding) từ nội dung section bằng AI
-    """
-    import json
-    import re
-    from openai import AsyncOpenAI
-    
-    settings = get_settings()
-    client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-    
-    if request.exercise_type == "parsons":
-        system_prompt = """Bạn là trợ lý tạo bài tập lập trình. 
-Nhiệm vụ: Tạo bài tập "Ghép thẻ code" (Parsons Problem) từ nội dung bài học.
-
-Bài tập Ghép thẻ code: Học sinh sắp xếp các dòng code theo đúng thứ tự để tạo chương trình hoàn chỉnh.
-
-Yêu cầu:
-1. Tạo 5-10 blocks code, mỗi block là một dòng hoặc một nhóm dòng liên quan
-2. Mỗi block có id duy nhất (block_1, block_2, ...)
-3. Trường indent cho biết mức thụt đầu dòng (0 = không thụt, 1 = 1 level, ...)
-4. correct_order là danh sách id theo thứ tự đúng
-5. Có thể thêm 1-2 distractors (dòng code sai/nhiễu) để tăng độ khó
-
-Trả về JSON theo format:
-{
-  "title": "Tiêu đề bài tập ngắn gọn",
-  "description": "Mô tả yêu cầu bài tập",
-  "blocks": [
-    {"id": "block_1", "content": "def hello():", "indent": 0},
-    {"id": "block_2", "content": "print('Hello')", "indent": 1}
-  ],
-  "correct_order": ["block_1", "block_2"],
-  "distractors": [
-    {"id": "distractor_1", "content": "return None", "indent": 1}
-  ]
-}"""
-        
-        user_prompt = f"""Nội dung bài học:
-{request.section_content}
-
-Tên bài: {request.lesson_name}
-Phần: {request.section_title}
-Độ khó: {request.difficulty}
-Ngôn ngữ: {request.language}
-
-Tạo một bài tập Ghép thẻ code phù hợp với nội dung trên. Chỉ trả về JSON, không giải thích."""
-
-    else:  # coding
-        system_prompt = """Bạn là trợ lý tạo bài tập lập trình.
-Nhiệm vụ: Tạo bài tập "Viết code" từ nội dung bài học.
-
-Bài tập Viết code: Học sinh viết code để giải quyết yêu cầu và chạy test cases.
-
-Yêu cầu:
-1. starter_code: Code khung có sẵn với TODO comments
-2. solution_code: Code đáp án đầy đủ
-3. test_code: Các assert statements để kiểm tra
-4. test_cases: 3-5 test cases với input/expected output
-5. hints: 2-3 gợi ý giúp học sinh
-
-Trả về JSON theo format:
-{
-  "title": "Tiêu đề bài tập",
-  "description": "Mô tả yêu cầu chi tiết",
-  "starter_code": "def function():\\n    # TODO: Viết code tại đây\\n    pass",
-  "solution_code": "def function():\\n    return result",
-  "test_code": "assert function() == expected\\nassert function(1) == 1",
-  "test_cases": [
-    {"input": "", "expected": "output", "hidden": false}
-  ],
-  "hints": ["Gợi ý 1", "Gợi ý 2"]
-}"""
-
-        user_prompt = f"""Nội dung bài học:
-{request.section_content}
-
-Tên bài: {request.lesson_name}
-Phần: {request.section_title}
-Độ khó: {request.difficulty}
-Ngôn ngữ: {request.language}
-
-Tạo một bài tập Viết code phù hợp với nội dung trên. Chỉ trả về JSON, không giải thích."""
-
-    try:
-        response = await client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            temperature=0.7,
-            max_tokens=2000,
+    """Lấy thống kê bài tập lập trình"""
+    result = await db.execute(
+        select(CodeExercise).where(
+            CodeExercise.id == exercise_id,
+            CodeExercise.creator_id == current_user.id,
         )
+    )
+    exercise = result.scalar_one_or_none()
+    if not exercise:
+        raise HTTPException(status_code=404, detail="Bài tập không tồn tại")
+
+    # Get all submissions
+    subs_result = await db.execute(
+        select(CodeSubmission)
+        .where(CodeSubmission.exercise_id == exercise_id)
+    )
+    submissions = subs_result.scalars().all()
+
+    total = len(submissions)
+    if total == 0:
+        return {
+            "total_submissions": 0,
+            "pass_rate": 0,
+            "average_percentage": 0,
+            "highest_percentage": 0,
+            "lowest_percentage": 0,
+            "average_execution_time_ms": 0,
+            "status_distribution": {"passed": 0, "failed": 0, "error": 0, "timeout": 0},
+            "score_distribution": {"0-20": 0, "21-40": 0, "41-60": 0, "61-80": 0, "81-100": 0},
+        }
+
+    percentages = []
+    exec_times = []
+    status_counts = {"passed": 0, "failed": 0, "error": 0, "timeout": 0}
+    score_dist = {"0-20": 0, "21-40": 0, "41-60": 0, "61-80": 0, "81-100": 0}
+
+    for sub in submissions:
+        pct = round(sub.passed_tests / sub.total_tests * 100, 1) if sub.total_tests > 0 else 0
+        percentages.append(pct)
         
-        content = response.choices[0].message.content.strip()
+        if sub.execution_time_ms:
+            exec_times.append(sub.execution_time_ms)
         
-        # Trích xuất JSON từ response
-        json_match = re.search(r'\{[\s\S]*\}', content)
-        if not json_match:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Không thể phân tích response từ AI"
-            )
-        
-        data = json.loads(json_match.group())
-        
-        if request.exercise_type == "parsons":
-            parsons = GeneratedParsonsExercise(
-                title=data.get("title", "Bài tập Ghép thẻ code"),
-                description=data.get("description", ""),
-                blocks=[ParsonsBlock(**b) for b in data.get("blocks", [])],
-                correct_order=data.get("correct_order", []),
-                distractors=[ParsonsBlock(**d) for d in data.get("distractors", [])] if data.get("distractors") else None
-            )
-            return GenerateCodeExerciseResponse(
-                exercise_type="parsons",
-                parsons_exercise=parsons
-            )
+        status = sub.status or "failed"
+        if status in status_counts:
+            status_counts[status] += 1
         else:
-            coding = GeneratedCodingExercise(
-                title=data.get("title", "Bài tập Viết code"),
-                description=data.get("description", ""),
-                starter_code=data.get("starter_code", ""),
-                solution_code=data.get("solution_code", ""),
-                test_code=data.get("test_code", ""),
-                test_cases=[TestCase(**tc) for tc in data.get("test_cases", [])],
-                hints=data.get("hints")
+            status_counts["failed"] += 1
+        
+        if pct <= 20:
+            score_dist["0-20"] += 1
+        elif pct <= 40:
+            score_dist["21-40"] += 1
+        elif pct <= 60:
+            score_dist["41-60"] += 1
+        elif pct <= 80:
+            score_dist["61-80"] += 1
+        else:
+            score_dist["81-100"] += 1
+
+    avg_pct = round(sum(percentages) / len(percentages), 1) if percentages else 0
+    avg_exec = round(sum(exec_times) / len(exec_times), 1) if exec_times else 0
+
+    return {
+        "total_submissions": total,
+        "pass_rate": round(status_counts["passed"] / total * 100, 1),
+        "average_percentage": avg_pct,
+        "highest_percentage": max(percentages) if percentages else 0,
+        "lowest_percentage": min(percentages) if percentages else 0,
+        "average_execution_time_ms": avg_exec,
+        "status_distribution": status_counts,
+        "score_distribution": score_dist,
+    }
+
+
+# ============== Code Extraction from KHBD ==============
+
+@router.post("/extract-from-lesson", response_model=ExtractCodeExercisesResponse)
+async def extract_code_exercises_from_lesson(
+    request: ExtractCodeExercisesRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Trích xuất bài tập lập trình từ KHBD đã sinh và tạo test cases tự động"""
+    logger.info(f"Extracting code exercises from lesson plan for user {current_user.id}")
+
+    service = get_code_extraction_service()
+    result = service.extract_exercises(
+        lesson_plan_content=request.lesson_plan_content,
+        lesson_info=request.lesson_info,
+    )
+
+    found = result.get("found", False)
+    exercises_data = result.get("exercises", [])
+
+    # Parse exercises thành schema
+    exercises = []
+    for ex_data in exercises_data:
+        test_cases = [
+            TestCaseInput(
+                input=tc.get("input", ""),
+                expected_output=tc.get("expected_output", ""),
+                is_hidden=tc.get("is_hidden", False),
             )
-            return GenerateCodeExerciseResponse(
-                exercise_type="coding",
-                coding_exercise=coding
+            for tc in ex_data.get("test_cases", [])
+        ]
+        exercises.append(ExtractedExerciseItem(
+            title=ex_data.get("title", ""),
+            description=ex_data.get("description", ""),
+            source_activity=ex_data.get("source_activity", ""),
+            language=ex_data.get("language", "python"),
+            starter_code=ex_data.get("starter_code"),
+            test_cases=test_cases,
+            lesson_info=ex_data.get("lesson_info") or request.lesson_info,
+        ))
+
+    # Nếu auto_create=true, tạo CodeExercise records
+    created_exercises = None
+    if request.auto_create and found and exercises:
+        created_exercises = []
+        settings = get_settings()
+
+        for ex in exercises:
+            share_code = generate_share_code()
+            while True:
+                check = await db.execute(
+                    select(CodeExercise).where(CodeExercise.share_code == share_code)
+                )
+                if not check.scalar_one_or_none():
+                    break
+                share_code = generate_share_code()
+
+            expires_at = datetime.utcnow() + timedelta(days=request.expires_in_days)
+
+            code_exercise = CodeExercise(
+                share_code=share_code,
+                title=ex.title,
+                description=ex.description,
+                language=ex.language,
+                problem_statement=ex.description,
+                starter_code=ex.starter_code,
+                test_cases=[tc.dict() for tc in ex.test_cases],
+                time_limit_seconds=5,
+                memory_limit_mb=128,
+                lesson_info=ex.lesson_info,
+                creator_id=current_user.id,
+                expires_at=expires_at,
             )
-            
-    except json.JSONDecodeError as e:
-        logger.error(f"JSON parse error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Lỗi phân tích dữ liệu từ AI"
+            db.add(code_exercise)
+            await db.flush()
+
+            share_url = f"{settings.frontend_base_url}/code/{share_code}"
+            created_exercises.append(CreateCodeExerciseResponse(
+                exercise_id=code_exercise.id,
+                share_code=share_code,
+                share_url=share_url,
+                title=code_exercise.title,
+                total_test_cases=len(ex.test_cases),
+                expires_at=expires_at,
+            ))
+
+        await db.commit()
+
+    return ExtractCodeExercisesResponse(
+        found=found,
+        exercises=exercises,
+        reason=result.get("reason"),
+        created_exercises=created_exercises,
+    )
+
+
+# ============== Teacher View on Public Page ==============
+
+@router.get("/public/{share_code}/teacher", response_model=CodeExerciseTeacherView)
+async def get_exercise_teacher_view(
+    share_code: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Lấy thông tin bài tập đầy đủ (cho giáo viên/creator)"""
+    result = await db.execute(
+        select(CodeExercise).where(CodeExercise.share_code == share_code)
+    )
+    exercise = result.scalar_one_or_none()
+
+    if not exercise:
+        raise HTTPException(status_code=404, detail="Bài tập không tồn tại")
+    if exercise.creator_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Bạn không có quyền xem")
+
+    all_test_cases = exercise.test_cases or []
+    return CodeExerciseTeacherView(
+        title=exercise.title,
+        description=exercise.description,
+        language=exercise.language,
+        problem_statement=exercise.problem_statement,
+        starter_code=exercise.starter_code,
+        test_cases=[
+            TestCaseInput(
+                input=tc.get("input", ""),
+                expected_output=tc.get("expected_output", ""),
+                is_hidden=tc.get("is_hidden", False),
+            )
+            for tc in all_test_cases
+        ],
+        time_limit_seconds=exercise.time_limit_seconds,
+    )
+
+
+@router.put("/public/{share_code}/update")
+async def update_exercise_by_share_code(
+    share_code: str,
+    request: UpdateCodeExerciseRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Cập nhật bài tập (chỉ creator)"""
+    result = await db.execute(
+        select(CodeExercise).where(CodeExercise.share_code == share_code)
+    )
+    exercise = result.scalar_one_or_none()
+
+    if not exercise:
+        raise HTTPException(status_code=404, detail="Bài tập không tồn tại")
+    if exercise.creator_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Bạn không có quyền chỉnh sửa")
+
+    if request.starter_code is not None:
+        exercise.starter_code = request.starter_code
+    if request.test_cases is not None:
+        exercise.test_cases = [tc.dict() for tc in request.test_cases]
+
+    await db.commit()
+    return {"message": "Đã cập nhật bài tập"}
+
+
+# ============== Public Endpoints (Học sinh) ==============
+
+@router.get("/public/{share_code}", response_model=CodeExercisePublic)
+@limiter.limit("30/minute")
+async def get_public_exercise(
+    request: Request,
+    share_code: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Lấy thông tin bài tập công khai (cho học sinh)"""
+    result = await db.execute(
+        select(CodeExercise).where(CodeExercise.share_code == share_code)
+    )
+    exercise = result.scalar_one_or_none()
+
+    if not exercise:
+        raise HTTPException(status_code=404, detail="Bài tập không tồn tại")
+
+    if not exercise.is_active:
+        raise HTTPException(status_code=403, detail="Bài tập đã bị tắt")
+
+    if exercise.expires_at and exercise.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=410, detail="Bài tập đã hết hạn")
+
+    # Chỉ trả về test cases công khai (không hidden)
+    all_test_cases = exercise.test_cases or []
+    public_test_cases = [
+        TestCasePublic(input=tc["input"], expected_output=tc["expected_output"])
+        for tc in all_test_cases
+        if not tc.get("is_hidden", False)
+    ]
+
+    return CodeExercisePublic(
+        title=exercise.title,
+        description=exercise.description,
+        language=exercise.language,
+        problem_statement=exercise.problem_statement,
+        starter_code=exercise.starter_code,
+        test_cases=public_test_cases,
+        time_limit_seconds=exercise.time_limit_seconds,
+    )
+
+
+@router.post("/public/{share_code}/run", response_model=RunCodeResponse)
+@limiter.limit("10/minute")
+async def run_code_public(
+    request: Request,
+    share_code: str,
+    body: RunCodeRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Chạy code thử (không chấm điểm)"""
+    result = await db.execute(
+        select(CodeExercise).where(CodeExercise.share_code == share_code)
+    )
+    exercise = result.scalar_one_or_none()
+
+    if not exercise:
+        raise HTTPException(status_code=404, detail="Bài tập không tồn tại")
+    if not exercise.is_active:
+        raise HTTPException(status_code=403, detail="Bài tập đã bị tắt")
+
+    exec_result = await execute_code(
+        code=body.code,
+        language=body.language or exercise.language,
+        stdin=body.stdin,
+        timeout_seconds=exercise.time_limit_seconds,
+    )
+
+    return RunCodeResponse(
+        stdout=exec_result["stdout"],
+        stderr=exec_result["stderr"],
+        exit_code=exec_result["exit_code"],
+        execution_time_ms=exec_result["execution_time_ms"],
+        timed_out=exec_result["timed_out"],
+    )
+
+
+@router.post("/public/{share_code}/start-session", response_model=StartSessionResponse)
+@limiter.limit("10/minute")
+async def start_code_session(
+    request: Request,
+    share_code: str,
+    body: StartSessionRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Bắt đầu phiên làm bài tập code - trả về session token"""
+    result = await db.execute(
+        select(CodeExercise).where(CodeExercise.share_code == share_code)
+    )
+    exercise = result.scalar_one_or_none()
+
+    if not exercise or not exercise.is_active:
+        raise HTTPException(status_code=404, detail="Bài tập không tồn tại")
+
+    if exercise.expires_at and exercise.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=410, detail="Bài tập đã hết hạn")
+
+    client_ip = request.client.host if request.client else None
+    session = SubmissionSession(
+        share_code=share_code,
+        resource_type="code_exercise",
+        student_name=body.student_name,
+        student_class=body.student_class,
+        ip_address=client_ip,
+    )
+    db.add(session)
+    await db.commit()
+    await db.refresh(session)
+
+    return StartSessionResponse(session_token=session.session_token)
+
+
+@router.post("/public/{share_code}/submit", response_model=SubmitCodeResponse)
+@limiter.limit("5/minute")
+async def submit_code(
+    request: Request,
+    share_code: str,
+    body: SubmitCodeRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Nộp bài và chấm điểm"""
+    # Verify session token
+    session_result = await db.execute(
+        select(SubmissionSession).where(
+            SubmissionSession.session_token == body.session_token,
+            SubmissionSession.share_code == share_code,
+            SubmissionSession.resource_type == "code_exercise",
+            SubmissionSession.student_name == body.student_name,
+            SubmissionSession.student_class == body.student_class,
         )
-    except Exception as e:
-        logger.error(f"Generate error: {e}")
+    )
+    session = session_result.scalar_one_or_none()
+    if not session:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Lỗi tạo bài tập: {str(e)}"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Phiên làm bài không hợp lệ. Vui lòng bắt đầu lại."
         )
+    if session.expires_at and session.expires_at < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Phiên làm bài đã hết hạn. Vui lòng bắt đầu lại."
+        )
+
+    result = await db.execute(
+        select(CodeExercise).where(CodeExercise.share_code == share_code)
+    )
+    exercise = result.scalar_one_or_none()
+
+    if not exercise:
+        raise HTTPException(status_code=404, detail="Bài tập không tồn tại")
+    if not exercise.is_active:
+        raise HTTPException(status_code=403, detail="Bài tập đã bị tắt")
+    if exercise.expires_at and exercise.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=410, detail="Bài tập đã hết hạn")
+
+    # Chạy code với tất cả test cases (bao gồm hidden)
+    all_test_cases = exercise.test_cases or []
+    grading_result = await run_test_cases(
+        code=body.code,
+        test_cases=all_test_cases,
+        language=body.language or exercise.language,
+        timeout_seconds=exercise.time_limit_seconds,
+    )
+
+    # Lưu submission
+    total_tests = grading_result["total_tests"]
+    passed_tests = grading_result["passed_tests"]
+
+    submission = CodeSubmission(
+        exercise_id=exercise.id,
+        student_name=body.student_name,
+        student_class=body.student_class,
+        student_group=body.student_group,
+        code=body.code,
+        language=body.language or exercise.language,
+        status=grading_result["status"],
+        total_tests=total_tests,
+        passed_tests=passed_tests,
+        test_results=grading_result["test_results"],
+        error_message=None,
+        execution_time_ms=grading_result["execution_time_ms"],
+    )
+
+    db.add(submission)
+    await db.commit()
+    await db.refresh(submission)
+
+    # Trả kết quả cho học sinh (chỉ hiển thị test cases công khai)
+    visible_results = [
+        TestResultItem(
+            test_num=tr["test_num"],
+            input=tr["input"],
+            expected_output=tr["expected_output"],
+            actual_output=tr["actual_output"],
+            passed=tr["passed"],
+            is_hidden=tr["is_hidden"],
+            error=tr.get("error"),
+        )
+        for tr in grading_result["test_results"]
+        if not tr["is_hidden"]
+    ]
+
+    # Thêm summary cho hidden test cases
+    hidden_results = [tr for tr in grading_result["test_results"] if tr["is_hidden"]]
+    if hidden_results:
+        hidden_passed = sum(1 for tr in hidden_results if tr["passed"])
+        hidden_total = len(hidden_results)
+        visible_results.append(
+            TestResultItem(
+                test_num=len(visible_results) + 1,
+                input="(ẩn)",
+                expected_output="(ẩn)",
+                actual_output=f"Đạt {hidden_passed}/{hidden_total} test cases ẩn",
+                passed=hidden_passed == hidden_total,
+                is_hidden=True,
+                error=None,
+            )
+        )
+
+    percentage = round(passed_tests / total_tests * 100, 1) if total_tests > 0 else 0
+
+    return SubmitCodeResponse(
+        submission_id=submission.id,
+        status=grading_result["status"],
+        total_tests=total_tests,
+        passed_tests=passed_tests,
+        percentage=percentage,
+        test_results=visible_results,
+        execution_time_ms=grading_result["execution_time_ms"],
+    )
+
+
+@router.post("/public/{share_code}/hint", response_model=HintResponse)
+@limiter.limit("10/minute")
+async def get_hint(
+    request: Request,
+    share_code: str,
+    body: HintRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Phân tích lỗi tổng hợp cho các test case sai (public, không cần auth)"""
+    result = await db.execute(
+        select(CodeExercise).where(CodeExercise.share_code == share_code)
+    )
+    exercise = result.scalar_one_or_none()
+
+    if not exercise:
+        raise HTTPException(status_code=404, detail="Bài tập không tồn tại")
+    if not exercise.is_active:
+        raise HTTPException(status_code=403, detail="Bài tập đã bị tắt")
+    if exercise.expires_at and exercise.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=410, detail="Bài tập đã hết hạn")
+
+    hint_service = get_hint_service()
+    hint_text = await hint_service.generate_hint(
+        problem_statement=exercise.problem_statement,
+        language=exercise.language,
+        student_code=body.code,
+        failed_tests=[t.model_dump() for t in body.failed_tests],
+    )
+
+    return HintResponse(hint=hint_text)

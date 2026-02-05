@@ -1,0 +1,943 @@
+<table style="width:100%;">
+<colgroup>
+<col style="width: 44%" />
+<col style="width: 55%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: center;"><strong>TRƯỜNG:...</strong></th>
+<th rowspan="2" style="text-align: center;"><strong>GIÁO VIÊN:...</strong></th>
+</tr>
+<tr>
+<th style="text-align: center;"><strong>TỔ:...</strong></th>
+</tr>
+</thead>
+<tbody>
+</tbody>
+</table>
+<p><strong>CHỦ ĐỀ 5: GIẢI QUYẾT VẤN ĐỀ VỚI SỰ TRỢ GIÚP CỦA MÁY
+TÍNH</strong></p>
+<p><strong>BÀI 19: CÂU LỆNH RẼ NHÁNH IF</strong></p>
+<p><strong>Môn học: Tin Học; Lớp: 10</strong></p>
+<p><strong>Định hướng: Tin học ứng dụng</strong></p>
+<p><strong>Bộ sách Kết nối tri thức với cuộc sống</strong></p>
+<p><strong>(Thời lượng: 2 tiết)</strong></p>
+<h1 id="mục-tiêu">MỤC TIÊU</h1>
+<h2 id="về-kiến-thức">Về kiến thức</h2>
+<ul>
+<li><p>Các phép toán và kiểu dữ liệu logic.</p></li>
+<li><p>Câu lệnh rẽ nhánh IF trogn Python</p></li>
+</ul>
+<h2 id="về-năng-lực">Về năng lực</h2>
+<h3 id="năng-lực-tin-học">Năng lực tin học</h3>
+<ul>
+<li><p>Bài học góp phần phát triển cho học sinh các năng lực Tin học Nlc
+và Nld với biểu hiện cụ thể sau đây:</p></li>
+</ul>
+<ul>
+<li><p><strong><em>Nlc:</em></strong> Sử dụng được lệnh rẽ nhánh IF
+trong lập trình giải quyết một số bài toán trong thực tế cuộc
+sống.</p></li>
+<li><p><em><strong>Nld:</strong></em> HS khai thác được các dịch vụ tra
+cứu và trao đổi thông tin, các nguồn học liệu mở để cập nhật kiến thức
+về biểu thức logic và câu lệnh lặp rẽ nhánh IF.</p></li>
+</ul>
+<h3 id="năng-lực-chung">Năng lực chung</h3>
+<ul>
+<li><p>Bài học góp phần phát triển cho học sinh các năng lực chung với
+các biểu hiện cụ thể sau đây:</p></li>
+</ul>
+<ul>
+<li><p>Năng lực tự chủ và tự học: Chủ động, tích cực trong khi tìm hiểu
+cách viết câu lệnh rẽ nhánh IF.</p></li>
+<li><p>Giao tiếp và hợp tác: Tham gia thảo luận nhóm, trao đổi về cách
+giải quyết bài tập mà giáo viên đưa ra và trình bày kết quả ở các nhiệm
+vụ học tập.</p></li>
+<li><p>Giải quyết vấn đề và sáng tạo: Phân tích và đưa ra hướng giải
+quyết một số bài toán trong thực tế bằng cách sử dụng câu rẽ nhánh
+IF.</p></li>
+</ul>
+<h2 id="về-phẩm-chất">Về phẩm chất</h2>
+<ul>
+<li><p>Bài học góp phần phát triển cho học sinh các phẩm chất cốt lõi
+với các biểu hiện cụ thể sau đây:</p></li>
+</ul>
+<ul>
+<li><p><em>Chăm chỉ:</em> Tích cực tìm tòi và sáng tạo trong học tập;
+kiên trì tìm hiểu và thực hành các câu lệnh lặp.</p></li>
+<li><p><em>Trách nhiệm:</em> Tích cực hoàn thành các bài tập cá nhân và
+hoạt động nhóm, đảm bảo chất lượng và tiến độ công việc được giao. Có ý
+thức giữ gìn, tổ chức và quản lý dữ liệu một cách cẩn thận và khoa
+học.</p></li>
+</ul>
+<h1 id="thiết-bị-dạy-học-và-học-liệu">THIẾT BỊ DẠY HỌC VÀ HỌC LIỆU</h1>
+<h2 id="giáo-viên">Giáo viên </h2>
+<ul>
+<li><p>SGK T101 - 104 Tin học 10 (Sách Kết nối tri thức với cuộc sống) –
+<strong>Bài 19: Câu lệnh rẽ nhánh IF.</strong></p></li>
+<li><p>Máy chiếu, màn chiếu, máy tính, giấy A0, giấy A1, bút
+dạ.</p></li>
+<li><p>Kế hoạch bài dạy.</p></li>
+<li><p>Phiếu học tập.</p></li>
+<li><p>PowerPoint bài giảng.</p></li>
+<li><p>Pycharm 2024.3.3, Thonny 4.1.7</p></li>
+</ul>
+<h2 id="học-sinh">Học sinh</h2>
+<ul>
+<li><p>Đọc và tìm hiểu trước bài mới – <strong>Bài 19: Câu lệnh rẽ nhánh
+IF.</strong></p></li>
+<li><p>SGK Tin học 10 bộ sách <strong>Kết nối tri thức với cuộc
+sống</strong> (Chủ đề 5, bài 19, T101 - 104)</p></li>
+<li><p>Vở ghi, dụng cụ học tập viết bài, nháp.</p></li>
+<li><p>Kiến thức đã học ở các bài trước.</p></li>
+</ul>
+<h1 id="tiến-trình-dạy-học">Tiến trình dạy học </h1>
+<h2 id="hoạt-động-khởi-động-5-phút">Hoạt động khởi động (5 phút)</h2>
+<h3 id="mục-tiêu-1">Mục tiêu</h3>
+<ul>
+<li><p>Tạo tâm thế vui vẻ, hứng khởi, kích thích sự tò mò, sẵn sàng học
+tập cho học sinh trước khi vào bài học mới.</p></li>
+</ul>
+<h3 id="nội-dung">Nội dung </h3>
+<ul>
+<li><p>Học sinh tham gia trò chơi “Chiếc ghế âm nhạc” theo chỉ dẫn của
+giáo viên.</p></li>
+</ul>
+<h3 id="sản-phẩm">Sản phẩm</h3>
+<ul>
+<li><p>HS liên tưởng cụ thể của những mệnh đề “Nếu…thì” đến bài học
+mới.</p></li>
+</ul>
+<h3 id="tổ-chức-thực-hiện">Tổ chức thực hiện</h3>
+<blockquote>
+<p><strong>Bước 1. Chuyển giao nhiệm vụ</strong></p>
+</blockquote>
+<ul>
+<li><p>GV chia lớp thành 4 đội thi (mỗi đội gồm 5-6 người).</p></li>
+<li><p>GV yêu cầu nhóm HS chọn ra một đại diện để tham gia trò
+chơi.</p></li>
+<li><p>Luật chơi được GV phổ biến như sau:</p></li>
+</ul>
+<ul>
+<li><p>Ở mỗi vòng sẽ có n-1 chiếc ghế và n người.</p></li>
+<li><p>GV bật nhạc và các đại diện sẽ đi xung quanh những chiếc ghế đó.
+Khi nhạc dừng, HS nhanh chóng ngồi vào ghế. HS nào không giành được ghế
+ngồi sẽ bị loại.</p></li>
+<li><p>Lặp lại trò chơi cho tới khi chỉ còn 1 HS. HS đó sẽ giành chiến
+thắng về cho đội mình.</p></li>
+</ul>
+<blockquote>
+<p><strong>Bước 2. Thực hiện nhiệm vụ</strong></p>
+</blockquote>
+<ul>
+<li><p>HS tiếp nhận nhiệm vụ, đọc kĩ luật chơi và hoàn thành các lượt
+chơi theo đúng luật dưới nền nhạc sôi động mà GV đã lựa chọn.</p></li>
+</ul>
+<ul>
+<li><p>GV theo dõi, điều hành quá trình tham gia của HS.</p></li>
+</ul>
+<blockquote>
+<p><strong>Bước 3. Báo cáo, thảo luận</strong></p>
+</blockquote>
+<ul>
+<li><p>HS thực hiện cho chơi như đã yêu cầu.</p></li>
+<li><p>GV ghi lại phần thi vui nhộn để làm kỷ niệm cho lớp.</p></li>
+</ul>
+<blockquote>
+<p><strong>Bước 4. Kết luận, nhận định</strong></p>
+</blockquote>
+<ul>
+<li><p>GV chuẩn hoá kiến thức và dẫn dắt HS vào bài mới.</p></li>
+</ul>
+<h2 id="hình-thành-kiến-thức-40-phút">Hình thành kiến thức (40
+phút)</h2>
+<p><strong>Hoạt động 1. Khái niệm biểu thức logic (15 phút)</strong></p>
+<h3 id="mục-tiêu-2">Mục tiêu</h3>
+<ul>
+<li><p>HS hiểu và trình bày được biểu thức logic là gì.</p></li>
+<li><p>HS xác định được giá trị (True/False) và kiểu dữ liệu của biểu
+thức logic (bool).</p></li>
+<li><p>HS phân biệt và vận dụng các phép toán logic: and, or,
+not.</p></li>
+</ul>
+<h3 id="nội-dung-1">Nội dung </h3>
+<ul>
+<li><p>HS tìm hiểu nội dung trong SGK T101 – 102.</p></li>
+<li><p>Thực hiện <strong>Phiếu học tập 01</strong> (được mô tả tại
+<strong>Phụ lục 1</strong>).</p></li>
+</ul>
+<h3 id="sản-phẩm-1">Sản phẩm</h3>
+<ul>
+<li><p>Kết quả bài làm của HS.</p></li>
+<li><p>Kết quả mong đợi:</p></li>
+</ul>
+<table style="width:88%;">
+<colgroup>
+<col style="width: 87%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: center;"><p><strong>PHIẾU HỌC TẬP 01</strong></p>
+<p><strong>Nhóm: ………………………………………..</strong></p>
+<p><strong>Hoàn thành các câu hỏi dưới đây theo yêu cầu</strong></p>
+<p><strong>Câu 1.</strong> Biểu thức thức logic có thể nhận mấy giá trị
+khác nhau?</p>
+<p><em>Điền đáp án thích hợp vào ô sau:</em></p>
+<p><strong>Câu 2.</strong> Biểu thức nào sau đây là biểu thức logic
+trong Python?</p>
+<ol type="A">
+<li><p>a = 5 + 3</p></li>
+<li><p>a + b*2</p></li>
+<li><p><mark>x &gt; 10 + y</mark></p></li>
+<li><p>b**2</p></li>
+</ol>
+<p><strong>Câu 3.</strong> Kiểu dữ liệu của biểu thức logic trong Python
+là gì?</p>
+<ol type="A">
+<li><p>int</p></li>
+<li><p>float</p></li>
+<li><p><mark>bool</mark></p></li>
+<li><p>str</p></li>
+</ol>
+<p><strong>Câu 4.</strong> Kết quả của biểu thức sau là gì?</p>
+<p><img src="./media/image1.png"
+style="width:2.79206in;height:0.72927in" /></p>
+<ol type="A">
+<li><p>True</p></li>
+<li><p><mark>False</mark></p></li>
+<li><p>Error</p></li>
+<li><p>None</p></li>
+</ol>
+<p><strong>Câu 5.</strong> Biểu thức x &gt; 3 or x &lt; 1 sẽ trả về True
+khi nào?</p>
+<ol type="A">
+<li><p>Khi x = 1</p></li>
+<li><p><mark>Khi x = 2</mark></p></li>
+<li><p>Khi x thuộc khoảng (1, 2)</p></li>
+<li><p>Khi x thuộc khoảng [1, 2)</p></li>
+</ol>
+<p><strong>Câu 6.</strong> Kết quả của biểu thức sau là gì?</p>
+<p><img src="./media/image2.png"
+style="width:3.30254in;height:0.61467in" /></p>
+<ol type="A">
+<li><p><mark>True</mark></p></li>
+<li><p>False</p></li>
+<li><p>Error</p></li>
+<li><p>None</p></li>
+</ol>
+<p><strong>Câu 7.</strong> Kết quả của biểu thức sau là gì?</p>
+<p><img src="./media/image3.png"
+style="width:2.49969in;height:0.57285in" /></p>
+<ol type="A">
+<li><p>True</p></li>
+<li><p><mark>False</mark></p></li>
+<li><p>Error</p></li>
+<li><p>None</p></li>
+</ol>
+<p><strong>Câu 8.</strong> Viết một biểu thức có sử dụng toán tử OR và
+có giá trị là True.</p>
+<p><strong>Câu 9.</strong> Viết một biểu thức có sử dụng các toán hạng,
+toán tử OR kết hợp toán tử AND và có giá trị là False.</p>
+<p><strong>Câu 10.</strong> Viết một biểu thức có sử dụng các toán hạng,
+toán tử OR kết hợp toán tử NOT, AND và có giá trị là False.</p></th>
+</tr>
+</thead>
+<tbody>
+</tbody>
+</table>
+<ul>
+<li><p>Dự kiến câu trả lời của HS:</p></li>
+</ul>
+<table style="width:88%;">
+<colgroup>
+<col style="width: 13%" />
+<col style="width: 74%" />
+</colgroup>
+<thead>
+<tr>
+<th><strong>Câu</strong></th>
+<th><strong>Trường hợp</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>1</strong></td>
+<td><p>TH1: HS nắm rõ biểu thức logic chỉ nhận giá trị True hoặc False.
+Từ đó HS lựa chọn được đáp án chính xác.</p>
+<p>TH2: HS lựa chọn sai hoặc không lựa chọn được đáp án do không biết
+biểu thức logic có thể nhận các giá trị nào.</p></td>
+</tr>
+<tr>
+<td><strong>2</strong></td>
+<td><p>TH1: HS biết rõ đặc điểm của một biểu thức logic. Từ đó HS lựa
+chọn được đáp án chính xác.</p>
+<p>TH2: HS lựa chọn được đáp án chính xác nhưng không hiểu rõ bản
+chất.</p>
+<p>TH3: HS lựa chọn sai hoặc không lựa chọn được đáp án do không hiểu
+thế nào là một biểu thức logic.</p></td>
+</tr>
+<tr>
+<td><strong>3</strong></td>
+<td><p>TH1: HS biết rõ kiểu dữ liệu của biểu thức logic. Từ đó HS lựa
+chọn được đáp án chính xác.</p>
+<p>TH2: HS chọn sai do chưa tìm hiểu kĩ.</p></td>
+</tr>
+<tr>
+<td><strong>4 - 7</strong></td>
+<td><p>TH1: HS hiểu rõ tính chất các toán tử logic trong biểu thức
+logic. Từ đó HS lựa chọn được đáp án chính xác.</p>
+<p>TH2: HS có thể lựa chọn đáp án nhưng vẫn có sự nhầm lẫn giữa các toán
+tử. Từ đó dẫn tới lựa chọn giá trị logic chưa được hoàn toàn chính xác ở
+một số câu.</p>
+<p>TH3: HS không thể lựa chọn được đáp án do không hiểu các biểu thức
+logic có chứa toán tử logic.</p></td>
+</tr>
+<tr>
+<td><strong>8 - 10</strong></td>
+<td><p>TH1: HS có thể đưa ra được nhiều ví dụ khác nhau với các toán tử
+logic mà đề bài yêu cầu nhờ việc hiểu rõ các toán tử logic.</p>
+<p>TH2: HS đưa ra được một ví dụ cụ thể.</p>
+<p>TH3: HS không thể đưa ra ví dụ cụ thể ở một số câu yêu cầu sử dụng
+toán tử logic một cách phức tạp.</p></td>
+</tr>
+</tbody>
+</table>
+<h3 id="tổ-chức-thực-hiện-1">Tổ chức thực hiện</h3>
+<blockquote>
+<p><strong>Bước 1. Chuyển giao nhiệm vụ</strong></p>
+</blockquote>
+<ul>
+<li><p>GV chia lớp thành 4 nhóm (mỗi nhóm gồm 5-6 người).</p></li>
+<li><p>GV phát phiếu học tập cho mỗi nhóm, hướng dẫn học sinh thực hiện
+và yêu cầu HS thực hiện (thực hiện trong vòng 7 phút).</p></li>
+</ul>
+<blockquote>
+<p><strong>Bước 2. Thực hiện nhiệm vụ</strong></p>
+</blockquote>
+<ul>
+<li><p>HS thực hiện phiếu học tập theo sự hướng dẫn của GV.</p></li>
+<li><p>GV quan sát, hỗ trợ HS (nếu cần).</p></li>
+</ul>
+<blockquote>
+<p><strong>Bước 3. Báo cáo, thảo luận</strong></p>
+</blockquote>
+<ul>
+<li><p>GV mời mỗi nhóm điền câu trả lời của một câu hỏi lên
+bảng.</p></li>
+<li><p>Các nhóm quan sát, nhận xét bổ sung ý kiến.</p>
+<p><strong>Bước 4. Kết luận, nhận định</strong></p></li>
+<li><p>GV tuyên dương tinh thần của cả lớp.</p></li>
+<li><p>GV chiếu đáp án, các nhóm chấm chéo cho nhau. Khen thưởng nhóm có
+bài làm chính xác nhất.</p></li>
+<li><p>GV chốt lại và chuẩn hoá lại kiến thức cho HS.</p></li>
+</ul>
+<p><strong>Hoạt động 2. Câu trúc lệnh if trong Python (15
+phút)</strong></p>
+<h3 id="mục-tiêu-3">Mục tiêu</h3>
+<ul>
+<li><p>Học sinh hiểu và phân tích được cấu trúc rẽ nhánh mà câu lệnh if
+thể hiện trong mô tả thuật toán.</p></li>
+<li><p>HS trình bày được cú pháp và cách sử câu lệnh rẽ nhánh if trong
+Python.</p></li>
+</ul>
+<h3 id="nội-dung-2">Nội dung </h3>
+<ul>
+<li><p>HS tìm hiểu SGK và thực hiện nhiệm vụ “Hành trình đi tìm tri
+thức” mà GV giao.</p></li>
+<li><p>Yêu cầu của giáo viên.</p></li>
+</ul>
+<ol type="1">
+<li><p>Tìm hiểu cấu trúc rẽ nhánh mà câu lệnh if dạng thiếu thể hiện
+trong mô tả thuật toán. Vẽ sơ đồ khối cho đoạn chương trình ví dụ ở SGK
+T102. Cú pháp câu lệnh rẽ nhánh if dạng thiếu trong python.</p></li>
+<li><p>Tìm hiểu cấu trúc rẽ nhánh mà câu lệnh if dạng đủ thể hiện trong
+mô tả thuật toán. Vẽ sơ đồ khối cho đoạn chương trình ví dụ SGK T103. Cú
+pháp câu lệnh rẽ nhánh if dạng thiếu trong python.</p></li>
+</ol>
+<h3 id="sản-phẩm-2">Sản phẩm</h3>
+<ul>
+<li><p>Kết quả được trình bày trên giấy A1 hoàn chỉnh (giải thích phần
+kiến thức/nội dung đã nghiên cứu).</p></li>
+<li><p>Chương trình Python hoàn chỉnh.</p></li>
+<li><p>Phần trình bày của nhóm và phản hồi từ nhóm khác.</p></li>
+<li><p>Đoạn chương trình mà HS thực hành theo GV.</p></li>
+</ul>
+<h3 id="tổ-chức-thực-hiện-2">Tổ chức thực hiện</h3>
+<blockquote>
+<p><strong>Bước 1. Chuyển giao nhiệm vụ</strong></p>
+</blockquote>
+<ul>
+<li><p>GV chia lớp thành 4 nhóm. Nhiệm vụ 1 sẽ có hai nhóm thực hiện
+tương ứng với 2 nhóm trong tổ 1. Nhiệm vụ 2 sẽ là 2 nhóm tổ 2 thực
+hiện.</p></li>
+<li><p>GV phát giấy A0 và bút dạ cho học sinh. Yêu cầu HS thực hiện
+nhiệm vụ được chiếu trên màn hình/màn chiếu hoặc phiếu yêu cầu đã được
+phát.</p></li>
+<li><p>GV yêu cầu HS tìm hiểu SGK hướng dẫn HS trình bày vào giấy theo
+mẫu khăn trải bàn.</p></li>
+</ul>
+<blockquote>
+<p><strong>Bước 2. Thực hiện nhiệm vụ</strong></p>
+</blockquote>
+<ul>
+<li><p>Các nhóm HS tiếp nhận nhiệm vụ, phân chia nhiệm vụ nhóm hợp
+lý.</p></li>
+<li><p>HS tìm hiểu SGK ghi vào phần của mình nội dung tìm hiểu được. Thư
+ký tổng hợp nội dung vào giấy được phát. Thực hiện trong vòng 10
+phút.</p></li>
+<li><p>GV quan sát HS thực hiện nhiệm vụ, hỗ trợ HS khi cần.</p></li>
+</ul>
+<blockquote>
+<p><strong>Bước 3. Báo cáo, thảo luận</strong></p>
+</blockquote>
+<ul>
+<li><p>GV gọi ngẫu nhiên 2 nhóm lên trình bày tổng hợp về toàn bộ kiến
+thức ghi trên giấy ở 2 nội dung.</p></li>
+<li><p>Các nhóm khác góp ý, bổ sung, đặt câu hỏi.</p></li>
+<li><p>GV hướng dẫn HS thực hành theo 2 bài trong SGK.</p></li>
+</ul>
+<blockquote>
+<p><strong>Bước 4. Kết luận, nhận định</strong></p>
+</blockquote>
+<ul>
+<li><p>GV chuẩn hoá lại kiến thức, lưu ý các lỗi phổ biến khi dùng câu
+lệnh if trong python.</p></li>
+</ul>
+<p><strong>Hoạt động 3. Thực hành sử dụng lệnh if trong Python (15
+phút)</strong></p>
+<h3 id="mục-tiêu-4">Mục tiêu</h3>
+<ul>
+<li><p>HS sử dụng được câu lệnh rẽ nhánh if trong Python.</p></li>
+</ul>
+<h3 id="nội-dung-3">Nội dung </h3>
+<ul>
+<li><p>HS thực hành theo sự hướng dẫn của GV với nội dung SGK
+T103.</p></li>
+</ul>
+<h3 id="sản-phẩm-3">Sản phẩm</h3>
+<ul>
+<li><p>Đoạn chương trình mà HS thực hành theo GV.</p></li>
+</ul>
+<h3 id="tổ-chức-thực-hiện-3">Tổ chức thực hiện</h3>
+<blockquote>
+<p><strong>Bước 1. Chuyển giao nhiệm vụ</strong></p>
+</blockquote>
+<ul>
+<li><p>GV yêu cầu HS theo dõi SGK đồng thời theo dõi màn chiếu và thực
+hành theo hướng dẫn của GV.</p></li>
+</ul>
+<blockquote>
+<p><strong>Bước 2. Thực hiện nhiệm vụ</strong></p>
+</blockquote>
+<ul>
+<li><p>GV hướng dẫn HS lập trình theo các bước.</p></li>
+<li><p>GV quan sát HS thực hiện, hỗ trợ HS khi cần.</p></li>
+</ul>
+<blockquote>
+<p><strong>Bước 3. Báo cáo, thảo luận</strong></p>
+</blockquote>
+<ul>
+<li><p>GV mời HS chạy thử chương trình và phát hiện lỗi, sửa lỗi (nếu
+có).</p></li>
+</ul>
+<blockquote>
+<p><strong>Bước 4. Kết luận, nhận định</strong></p>
+</blockquote>
+<ul>
+<li><p>GV chuẩn hoá lại kiến thức, lưu ý các lỗi phổ biến khi dùng câu
+lệnh if trong python.</p></li>
+</ul>
+<h2 id="luyện-tập-15-phút">Luyện tập (15 phút)</h2>
+<h3 id="mục-tiêu-5">Mục tiêu </h3>
+<ul>
+<li><p>Củng cố lại kiến thức về câu lệnh rẽ nhánh.</p></li>
+</ul>
+<h3 id="nội-dung-4">Nội dung</h3>
+<ul>
+<li><p>Học sinh hoạt động theo 4 nhóm, tham gia trò chơi “Thám tử IF –
+Giải mã mật thư” để giải quyết các bài tập mà giáo viên đưa ra.</p></li>
+<li><p><strong>Các bài tập</strong></p>
+<p><strong>Bài 1.</strong> Viết chương trình kiểm tra số dương.</p>
+<p>In ra màn hình:</p></li>
+</ul>
+<ul>
+<li><p>“Số dương” nếu số đó lớn hơn 0</p></li>
+<li><p>“Số âm” nếu nhỏ hơn 0</p></li>
+<li><p>“Số không: nếu số nhập vào là số 0</p>
+<p><strong>Bài 2.</strong> Kiểm tra bộ ba cạnh thoả mãn là một tam
+giác.</p>
+<p>Viết chương trình kiểm tra bộ 3 cạnh a, b, c có thể tạo thành một tam
+giác hay không. Nhập vào chiều dài 3 cạnh. In ra màn hình "Có" nếu đây
+là một tam giác, ngược lại hiển thị "Không". Yêu cầu ba cạnh nhập vào
+phải lớn hơn 0.</p>
+<p><strong>Bài 3.</strong> Tìm số lớn nhất trong ba số.</p>
+<p>Viết chương trình cho phép nhập vào ba số thực a, b, c từ bàn phím.
+Tìm và hiển thị ra số lớn nhất. Yêu cầu: điều kiện ba số nhập vào là số
+ít nhất có 2 chữ số.</p></li>
+</ul>
+<ul>
+<li><p><strong>Phần câu hỏi phụ:</strong></p>
+<p><strong>Câu hỏi 1.</strong> Hãy cho biết kết quả khi ta chạy đoạn
+chương trình sau với n = 5:</p>
+<p><img src="./media/image4.png"
+style="width:4.13599in;height:1.50021in" /></p>
+<p><strong>Câu hỏi 2.</strong> Hãy cho biết đoạn chương trình sau thực
+hiện công việc gì?</p>
+<p><img src="./media/image5.png"
+style="width:4.67774in;height:1.53146in" /></p>
+<p><strong>Câu hỏi 3.</strong> Viết câu lệnh rẽ nhánh cho câu sau: “Nếu
+độ ẩm không khí lớn hơn hoặc bằng 80% thì trời có thể mưa”.</p></li>
+</ul>
+<h3 id="sản-phẩm-4">Sản phẩm</h3>
+<ul>
+<li><p>Câu trả lời của HS trên giấy A1.</p></li>
+<li><p>Kết quả mong đợi:</p>
+<p><strong>Bài 1.</strong></p>
+<p><img src="./media/image6.png"
+style="width:3.40673in;height:2.17739in" /></p>
+<p><strong>Bài 2.</strong></p>
+<p><img src="./media/image7.png"
+style="width:5.56474in;height:2.20162in" /></p>
+<p><strong>Bài 3.</strong></p>
+<p><img src="./media/image8.png"
+style="width:5.06115in;height:2.59145in" /></p>
+<p><strong>Phần câu hỏi phụ:</strong></p>
+<p><strong>Câu 1.</strong> In ra: Số lẻ</p>
+<p><strong>Câu 2.</strong> Kiểm tra một số nguyên dương có thể chia hết
+cho 15 không. Hoặc Kiểm tra một số nguyên dương có chia hết cho cả 5 và
+3 không.</p>
+<p><strong>Câu 3.</strong></p>
+<p><img src="./media/image9.png"
+style="width:3.80261in;height:0.81261in" /></p></li>
+<li><p>Dự kiến câu trả lời của HS:</p></li>
+</ul>
+<table style="width:88%;">
+<colgroup>
+<col style="width: 15%" />
+<col style="width: 72%" />
+</colgroup>
+<thead>
+<tr>
+<th><strong>Nội dung</strong></th>
+<th><strong>Trường hợp</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Bài 1</td>
+<td><p>TH1: HS đã nắm rõ các kiến thức đã học ở tiết trước. Hiểu rõ các
+nhánh rẽ của điều kiện và các yêu cầu của đề bài. Từ đó lựa được các câu
+lệnh chính xác và sắp xếp thành đoạn câu lệnh hoàn chỉnh cho bài kiểm
+tra số âm dương.</p>
+<p>TH2: HS không lựa chọn được câu lệnh hoặc lựa chọn sai câu lệnh. Từ
+đó đưa ra kết quả sai.</p></td>
+</tr>
+<tr>
+<td>Bài 2</td>
+<td><p>TH1: HS đã nắm rõ các kiến thức đã học ở tiết trước. Hiểu rõ các
+nhánh rẽ của điều kiện để bộ ba cạnh trở thành một tam giác hợp lệ và
+các yêu cầu của đề bài. Từ đó lựa được các câu lệnh chính xác và sắp xếp
+thành đoạn câu lệnh hoàn chỉnh cho bài kiểm tra số âm dương.</p>
+<p>TH2: HS không lựa chọn được câu lệnh hoặc lựa chọn sai câu lệnh do
+nhầm lẫn các điều kiện, nhánh rẽ. Từ đó đưa ra kết quả sai.</p></td>
+</tr>
+<tr>
+<td>Bài 3</td>
+<td><p>TH1: HS đã nắm rõ các kiến thức đã học ở tiết trước. Hiểu rõ các
+nhánh rẽ để tìm ra giá trị lớn nhất và các yêu cầu của đề bài. Từ đó lựa
+được các câu lệnh chính xác và sắp xếp thành đoạn câu lệnh hoàn chỉnh
+cho bài kiểm tra số âm dương.</p>
+<p>TH2: HS không lựa chọn được câu lệnh hoặc lựa chọn sai câu lệnh do
+nhầm lẫn các điều kiện, nhánh rẽ. Từ đó đưa ra kết quả sai.</p></td>
+</tr>
+<tr>
+<td>Câu 1</td>
+<td><p>TH1: HS hiểu rõ ý nghĩa của đoạnh chương trình là kiểm tra số
+chẵn lẻ. Từ đó nếu nhập vào số 5 sẽ trả về kết quả là “Số lẻ”.</p>
+<p>TH2: HS không hiểu rõ ý nghĩa của đoạn chương trình hoặc các điều
+kiện nhánh rẽ nên không lựa chọn được đáp án.</p></td>
+</tr>
+<tr>
+<td>Câu 2</td>
+<td><p>TH1: HS đưa ra được các trường hợp đề bài thoả mãn đoạn chương
+trình đã cho.</p>
+<p>TH2: HS không thể liên tưởng đoạn chương trình ngược về vấn đề cần
+giải quyết.</p></td>
+</tr>
+<tr>
+<td>Câu 3</td>
+<td><p>TH1: HS viết được câu lệnh nhờ vận dụng chính xác cú pháp câu
+lệnh IF.</p>
+<p>TH2: HS viết sai câu lệnh do viết sai quy tắc của cú pháp hoặc không
+viết được.</p></td>
+</tr>
+<tr>
+<td>Mã mật thư</td>
+<td>0010</td>
+</tr>
+</tbody>
+</table>
+<h3 id="tổ-chức-thực-hiện-4">Tổ chức thực hiện</h3>
+<blockquote>
+<p><strong>Bước 1. Chuyển giao nhiệm vụ</strong></p>
+</blockquote>
+<ul>
+<li><p>GV chia lớp thành 4 nhóm, hướng dẫn và phổ biến cho HS luật
+chơi.</p></li>
+<li><p>GV giao mật thư chứa các câu lệnh đã bị xáo trộn kèm các câu lệnh
+gây nhiễu cho các nhóm, mỗi nhóm nhận các mảnh ghép từ GV và có nhiệm vụ
+ghép chúng lại và dán lên giấy A1 để hoàn thiện bài toán được chiếu trên
+slide.</p></li>
+<li><p>Luật chơi:</p></li>
+</ul>
+<ul>
+<li><p>Trò chơi gồm 3 vòng, mỗi vòng kéo dài 3 phút.</p></li>
+<li><p>Nhóm hoàn thành sớm nhất sẽ được gắn kết quả lên bảng và nhận mật
+thư sớm ở vòng sau.</p></li>
+<li><p>Khi hết giờ, tất cả nhóm đều phải nộp kết quả để trình
+bày.</p></li>
+<li><p>Nhóm có kết quả đúng và nhanh nhất sẽ được vào vòng tiếp
+theo.</p></li>
+<li><p>Nếu có nhiều nhóm hoà, giáo viên sẽ đưa ra câu hỏi phụ để phân
+định.</p></li>
+<li><p>Ở vòng cuối, sau khi giải mật thư, các nhóm phải xâu chuỗi các
+con số từ các mật thư theo đúng thứ tự đáp án. Nếu nhóm đầu tiên trả lời
+sai, cơ hội sẽ chuyển cho nhóm còn lại.</p></li>
+</ul>
+<blockquote>
+<p><strong>Bước 2. Thực hiện nhiệm vụ</strong></p>
+</blockquote>
+<ul>
+<li><p>HS thảo luận nhóm, giải mã bài toán trong thời gian quy
+định.</p></li>
+<li><p>GV di chuyển theo dõi, gợi ý khi cần (gợi mở chứ không giải trực
+tiếp).</p></li>
+</ul>
+<blockquote>
+<p><strong>Bước 3. Báo cáo, thảo luận</strong></p>
+</blockquote>
+<ul>
+<li><p>Nhóm hoàn thành mang giấy A1 lên bảng, giải thích từng bước của
+câu lệnh if.</p></li>
+<li><p>Các nhóm còn lại được quyền đặt câu hỏi, phản biện khi phát hiện
+điểm chưa chính xác.</p></li>
+<li><p>GV sẽ đóng vai là trọng tài trong các phần thi này.</p></li>
+</ul>
+<blockquote>
+<p><strong>Bước 4. Kết luận, nhận định</strong></p>
+</blockquote>
+<ul>
+<li><p>GV nhận xét, chỉnh sửa lỗi sai, giải thích kỹ vai trò của điều
+kiện và nhánh if - else trong bài toán.</p></li>
+<li><p>GV tuyên dương tinh thần của cả lớp. Nhóm thắng cuộc được nhận
+“Huy hiệu Thám tử logic IF”.</p></li>
+</ul>
+<h2 id="vận-dụng-30-phút">Vận dụng (30 phút)</h2>
+<h3 id="mục-tiêu-6">Mục tiêu </h3>
+<ul>
+<li><p>Học sinh vận dụng kiến thức câu lệnh rẽ nhánh đã học để giải
+quyết được các bài tập về câu lệnh rẽ nhánh trong Python.</p></li>
+</ul>
+<h3 id="nội-dung-5">Nội dung</h3>
+<ul>
+<li><p>Nhóm HS (5-6 người) theo dõi ví dụ của GV; thực hiện tìm hiểu,
+phân tích đồng thời vận dụng các kiến thức về câu lệnh rẽ nhánh IF để
+tham gia trò chơi “Kỹ sư giải pháp”. Thông qua đó, HS phát hiện và giải
+quyết vấn đề trong bài toán thực tế mà nhóm mình nhận được.</p></li>
+<li><p>Các vấn đề giáo viên đặt ra:</p></li>
+</ul>
+<blockquote>
+<p><strong>Vấn đề 1</strong></p>
+</blockquote>
+<p>Sau khi kỳ thi vào lớp 10 kết thúc, kết quả điểm thi từng môn (Toán,
+Văn, môn thứ 3) của thí sinh đã có nhưng điểm chuẩn chính thức vẫn chưa
+được công bố. Tuy nhiên, theo dự báo, điểm chuẩn năm nay có thể dao động
+trong khoảng từ <strong>1 đến 2.5 điểm</strong> so với năm trước. Vậy
+làm thế nào để ước tính khả năng trúng tuyển của một thí sinh?</p>
+<blockquote>
+<p><strong>Vấn đề 2</strong></p>
+</blockquote>
+<p>Khi đặt/mua vé tham quan khu du lịch, ta thấy có sự chênh lệnh giá
+giữa các đối tượng tham quan. Việc tính tổng tiền theo cách thủ công cho
+từng đoàn tham quan gồm nhiều người gồm nhiều đối tượng khác khá mất
+thời gian. Em có cách nào để giải quyết vấn đề trên không? Hãy nêu cách
+giải quyết.</p>
+<blockquote>
+<p><strong>Vấn đề 3</strong></p>
+</blockquote>
+<p>Phúc Anh được cơ quan giao nhiệm vụ tính chỉ số BMI và phân loại tình
+trạng cơ thể cho từng nhân viên trong công ty. Để thực hiện, anh đã sử
+dụng máy tính Casio để tính toán từng trường hợp một. Nếu số lượng nhân
+viên lớn, liệu cách làm này có mất nhiều thời gian và dễ xảy ra sai sót
+không? Có cách nào giúp anh ấy tự động hóa quy trình để tính toán nhanh
+hơn, chính xác hơn không?</p>
+<p><strong>Phần câu hỏi</strong></p>
+<p>1. Vấn đề gặp phải ở trên?</p>
+<p>2. Ý tưởng và cách giải quyết?</p>
+<h3 id="sản-phẩm-5">Sản phẩm </h3>
+<ul>
+<li><p>Ý tưởng và giải pháp cho vấn đề mà nhóm HS nhận được.</p></li>
+<li><p>Chương trình hoàn chỉnh giải quyết vấn đề đặt ra</p></li>
+<li><p>Sản phẩm dự kiến:</p></li>
+</ul>
+<table style="width:90%;">
+<colgroup>
+<col style="width: 9%" />
+<col style="width: 14%" />
+<col style="width: 66%" />
+</colgroup>
+<thead>
+<tr>
+<th rowspan="3">Vấn đề 1</th>
+<th>HS xác định được vấn đề gặp phải.</th>
+<th><ul>
+<li><p>Làm thế nào để một thí sinh có thể ước tính khả năng trúng tuyển
+của mình dựa trên điểm số đã có?</p></li>
+<li><p>Nếu biết điểm chuẩn của năm trước, có thể dự đoán được cơ hội đỗ
+hay không?</p></li>
+</ul></th>
+</tr>
+<tr>
+<th>Ý tưởng và giải pháp</th>
+<th><ul>
+<li><p>Tạo một chương trình Python yêu cầu nhập điểm chuẩn năm trước và
+từng điểm của từng môn thi kèm hệ số.</p></li>
+<li><p>Chương trình sẽ tính điểm tổng của thí sinh bằng tổng điểm các
+môn tính theo hệ số từng môn nếu có.</p></li>
+<li><p>So sánh điểm của thí sinh với khoảng dao động của điểm chuẩn năm
+nay:</p></li>
+</ul>
+<ul>
+<li><p>Nếu điểm thí sinh lớn hơn hoặc bằng mức điểm chuẩn thấp nhất
+trong khoảng dự đoán → Có cơ hội trúng tuyển.</p></li>
+<li><p>Nếu thấp hơn mức điểm chuẩn cao nhất → Không chắc chắn, cần chờ
+kết quả chính thức.</p></li>
+<li><p>Nếu quá thấp so với khoảng dự báo → Khả năng trượt cao.</p></li>
+</ul>
+<ul>
+<li><p>Sử dụng chương trình Python có câu lệnh rẽ nhánh để giải quyết
+vấn đề.</p></li>
+</ul></th>
+</tr>
+<tr>
+<th>Chương trình Python</th>
+<th><img src="./media/image10.png"
+style="width:4.01383in;height:2.2666in" /></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td rowspan="3">Vấn đề 2</td>
+<td>HS xác định được vấn đề gặp phải.</td>
+<td><ul>
+<li><p>Giá vé của từng đối tượng sẽ được tính khác nhau.</p></li>
+<li><p>Ví dụ:</p></li>
+</ul>
+<ul>
+<li><p>Người lớn có giá vé cao hơn.</p></li>
+<li><p>Trẻ em và người cao tuổi được miễn phí.</p></li>
+<li><p>Học sinh/Sinh viên có thể có mức giá ưu đãi.</p></li>
+</ul>
+<ul>
+<li><p>Việc tính giá vé cho đoàn gồm nhiều đối tượng sẽ khá mất thời
+gian và có thể thiếu chính xác. Từ đó, cần có quy trình tự động tính
+toán.</p></li>
+</ul></td>
+</tr>
+<tr>
+<td>Ý tưởng và giải pháp</td>
+<td><ul>
+<li><p>Sử dụng chương trình Python để tính toán giá vé của đoàn tham
+quan một cách tự động và chính xác.</p></li>
+<li><p>Chương trình gồm các yêu cầu:</p></li>
+</ul>
+<ul>
+<li><p>Yêu cầu người dùng nhập số lượng từng nhóm đối tượng.</p></li>
+<li><p>Áp dụng mức giá vé tương ứng cho mỗi nhóm với câu lệnh rẽ
+nhánh.</p></li>
+<li><p>Tính tổng số tiền cần thanh toán.</p></li>
+</ul></td>
+</tr>
+<tr>
+<td>Chương trình Python</td>
+<td><img src="./media/image11.png"
+style="width:3.82408in;height:3.35756in" /></td>
+</tr>
+<tr>
+<td rowspan="3">Vấn đề 3</td>
+<td>HS xác định được vấn đề gặp phải.</td>
+<td><ul>
+<li><p>Nếu số lượng nhân viên lớn, việc tính toán thủ công sẽ tốn nhiều
+thời gian và dễ sai sót.</p></li>
+<li><p>Cần có cách để tự động hóa quy trình này để tính toán nhanh hơn,
+chính xác hơn.</p></li>
+</ul></td>
+</tr>
+<tr>
+<td>Ý tưởng và giải pháp</td>
+<td><ul>
+<li><p>Sử dụng chương trình Python để tính chỉ số BMI của nhân viên và
+đưa ra phân loại phù hợp.</p></li>
+<li><p>Đầu vào của chương trình là cân nặng và chiều cao của từng nhân
+viên.</p></li>
+<li><p>Tính BMI dựa trên công thức sau:</p>
+<p>BMI = <span class="math inline">$\frac{Cân\ nặng\ (kg)}{{Chiều\ cao\
+(m)}^{2}}$</span></p></li>
+<li><p>Sử dụng câu lệnh rẽ nhánh để phân loại tình trạng cơ
+thể.</p></li>
+</ul>
+<ul>
+<li><p>Dưới 18.5 → Gầy</p></li>
+<li><p>18.5 - 24.9 → Bình thường</p></li>
+<li><p>25 - 29.9 → Thừa cân</p></li>
+<li><p>30 trở lên → Béo phì</p></li>
+</ul>
+<ul>
+<li><p>Đưa ra BMI kèm phân loại.</p></li>
+</ul></td>
+</tr>
+<tr>
+<td>Chương trình Python</td>
+<td><img src="./media/image12.png"
+style="width:3.88542in;height:3.51111in" /></td>
+</tr>
+</tbody>
+</table>
+<h3 id="tổ-chức-thực-hiện-5">Tổ chức thực hiện</h3>
+<blockquote>
+<p><strong>Bước 1. Chuyển giao nhiệm vụ</strong></p>
+</blockquote>
+<ul>
+<li><p>GV chia lớp thành các nhóm nhỏ (5-6 người), phát giấy A1 và phân
+phối nhiệm vụ cho các nhóm bằng hình thức bốc thăm.</p></li>
+<li><p>GV nêu mục tiêu: Học sinh phân tích tình huống, đề xuất ý tưởng
+giải quyết, viết đoạn mã sử dụng if và trình bày bằng đoạn chương
+trình.</p></li>
+<li><p>GV phổ biến luật chơi:</p></li>
+</ul>
+<ul>
+<li><p>Mỗi nhóm cần trình bày các nội dung sau: Vấn đề bài toán đặt ra,
+ý tưởng giải pháp, đoạn chương trình giải quyết bài toán. Thực hiện
+trong vòng 10 phút.</p></li>
+<li><p>Diễn giải rõ điều kiện và nhánh rẽ.</p></li>
+<li><p>Các nhóm còn lại đặt câu hỏi, phản biện logic, đề xuất phương án
+cải tiến khác.</p></li>
+<li><p>Nhóm đặt ra câu hỏi hoặc phản biện, đề xuất hay sẽ được cộng
+điểm. Nhóm được hỏi nếu giải quyết được cũng sẽ được cộng điểm.</p></li>
+</ul>
+<ul>
+<li><p>GV trình bày một mẫu ví dụ minh họa đơn giản, làm mẫu tư duy phân
+tích điều kiện từ một tình huống cụ thể để HS hiểu rõ yêu cầu.</p></li>
+</ul>
+<blockquote>
+<p><strong>Bước 2. Thực hiện nhiệm vụ</strong></p>
+</blockquote>
+<ul>
+<li><p>Học sinh thảo luận, phát hiện và nêu ra vấn đề mà nhóm mình nhận
+được, phân chia công việc nhóm hợp lý (người ghi chép, lập trình, trình
+bày, kiểm tra logic,…). Sau đó, HS đưa ra hướng giải quyết. Tổng thời
+thực hiện là 7 phút.</p></li>
+<li><p>HS ghi chú lại quá trình thực hiện, khó khăn gặp phải và cách
+khắc phục vào vở.</p></li>
+<li><p>GV đóng vai trò hướng dẫn viên, đưa ra gợi ý khi học sinh gặp khó
+khăn.</p></li>
+</ul>
+<blockquote>
+<p><strong>Bước 3. Báo cáo, thảo luận</strong></p>
+</blockquote>
+<ul>
+<li><p>Nhóm được chọn sẽ trình bày bài làm của mình trước lớp (nêu vấn
+đề và ý tưởng giải quyết, chương trình + giải thích cách hoạt
+động).</p></li>
+<li><p>Các nhóm khác (đặc biệt là các nhóm có chung vấn đề) đặt câu hỏi,
+phản biện, góp ý để cải thiện chương trình.</p></li>
+<li><p>Tổng thời gian báo cáo và tranh luận là 10 phút.</p></li>
+</ul>
+<blockquote>
+<p><strong>Bước 4. Kết luận, nhận định</strong></p>
+</blockquote>
+<ul>
+<li><p>GV tổ chức cho HS rút ra kết luận về cách giải quyết vấn đề trong
+tình huống đã được đặt ra. Từ đó HS lĩnh hội được tri thức, kĩ năng của
+bài học hoặc vận dụng kiến thức, kĩ năng trong môn học để giải quyết vấn
+đề trong thực tiễn.</p></li>
+<li><p>Đề nghị học sinh suy nghĩ nhanh (1 phút) một <strong>tình huống
+thực tế khác</strong> trong cuộc sống có thể áp dụng câu lệnh
+if.</p></li>
+</ul>
+<h1 id="phụ-lục">PHỤ LỤC</h1>
+<h2 id="phụ-lục-1">Phụ lục 1 </h2>
+<table style="width:92%;">
+<colgroup>
+<col style="width: 91%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: center;"><p><strong>PHIẾU HỌC TẬP 01</strong></p>
+<p><strong>Nhóm: ………………………………………..</strong></p>
+<p><strong>Hoàn thành các câu hỏi dưới đây theo yêu cầu</strong></p>
+<p><strong>Câu 1.</strong> Biểu thức thức logic có thể nhận mấy giá trị
+khác nhau?</p>
+<p><em>Điền đáp án thích hợp vào ô sau:</em></p>
+<p><strong>Câu 2.</strong> Biểu thức nào sau đây là biểu thức logic
+trong Python?</p>
+<ol start="5" type="A">
+<li><p>a = 5 + 3</p></li>
+<li><p>a + b*2</p></li>
+<li><p>x &gt; 10 + y</p></li>
+<li><p>b**2</p></li>
+</ol>
+<p><strong>Câu 3.</strong> Kiểu dữ liệu của biểu thức logic trong Python
+là gì?</p>
+<ol start="5" type="A">
+<li><p>int</p></li>
+<li><p>float</p></li>
+<li><p>bool</p></li>
+<li><p>str</p></li>
+</ol>
+<p><strong>Câu 4.</strong> Kết quả của biểu thức sau là gì?</p>
+<p><img src="./media/image1.png"
+style="width:2.79206in;height:0.72927in" /></p>
+<ol start="5" type="A">
+<li><p>True</p></li>
+<li><p>False</p></li>
+<li><p>Error</p></li>
+<li><p>None</p></li>
+</ol>
+<p><strong>Câu 5.</strong> Biểu thức x &gt; 3 or x &lt; 1 sẽ trả về True
+khi nào?</p>
+<ol start="5" type="A">
+<li><p>Khi x = 1</p></li>
+<li><p>Khi x = 2</p></li>
+<li><p>Khi x thuộc khoảng (1, 2)</p></li>
+<li><p>Khi x thuộc khoảng [1, 2)</p></li>
+</ol>
+<p><strong>Câu 6.</strong> Kết quả của biểu thức sau là gì?</p>
+<p><img src="./media/image2.png"
+style="width:3.30254in;height:0.61467in" /></p>
+<ol start="5" type="A">
+<li><p>True</p></li>
+<li><p>False</p></li>
+<li><p>Error</p></li>
+<li><p>None</p></li>
+</ol>
+<p><strong>Câu 7.</strong> Kết quả của biểu thức sau là gì?</p>
+<p><img src="./media/image3.png"
+style="width:2.49969in;height:0.57285in" /></p>
+<ol start="5" type="A">
+<li><p>True</p></li>
+<li><p>False</p></li>
+<li><p>Error</p></li>
+<li><p>None</p></li>
+</ol>
+<p><strong>Câu 8.</strong> Viết một biểu thức có sử dụng toán tử OR và
+có giá trị là True.</p>
+<p><strong>Câu 9.</strong> Viết một biểu thức có sử dụng các toán hạng,
+toán tử OR kết hợp toán tử AND và có giá trị là False.</p>
+<p><strong>Câu 10.</strong> Viết một biểu thức có sử dụng các toán hạng,
+toán tử OR kết hợp toán tử NOT, AND và có giá trị là False.</p></th>
+</tr>
+</thead>
+<tbody>
+</tbody>
+</table>

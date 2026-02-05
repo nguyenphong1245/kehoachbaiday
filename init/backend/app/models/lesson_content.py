@@ -5,7 +5,7 @@ Liên kết với Neo4j qua neo4j_lesson_id
 Flow:
 1. Người dùng chọn bài học từ dropdown (query Neo4j)
 2. Neo4j trả về lesson_id (VD: KNTT_10_BAI_01)
-3. Dùng lesson_id query SQLite lấy nội dung markdown
+3. Dùng lesson_id query PostgreSQL lấy nội dung markdown
 4. Truyền markdown content vào Gemini để generate giáo án
 """
 from sqlalchemy import Column, Integer, String, Text

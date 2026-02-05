@@ -17,11 +17,19 @@ class CreateSharedWorksheetRequest(BaseModel):
     max_submissions: Optional[int] = Field(None, description="Số lượt submit tối đa")
 
 
+class UpdateWorksheetRequest(BaseModel):
+    """Request cập nhật phiếu học tập"""
+    title: Optional[str] = Field(None, description="Tiêu đề mới")
+    content: Optional[str] = Field(None, description="Nội dung markdown mới")
+
+
 class SubmitWorksheetRequest(BaseModel):
     """Request học sinh submit câu trả lời"""
     student_name: str = Field(..., description="Họ tên học sinh")
     student_class: Optional[str] = Field(None, description="Lớp")
+    student_group: Optional[str] = Field(None, description="Nhóm (nếu có)")
     answers: Dict[str, str] = Field(..., description="Câu trả lời theo format {question_id: answer}")
+    session_token: str = Field(..., description="Token phiên làm bài từ start-session")
 
 
 # ============== RESPONSE SCHEMAS ==============
@@ -37,6 +45,7 @@ class SharedWorksheetResponse(BaseModel):
     max_submissions: Optional[int]
     response_count: int
     created_at: datetime
+    lesson_info: Optional[Dict[str, str]] = None
 
     class Config:
         from_attributes = True

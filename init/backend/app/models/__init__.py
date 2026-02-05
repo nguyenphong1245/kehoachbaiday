@@ -5,15 +5,20 @@ from .settings import UserSettings
 from .user import User
 from .email_verification import EmailVerificationToken
 from .password_reset import PasswordResetToken
-from .category import Category
-from .document import Document
 from .saved_lesson_plan import SavedLessonPlan
 from .shared_worksheet import SharedWorksheet, WorksheetResponse
-from .code_exercise import SharedCodeExercise, CodeExerciseSubmission
 from .lesson_content import LessonContent
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
-from sqlalchemy.orm import relationship
-from app.db.base import Base
+from .code_exercise import CodeExercise, CodeSubmission
+from .submission_session import SubmissionSession
+from .refresh_token import RefreshToken
+from .classroom import Classroom
+from .class_student import ClassStudent
+from .student_group import StudentGroup, GroupMember
+from .class_assignment import ClassAssignment
+from .work_session import GroupWorkSession, IndividualSubmission, GroupDiscussion
+from .peer_review import PeerReviewRound, PeerReview
+from .classroom_material import ClassroomMaterial
+from .audit_log import AuditLog
 
 __all__ = [
     "User",
@@ -23,12 +28,24 @@ __all__ = [
     "UserSettings",
     "EmailVerificationToken",
     "PasswordResetToken",
-    "Category",
-    "Document",
     "SavedLessonPlan",
     "SharedWorksheet",
     "WorksheetResponse",
-    "SharedCodeExercise",
-    "CodeExerciseSubmission",
     "LessonContent",
+    "CodeExercise",
+    "CodeSubmission",
+    "SubmissionSession",
+    "RefreshToken",
+    "Classroom",
+    "ClassStudent",
+    "StudentGroup",
+    "GroupMember",
+    "ClassAssignment",
+    "GroupWorkSession",
+    "IndividualSubmission",
+    "GroupDiscussion",
+    "PeerReviewRound",
+    "PeerReview",
+    "ClassroomMaterial",
+    "AuditLog",
 ]

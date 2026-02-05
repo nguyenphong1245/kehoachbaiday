@@ -26,22 +26,25 @@ const VerifyEmailPage = () => {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (code.length !== 6) {
-      setError("Please enter the 6-digit verification code.");
+    if (code.length !== 8) {
+      setError("Vui lòng nhập mã xác minh 8 chữ số.");
+      return;
+    }
+    if (!email) {
+      setError("Không tìm thấy email. Vui lòng quay lại trang đăng ký.");
       return;
     }
     setError(null);
     setSuccess(null);
     setIsSubmitting(true);
     try {
-      const response = await verifyEmail({ token: code });
+      const response = await verifyEmail({ email, token: code });
       setSuccess(response.message);
-      // Redirect to login page after 2 seconds
       setTimeout(() => {
-        navigate("/login", { state: { message: "Email verified successfully! You can now log in." } });
+        navigate("/login", { state: { message: "Xác minh email thành công! Bạn có thể đăng nhập." } });
       }, 2000);
     } catch (err: unknown) {
-      setError("Verification failed. Please check your code and try again.");
+      setError("Xác minh thất bại. Vui lòng kiểm tra lại mã và thử lại.");
       console.error(err);
     } finally {
       setIsSubmitting(false);
@@ -50,32 +53,32 @@ const VerifyEmailPage = () => {
 
   return (
     <AuthCard
-      title="Verify your email"
+      title="Xác minh email"
       description={
         <span>
-          Lost your code? <Link to="/resend-verification">Send it again</Link>
+          Mất mã xác minh? <Link to="/resend-verification">Gửi lại</Link>
         </span>
       }
     >
       <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
         {email && (
-          <p className="text-sm text-slate-600">
-            We sent a 6-digit code to <strong>{email}</strong>. Check your inbox.
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            Chúng tôi đã gửi mã 8 chữ số đến <strong>{email}</strong>. Kiểm tra hộp thư của bạn.
           </p>
         )}
         {error ? <FormAlert>{error}</FormAlert> : null}
         {success ? <FormAlert variant="success">{success}</FormAlert> : null}
         <OtpInput
-          length={6}
+          length={8}
           value={code}
           onChange={setCode}
-          label="Enter 6-digit code"
+          label="Nhập mã 8 chữ số"
           error={error}
         />
-        <SubmitButton label="Verify email" isLoading={isSubmitting} />
+        <SubmitButton label="Xác minh email" isLoading={isSubmitting} />
       </form>
-      <p className="mt-4 text-center text-sm text-slate-500">
-        Ready to sign in? <Link to="/login">Go to login</Link>
+      <p className="mt-4 text-center text-sm text-slate-500 dark:text-slate-400">
+        Sẵn sàng đăng nhập? <Link to="/login">Đi đến đăng nhập</Link>
       </p>
     </AuthCard>
   );

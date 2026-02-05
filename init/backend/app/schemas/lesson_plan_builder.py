@@ -1,7 +1,7 @@
 """
 Schemas cho Lesson Plan Builder - Giao diện mới cho việc soạn kế hoạch bài dạy
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict, Any
 from enum import Enum
 
@@ -10,8 +10,6 @@ from enum import Enum
 
 class BookType(str, Enum):
     KNTT = "Kết nối tri thức với cuộc sống"
-    CTST = "Chân trời sáng tạo"
-    CD = "Cánh diều"
 
 
 class Grade(str, Enum):
@@ -99,14 +97,48 @@ class LessonDetailResponse(BaseModel):
 
 class ActivityConfig(BaseModel):
     """Cấu hình cho mỗi hoạt động"""
-    activity_name: str = Field(..., description="Tên hoạt động")
+    activity_name: str = Field(..., max_length=200, description="Tên hoạt động")
     activity_type: str = Field(..., description="Loại hoạt động: khoi_dong, hinh_thanh_kien_thuc, luyen_tap, van_dung")
-    chi_muc: Optional[str] = Field(None, description="Tên chỉ mục (cho hoạt động hình thành kiến thức)")
+    chi_muc: Optional[str] = Field(None, max_length=500, description="Tên chỉ mục (cho hoạt động hình thành kiến thức)")
     selected_methods: List[str] = Field(default_factory=list, description="Phương pháp đã chọn")
     selected_techniques: List[str] = Field(default_factory=list, description="Kỹ thuật đã chọn")
     # Nội dung cách tổ chức của phương pháp/kỹ thuật đã chọn
     methods_content: Optional[Dict[str, str]] = Field(default_factory=dict, description="Nội dung cách tổ chức phương pháp {tên: nội dung}")
     techniques_content: Optional[Dict[str, str]] = Field(default_factory=dict, description="Nội dung cách tổ chức kỹ thuật {tên: nội dung}")
+    # Hình thức kiểm tra/đánh giá: trắc nghiệm, phiếu học tập, bài tập code
+    activity_format: Optional[str] = Field(None, description="Hình thức: trac_nghiem, phieu_hoc_tap, bai_tap_code")
+    # Yêu cầu bổ sung từ người dùng cho hoạt động
+    custom_request: Optional[str] = Field(None, max_length=2000, description="Yêu cầu bổ sung của người dùng cho hoạt động này")
+    # Vị trí dạy học cho hoạt động này
+    location: Optional[str] = Field("lop_hoc", description="Vị trí dạy học: lop_hoc (Lớp học), phong_may (Phòng máy)")
+
+    @field_validator("activity_type")
+    @classmethod
+    def validate_activity_type(cls, v: str) -> str:
+        allowed = {"khoi_dong", "hinh_thanh_kien_thuc", "luyen_tap", "van_dung"}
+        if v not in allowed:
+            raise ValueError(f"activity_type phải là một trong: {allowed}")
+        return v
+
+    @field_validator("activity_format")
+    @classmethod
+    def validate_activity_format(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        allowed = {"trac_nghiem", "phieu_hoc_tap", "bai_tap_code"}
+        if v not in allowed:
+            raise ValueError(f"activity_format phải là một trong: {allowed}")
+        return v
+
+    @field_validator("location")
+    @classmethod
+    def validate_location(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        allowed = {"lop_hoc", "phong_may"}
+        if v not in allowed:
+            raise ValueError(f"location phải là một trong: {allowed}")
+        return v
 
 
 class GenerateLessonPlanBuilderRequest(BaseModel):
@@ -120,13 +152,14 @@ class GenerateLessonPlanBuilderRequest(BaseModel):
 
 
 class QuizQuestionItem(BaseModel):
-    """Một câu hỏi trắc nghiệm"""
+    """Một câu hỏi trắc nghiệm - hỗ trợ multiple_choice và multiple_select"""
     question: str = Field(..., description="Nội dung câu hỏi")
+    type: Optional[str] = Field(None, description="Loại: multiple_choice (mặc định) hoặc multiple_select")
     A: str = Field(..., description="Đáp án A")
     B: str = Field(..., description="Đáp án B")
     C: str = Field(..., description="Đáp án C")
     D: str = Field(..., description="Đáp án D")
-    answer: str = Field(..., description="Đáp án đúng (A/B/C/D)")
+    answer: str = Field(..., description="Đáp án đúng: 1 chữ cái (VD: A) hoặc nhiều chữ cái (VD: A,C)")
 
 
 class LessonPlanSection(BaseModel):
@@ -136,7 +169,8 @@ class LessonPlanSection(BaseModel):
     title: str = Field(..., description="Tiêu đề section")
     content: str = Field("", description="Nội dung section (Markdown)")
     questions: Optional[List[QuizQuestionItem]] = Field(None, description="Danh sách câu hỏi (chỉ cho trac_nghiem)")
-    code_exercises: Optional[List[Any]] = Field(None, description="Bài tập code (Parsons + Coding) - chỉ cho bài Python")
+    mindmap_data: Optional[str] = Field(None, description="Dữ liệu sơ đồ tư duy (Markdown headings cho Markmap)")
+    worksheet_data: Optional[Dict[str, Any]] = Field(None, description="Dữ liệu phiếu học tập JSON")
     editable: bool = Field(True, description="Có thể chỉnh sửa không")
 
 
@@ -153,12 +187,31 @@ class UpdateSectionRequest(BaseModel):
     new_content: str = Field(...)
 
 
+class TeachingMethodItem(BaseModel):
+    """Thông tin phương pháp dạy học từ Neo4j"""
+    value: str = Field(..., description="Tên phương pháp")
+    label: str = Field(..., description="Tên hiển thị")
+    cach_tien_hanh: Optional[str] = Field(None, description="Cách tiến hành")
+    uu_diem: Optional[str] = Field(None, description="Ưu điểm")
+    nhuoc_diem: Optional[str] = Field(None, description="Nhược điểm")
+
+
+class TeachingTechniqueItem(BaseModel):
+    """Thông tin kỹ thuật dạy học từ Neo4j"""
+    value: str = Field(..., description="Tên kỹ thuật")
+    label: str = Field(..., description="Tên hiển thị")
+    cach_tien_hanh: Optional[str] = Field(None, description="Cách tiến hành")
+    uu_diem: Optional[str] = Field(None, description="Ưu điểm")
+    nhuoc_diem: Optional[str] = Field(None, description="Nhược điểm")
+    bo_sung: Optional[str] = Field(None, description="Bổ sung")
+
+
 class StaticDataResponse(BaseModel):
     """Response chứa dữ liệu tĩnh cho frontend"""
     book_types: List[Dict[str, str]] = Field(...)
     grades: List[Dict[str, str]] = Field(...)
-    methods: List[Dict[str, str]] = Field(...)
-    techniques: List[Dict[str, str]] = Field(...)
+    methods: List[TeachingMethodItem] = Field(...)
+    techniques: List[TeachingTechniqueItem] = Field(...)
 
 
 class TopicsResponse(BaseModel):
@@ -174,6 +227,8 @@ class SavedLessonPlanSection(BaseModel):
     section_type: str
     title: str
     content: str
+    mindmap_data: Optional[str] = None
+    worksheet_data: Optional[Dict[str, Any]] = None
     editable: bool = True
 
 
@@ -186,6 +241,26 @@ class SaveLessonPlanRequest(BaseModel):
     activities: Optional[List[ActivityConfig]] = Field(None, description="Cấu hình hoạt động đã chọn")
     original_content: Optional[str] = Field(None, description="Nội dung gốc trước khi chỉnh sửa")
     is_printed: bool = Field(False, description="Đánh dấu là đã in")
+
+
+class UpdateLessonPlanRequest(BaseModel):
+    """Request để cập nhật giáo án đã lưu"""
+    title: Optional[str] = Field(None, description="Tiêu đề giáo án mới")
+    sections: Optional[List[SavedLessonPlanSection]] = Field(None, description="Các section đã chỉnh sửa")
+    full_content: Optional[str] = Field(None, description="Nội dung đầy đủ dạng Markdown")
+
+
+class GenerateMindmapRequest(BaseModel):
+    """Request để sinh sơ đồ tư duy cho một hoạt động"""
+    lesson_id: str = Field(..., description="ID bài học từ Neo4j")
+    lesson_name: str = Field(..., description="Tên bài học")
+    activity_content: str = Field(..., description="Nội dung hoạt động")
+    activity_name: str = Field(..., description="Tên hoạt động")
+
+
+class GenerateMindmapResponse(BaseModel):
+    """Response chứa dữ liệu sơ đồ tư duy"""
+    mindmap_data: str = Field(..., description="Markdown headings cho Markmap")
 
 
 class SavedLessonPlanRead(BaseModel):
@@ -254,9 +329,9 @@ class RelatedAppendix(BaseModel):
 class ImproveSectionRequest(BaseModel):
     """Request để AI cải thiện một section"""
     section_type: str = Field(..., description="Loại section: muc_tieu, thiet_bi, khoi_dong, hinh_thanh_kien_thuc, luyen_tap, van_dung")
-    section_title: str = Field(..., description="Tiêu đề section")
+    section_title: str = Field(..., max_length=500, description="Tiêu đề section")
     current_content: str = Field(..., description="Nội dung hiện tại của section")
-    user_request: str = Field(..., description="Yêu cầu cải thiện từ người dùng")
+    user_request: str = Field(..., max_length=2000, description="Yêu cầu cải thiện từ người dùng")
     lesson_info: Dict[str, str] = Field(..., description="Thông tin bài học: book_type, grade, topic, lesson_name")
     related_appendices: Optional[List[RelatedAppendix]] = Field(None, description="Các phụ lục liên quan cần cập nhật cùng")
 

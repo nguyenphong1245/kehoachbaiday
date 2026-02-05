@@ -1,11 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, func, desc
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import select, func, desc, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from typing import List
 
 from app.api.deps import get_current_user
 from app.core.logging import logger
+from app.core.rate_limiter import limiter
 from app.db.session import get_db
 from app.models.user import User
 from app.models.chat_conversation import ChatConversation
@@ -20,18 +21,68 @@ from app.schemas.chat import (
     ChatResponse,
 )
 from app.services.chat_ai import get_chat_ai_service
-from app.models.document import Document
 
 router = APIRouter()
 
+# Số token tạm giữ trước khi gọi AI (hoàn lại phần thừa sau)
+_RESERVE_TOKENS = 500
+
+
+async def _reserve_tokens(session: AsyncSession, user_id: int, amount: int) -> int:
+    """Atomic: trừ trước amount token bằng UPDATE ... WHERE balance >= amount.
+    Trả về số token thực sự trừ được (0 nếu không đủ).
+    Cũng tăng tokens_used tương ứng."""
+    result = await session.execute(
+        update(User)
+        .where(User.id == user_id, User.token_balance >= amount)
+        .values(
+            token_balance=User.token_balance - amount,
+            tokens_used=User.tokens_used + amount,
+        )
+        .returning(User.token_balance)
+    )
+    row = result.first()
+    if row is None:
+        return 0
+    await session.flush()
+    logger.info("token.reserved user_id=%s reserved=%s new_balance=%s", user_id, amount, row[0])
+    return amount
+
+
+async def _refund_tokens(session: AsyncSession, user_id: int, amount: int) -> None:
+    """Hoàn lại token thừa sau khi biết số thực tế dùng.
+    Cũng giảm tokens_used tương ứng."""
+    if amount <= 0:
+        return
+    await session.execute(
+        update(User)
+        .where(User.id == user_id)
+        .values(
+            token_balance=User.token_balance + amount,
+            tokens_used=User.tokens_used - amount,
+        )
+    )
+    await session.flush()
+    logger.info("token.refunded user_id=%s refunded=%s", user_id, amount)
+
 
 @router.post("/conversations", response_model=ChatResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/minute")
 async def create_conversation(
+    request: Request,
     payload: ChatConversationCreate,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> ChatResponse:
     """Create a new conversation with the first message"""
+
+    # Atomic: trừ trước token, tránh race condition
+    reserved = await _reserve_tokens(session, current_user.id, _RESERVE_TOKENS)
+    if reserved == 0:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bạn đã hết token. Vui lòng liên hệ quản trị viên để nâng hạn mức.",
+        )
 
     # Create conversation
     conversation = ChatConversation(
@@ -58,39 +109,18 @@ async def create_conversation(
         {"role": "user", "content": payload.first_message}
     ]
 
-    # Phân loại câu hỏi bằng pattern matching đơn giản
-    is_lesson_plan_request = any(keyword in payload.first_message.lower() 
-                                  for keyword in ['giáo án', 'soạn', 'kế hoạch bài dạy', 'khbd'])
-    
-    if is_lesson_plan_request:
-        # FLOW MỚI: Sử dụng semantic integration service
-        try:
-            # Lấy tất cả tài liệu từ database
-            stmt = select(Document)
-            result = await session.execute(stmt)
-            all_documents = result.scalars().all()
-            
-            # Format documents thành text
-            # Format documents thành text
-            documents_text = None
-            if all_documents:
-                documents_text = "\n\n--- TÀI LIỆU THAM KHẢO ---\n\n"
-                for doc in all_documents:
-                    documents_text += f"### {doc.title or 'Tài liệu'}\n"
-                    if doc.content:
-                        documents_text += f"{doc.content}\n\n"
-            
-            # Dùng chat AI với context từ documents
-            ai_response_content = await chat_ai.generate_response(message_history)
-            logger.info(f"✅ Generated response via chat AI")
-        except Exception as e:
-            logger.error(f"❌ Error in chat: {e}")
-            # Fallback về chat AI thông thường
-            ai_response_content = await chat_ai.generate_response(message_history)
-    else:
-        # Không phải câu hỏi về lesson plan → dùng chat AI
-        ai_response_content = await chat_ai.generate_response(message_history)
-        logger.info(f"ℹ️ General chat question, using chat AI")
+    total_tokens = 0
+
+    try:
+        ai_response_content, tokens_used = await chat_ai.generate_response(message_history)
+        total_tokens += tokens_used
+        logger.info(f"[OK] Generated response via chat AI, tokens={tokens_used}")
+    except Exception as e:
+        # AI lỗi → hoàn lại toàn bộ token đã giữ
+        await _refund_tokens(session, current_user.id, reserved)
+        await session.commit()
+        logger.error(f"[ERROR] Error in chat: {e}")
+        raise HTTPException(status_code=500, detail="Lỗi khi sinh phản hồi")
 
     # Save AI response
     ai_message = ChatMessage(
@@ -102,7 +132,13 @@ async def create_conversation(
 
     # Generate title if not provided
     if not conversation.title:
-        conversation.title = await chat_ai.generate_conversation_title(payload.first_message)
+        title, title_tokens = await chat_ai.generate_conversation_title(payload.first_message)
+        conversation.title = title
+        total_tokens += title_tokens
+
+    # Hoàn lại phần token thừa (reserved - actual)
+    refund = reserved - min(total_tokens, reserved)
+    await _refund_tokens(session, current_user.id, refund)
 
     await session.commit()
 
@@ -122,14 +158,45 @@ async def create_conversation(
 
 
 @router.get("/conversations", response_model=List[ChatConversationListItem])
+@limiter.limit("30/minute")
 async def list_conversations(
+    request: Request,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
     include_archived: bool = False,
 ) -> List[ChatConversationListItem]:
     """List all conversations for current user"""
 
-    query = select(ChatConversation).where(ChatConversation.user_id == current_user.id)
+    # Subquery: message count per conversation
+    count_sub = (
+        select(
+            ChatMessage.conversation_id,
+            func.count(ChatMessage.id).label("message_count"),
+        )
+        .group_by(ChatMessage.conversation_id)
+        .subquery()
+    )
+
+    # Correlated subquery: last message content
+    last_msg_scalar = (
+        select(ChatMessage.content)
+        .where(ChatMessage.conversation_id == ChatConversation.id)
+        .order_by(desc(ChatMessage.created_at))
+        .limit(1)
+        .correlate(ChatConversation)
+        .scalar_subquery()
+    )
+
+    # Single query with left join + correlated subquery
+    query = (
+        select(
+            ChatConversation,
+            func.coalesce(count_sub.c.message_count, 0).label("message_count"),
+            last_msg_scalar.label("last_content"),
+        )
+        .outerjoin(count_sub, ChatConversation.id == count_sub.c.conversation_id)
+        .where(ChatConversation.user_id == current_user.id)
+    )
 
     if not include_archived:
         query = query.where(ChatConversation.is_archived == False)
@@ -137,46 +204,26 @@ async def list_conversations(
     query = query.order_by(desc(ChatConversation.updated_at))
 
     result = await session.execute(query)
-    conversations = result.scalars().all()
+    rows = result.all()
 
-    # Build list items with message counts and previews
-    conversation_list = []
-    for conv in conversations:
-        # Get message count
-        count_query = select(func.count(ChatMessage.id)).where(
-            ChatMessage.conversation_id == conv.id
+    return [
+        ChatConversationListItem(
+            id=conv.id,
+            title=conv.title,
+            is_archived=conv.is_archived,
+            created_at=conv.created_at,
+            updated_at=conv.updated_at,
+            message_count=msg_count,
+            last_message_preview=last_content[:100] if last_content else None,
         )
-        count_result = await session.execute(count_query)
-        message_count = count_result.scalar() or 0
-
-        # Get last message preview
-        last_msg_query = (
-            select(ChatMessage.content)
-            .where(ChatMessage.conversation_id == conv.id)
-            .order_by(desc(ChatMessage.created_at))
-            .limit(1)
-        )
-        last_msg_result = await session.execute(last_msg_query)
-        last_msg = last_msg_result.scalar_one_or_none()
-        last_msg_preview = last_msg[:100] if last_msg else None
-
-        conversation_list.append(
-            ChatConversationListItem(
-                id=conv.id,
-                title=conv.title,
-                is_archived=conv.is_archived,
-                created_at=conv.created_at,
-                updated_at=conv.updated_at,
-                message_count=message_count,
-                last_message_preview=last_msg_preview,
-            )
-        )
-
-    return conversation_list
+        for conv, msg_count, last_content in rows
+    ]
 
 
 @router.get("/conversations/{conversation_id}", response_model=ChatConversationRead)
+@limiter.limit("30/minute")
 async def get_conversation(
+    request: Request,
     conversation_id: str,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
@@ -205,13 +252,23 @@ async def get_conversation(
 
 
 @router.post("/conversations/{conversation_id}/messages", response_model=ChatMessageRead)
+@limiter.limit("10/minute")
 async def send_message(
+    request: Request,
     conversation_id: str,
     payload: ChatMessageCreate,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> ChatMessage:
     """Send a message in an existing conversation"""
+
+    # Atomic: trừ trước token
+    reserved = await _reserve_tokens(session, current_user.id, _RESERVE_TOKENS)
+    if reserved == 0:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bạn đã hết token. Vui lòng liên hệ quản trị viên để nâng hạn mức.",
+        )
 
     # Verify conversation exists and belongs to user
     conv_query = select(ChatConversation).where(
@@ -222,6 +279,8 @@ async def send_message(
     conversation = conv_result.scalar_one_or_none()
 
     if not conversation:
+        await _refund_tokens(session, current_user.id, reserved)
+        await session.commit()
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Conversation not found",
@@ -253,39 +312,15 @@ async def send_message(
 
     # Generate AI response
     chat_ai = get_chat_ai_service()
-    
-    # Phân loại câu hỏi bằng pattern matching
-    is_lesson_plan_request = any(keyword in payload.content.lower() 
-                                  for keyword in ['giáo án', 'soạn', 'kế hoạch bài dạy', 'khbd'])
-    
+
     try:
-        if is_lesson_plan_request:
-            # FLOW: Sử dụng semantic integration service (giống create_conversation)
-            # Lấy tất cả tài liệu từ database
-            stmt = select(Document)
-            result = await session.execute(stmt)
-            all_documents = result.scalars().all()
-            
-            # Format documents thành text
-            documents_text = None
-            if all_documents:
-                documents_text = "\n\n--- TÀI LIỆU THAM KHẢO ---\n\n"
-                for doc in all_documents:
-                    documents_text += f"### {doc.title or 'Tài liệu'}\n"
-                    if doc.content:
-                        documents_text += f"{doc.content}\n\n"
-            
-            # Dùng chat AI với context
-            ai_response_content = await chat_ai.generate_response(message_history)
-            logger.info(f"✅ Generated response via chat AI")
-        else:
-            # Không phải câu hỏi về lesson plan → dùng chat AI
-            ai_response_content = await chat_ai.generate_response(message_history)
-            logger.info(f"ℹ️ Câu hỏi thông thường, dùng chat AI")
+        ai_response_content, tokens_used = await chat_ai.generate_response(message_history)
+        logger.info(f"[OK] Generated response via chat AI, tokens={tokens_used}")
     except Exception as e:
-        logger.error(f"❌ Lỗi khi xử lý: {e}")
-        # Fallback về chat AI thông thường
-        ai_response_content = await chat_ai.generate_response(message_history)
+        await _refund_tokens(session, current_user.id, reserved)
+        await session.commit()
+        logger.error(f"[ERROR] Loi khi xu ly: {e}")
+        raise HTTPException(status_code=500, detail="Lỗi khi sinh phản hồi")
 
     # Save AI response
     ai_message = ChatMessage(
@@ -297,6 +332,10 @@ async def send_message(
 
     # Update conversation timestamp
     conversation.updated_at = func.now()
+
+    # Hoàn lại phần token thừa
+    refund = reserved - min(tokens_used, reserved)
+    await _refund_tokens(session, current_user.id, refund)
 
     await session.commit()
     await session.refresh(ai_message)
@@ -379,3 +418,16 @@ async def delete_conversation(
         current_user.id,
         conversation_id,
     )
+
+
+@router.get("/token-balance")
+@limiter.limit("60/minute")
+async def get_token_balance(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    """Get current user's token balance and usage"""
+    return {
+        "token_balance": current_user.token_balance,
+        "tokens_used": current_user.tokens_used,
+    }

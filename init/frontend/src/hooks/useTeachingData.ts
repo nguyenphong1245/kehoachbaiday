@@ -1,26 +1,40 @@
 /**
- * Hook để lấy phương pháp dạy học và kỹ thuật dạy học từ API categories
+ * Hook để lấy phương pháp dạy học và kỹ thuật dạy học từ Neo4j qua lesson-builder API
  */
 import { useState, useEffect } from 'react';
-import { getStoredAccessToken } from '@/utils/authStorage';
 
-interface Category {
-  id: string;
-  name: string;
-  description: string | null;
+interface TeachingMethodFromAPI {
+  value: string;
+  label: string;
+  cach_tien_hanh: string | null;
+  uu_diem: string | null;
+  nhuoc_diem: string | null;
 }
 
-interface Document {
-  id: string;
-  title: string;
-  content: string | null;
-  category_id: string;
+interface TeachingTechniqueFromAPI {
+  value: string;
+  label: string;
+  cach_tien_hanh: string | null;
+  uu_diem: string | null;
+  nhuoc_diem: string | null;
+  bo_sung: string | null;
+}
+
+interface StaticDataResponse {
+  book_types: { value: string; label: string }[];
+  grades: { value: string; label: string }[];
+  methods: TeachingMethodFromAPI[];
+  techniques: TeachingTechniqueFromAPI[];
 }
 
 export interface TeachingItem {
   value: string;
   label: string;
-  content: string | null; // Nội dung cách tổ chức
+  content: string | null; // Nội dung cách tổ chức (kết hợp từ các trường)
+  cach_tien_hanh?: string | null;
+  uu_diem?: string | null;
+  nhuoc_diem?: string | null;
+  bo_sung?: string | null;
 }
 
 export interface TeachingData {
@@ -33,9 +47,25 @@ export interface TeachingData {
   getTechniqueContent: (name: string) => string | null;
 }
 
-// Tên danh mục trong database - hỗ trợ cả 2 cách viết (ĩ và ỹ)
-const METHODS_CATEGORY_NAMES = ["Phương pháp dạy học"];
-const TECHNIQUES_CATEGORY_NAMES = ["Kỹ thuật dạy học", "Kĩ thuật dạy học"];
+// Helper function để tạo content từ các trường
+function buildContent(item: TeachingMethodFromAPI | TeachingTechniqueFromAPI): string {
+  const parts: string[] = [];
+  
+  if (item.cach_tien_hanh) {
+    parts.push(`**Cách tiến hành:**\n${item.cach_tien_hanh}`);
+  }
+  if (item.uu_diem) {
+    parts.push(`**Ưu điểm:**\n${item.uu_diem}`);
+  }
+  if (item.nhuoc_diem) {
+    parts.push(`**Nhược điểm:**\n${item.nhuoc_diem}`);
+  }
+  if ('bo_sung' in item && item.bo_sung) {
+    parts.push(`**Bổ sung:**\n${item.bo_sung}`);
+  }
+  
+  return parts.join('\n\n');
+}
 
 export function useTeachingData(): TeachingData {
   const [methods, setMethods] = useState<TeachingItem[]>([]);
@@ -61,64 +91,45 @@ export function useTeachingData(): TeachingData {
         setLoading(true);
         setError(null);
         
-        const token = getStoredAccessToken();
-        const headers = {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        };
+        // Fetch từ Neo4j qua lesson-builder/static-data endpoint
+        const baseUrl = import.meta.env.VITE_API_URL ?? '/api/v1';
+        const response = await fetch(`${baseUrl}/lesson-builder/static-data`, {
+          credentials: 'include', // Send httpOnly cookies
+          headers: { 'Content-Type': 'application/json' },
+        });
 
-        // Fetch categories và documents song song
-        const [categoriesRes, documentsRes] = await Promise.all([
-          fetch('http://localhost:8000/api/v1/categories', { headers }),
-          fetch('http://localhost:8000/api/v1/documents', { headers }),
-        ]);
-
-        if (!categoriesRes.ok || !documentsRes.ok) {
-          throw new Error('Không thể tải dữ liệu');
+        if (!response.ok) {
+          throw new Error('Không thể tải dữ liệu phương pháp và kỹ thuật dạy học');
         }
 
-        const categories: Category[] = await categoriesRes.json();
-        const documents: Document[] = await documentsRes.json();
+        const data: StaticDataResponse = await response.json();
 
-        // Tìm category "Phương pháp dạy học"
-        const methodsCategory = categories.find(
-          (c) => METHODS_CATEGORY_NAMES.some(name => c.name.toLowerCase() === name.toLowerCase())
+        // Chuyển đổi methods từ API sang TeachingItem
+        setMethods(
+          data.methods.map((m) => ({
+            value: m.value,
+            label: m.label,
+            content: buildContent(m),
+            cach_tien_hanh: m.cach_tien_hanh,
+            uu_diem: m.uu_diem,
+            nhuoc_diem: m.nhuoc_diem,
+          }))
         );
 
-        // Tìm category "Kỹ thuật dạy học" hoặc "Kĩ thuật dạy học"
-        const techniquesCategory = categories.find(
-          (c) => TECHNIQUES_CATEGORY_NAMES.some(name => c.name.toLowerCase() === name.toLowerCase())
+        // Chuyển đổi techniques từ API sang TeachingItem
+        setTechniques(
+          data.techniques.map((t) => ({
+            value: t.value,
+            label: t.label,
+            content: buildContent(t),
+            cach_tien_hanh: t.cach_tien_hanh,
+            uu_diem: t.uu_diem,
+            nhuoc_diem: t.nhuoc_diem,
+            bo_sung: t.bo_sung,
+          }))
         );
-
-        // Lấy documents thuộc category "Phương pháp dạy học"
-        if (methodsCategory) {
-          const methodDocs = documents.filter(
-            (d) => d.category_id === methodsCategory.id
-          );
-          setMethods(
-            methodDocs.map((d) => ({
-              value: d.title,
-              label: d.title,
-              content: d.content, // Lưu nội dung cách tổ chức
-            }))
-          );
-        }
-
-        // Lấy documents thuộc category "Kỹ thuật dạy học"
-        if (techniquesCategory) {
-          const techniqueDocs = documents.filter(
-            (d) => d.category_id === techniquesCategory.id
-          );
-          setTechniques(
-            techniqueDocs.map((d) => ({
-              value: d.title,
-              label: d.title,
-              content: d.content, // Lưu nội dung cách tổ chức
-            }))
-          );
-        }
       } catch (err) {
-        console.error('Error fetching teaching data:', err);
+        console.error('Error fetching teaching data from Neo4j:', err);
         setError(err instanceof Error ? err.message : 'Lỗi không xác định');
       } finally {
         setLoading(false);

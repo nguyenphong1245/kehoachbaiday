@@ -13,9 +13,9 @@ depends_on = None
 def upgrade() -> None:
     op.add_column(
         "users",
-        sa.Column("is_verified", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_verified", sa.Boolean(), nullable=False, server_default=sa.text("false")),
     )
-    op.execute(sa.text("UPDATE users SET is_verified = 1"))
+    op.execute(sa.text("UPDATE users SET is_verified = true"))
 
     op.create_table(
         "email_verification_tokens",

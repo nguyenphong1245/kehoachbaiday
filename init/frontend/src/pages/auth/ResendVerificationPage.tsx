@@ -21,10 +21,9 @@ const ResendVerificationPage = () => {
     setIsSubmitting(true);
     try {
       await resendVerificationEmail({ email });
-      // Redirect to verify-email page
       navigate("/verify-email", { state: { email } });
     } catch (err: unknown) {
-      setError("Unable to send verification email. Please try again later.");
+      setError("Không thể gửi email xác minh. Vui lòng thử lại sau.");
       console.error(err);
     } finally {
       setIsSubmitting(false);
@@ -33,10 +32,10 @@ const ResendVerificationPage = () => {
 
   return (
     <AuthCard
-      title="Resend verification"
+      title="Gửi lại xác minh"
       description={
         <span>
-          Ready to verify? <Link to="/verify-email">Enter your token</Link>
+          Đã có mã? <Link to="/verify-email">Nhập mã xác minh</Link>
         </span>
       }
     >
@@ -44,19 +43,19 @@ const ResendVerificationPage = () => {
         {error ? <FormAlert>{error}</FormAlert> : null}
         {success ? <FormAlert variant="success">{success}</FormAlert> : null}
         <TextInput
-          label="Account email"
+          label="Email tài khoản"
           name="email"
           type="email"
           autoComplete="email"
-          placeholder="jane@example.com"
+          placeholder="email@example.com"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           required
         />
-        <SubmitButton label="Send verification" isLoading={isSubmitting} />
+        <SubmitButton label="Gửi xác minh" isLoading={isSubmitting} />
       </form>
-      <p className="mt-4 text-center text-sm text-slate-500">
-        Remembered your password? <Link to="/login">Sign in</Link>
+      <p className="mt-4 text-center text-sm text-slate-500 dark:text-slate-400">
+        Đã nhớ mật khẩu? <Link to="/login">Đăng nhập</Link>
       </p>
     </AuthCard>
   );

@@ -1,7 +1,7 @@
 """Add saved_lesson_plans table
 
 Revision ID: 008
-Revises: 006
+Revises: 005
 Create Date: 2026-01-07
 """
 from alembic import op
@@ -9,8 +9,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '008'
-down_revision = '006'
+revision = '008_add_saved_lesson_plans'
+down_revision = '005'
 branch_labels = None
 depends_on = None
 

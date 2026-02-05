@@ -15,10 +15,15 @@ import {
   X,
   Loader2,
   RotateCcw,
+  MapPin,
+  Layers,
+  MessageSquare,
 } from "lucide-react";
 import {
   TEACHING_METHODS,
   TEACHING_TECHNIQUES,
+  ACTIVITY_FORMATS,
+  LESSON_LOCATIONS,
   type LessonDetail,
   type ActivityConfig,
   type ChiMucInfo,
@@ -60,9 +65,10 @@ interface DraggableItemProps {
   value: string;
   label: string;
   isSelected: boolean;
-  onDragStart: (e: React.DragEvent, value: string) => void;
+  onDragStart: (e: React.DragEvent, value: string, itemType: "method" | "technique") => void;
   onClick: () => void;
   colorClass?: string;
+  itemType: "method" | "technique";
 }
 
 const DraggableItem: React.FC<DraggableItemProps> = ({
@@ -72,11 +78,12 @@ const DraggableItem: React.FC<DraggableItemProps> = ({
   onDragStart,
   onClick,
   colorClass = "bg-slate-50 dark:bg-slate-700",
+  itemType,
 }) => {
   return (
     <div
       draggable={!isSelected}
-      onDragStart={(e) => onDragStart(e, value)}
+      onDragStart={(e) => onDragStart(e, value, itemType)}
       onClick={onClick}
       className={`
         flex items-center gap-2 px-3 py-2 text-sm cursor-pointer
@@ -121,6 +128,9 @@ const DropZone: React.FC<DropZoneProps> = ({
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    // Check if the dragged item type matches this drop zone type
+    const draggedType = e.dataTransfer.types.includes("application/x-item-type") 
+      ? "check" : "allow";
     setIsDragOver(true);
   };
 
@@ -132,7 +142,10 @@ const DropZone: React.FC<DropZoneProps> = ({
     e.preventDefault();
     setIsDragOver(false);
     const value = e.dataTransfer.getData("text/plain");
-    if (value && !items.includes(value)) {
+    const itemType = e.dataTransfer.getData("application/x-item-type");
+    
+    // Chỉ chấp nhận nếu loại item khớp với loại drop zone
+    if (value && !items.includes(value) && itemType === type) {
       onDrop(value);
     }
   };
@@ -201,6 +214,8 @@ interface DragDropSelectorProps {
   loadingData?: boolean;
   currentMethodsContent?: { [key: string]: string };
   currentTechniquesContent?: { [key: string]: string };
+  customRequest?: string;
+  onCustomRequestChange?: (value: string) => void;
 }
 
 const DragDropSelector: React.FC<DragDropSelectorProps> = ({
@@ -213,9 +228,12 @@ const DragDropSelector: React.FC<DragDropSelectorProps> = ({
   loadingData = false,
   currentMethodsContent = {},
   currentTechniquesContent = {},
+  customRequest = "",
+  onCustomRequestChange,
 }) => {
-  const handleDragStart = (e: React.DragEvent, value: string) => {
+  const handleDragStart = (e: React.DragEvent, value: string, itemType: "method" | "technique") => {
     e.dataTransfer.setData("text/plain", value);
+    e.dataTransfer.setData("application/x-item-type", itemType);
     e.dataTransfer.effectAllowed = "copy";
   };
 
@@ -294,6 +312,7 @@ const DragDropSelector: React.FC<DragDropSelectorProps> = ({
                   onDragStart={handleDragStart}
                   onClick={() => addMethod(method.value)}
                   colorClass="bg-white dark:bg-slate-700"
+                  itemType="method"
                 />
               ))
             )}
@@ -318,6 +337,7 @@ const DragDropSelector: React.FC<DragDropSelectorProps> = ({
                   onDragStart={handleDragStart}
                   onClick={() => addTechnique(technique.value)}
                   colorClass="bg-white dark:bg-slate-700"
+                  itemType="technique"
                 />
               ))
             )}
@@ -343,6 +363,21 @@ const DragDropSelector: React.FC<DragDropSelectorProps> = ({
           placeholder="Kéo thả hoặc click để thêm"
           type="technique"
         />
+
+        {/* Yêu cầu bổ sung */}
+        <div>
+          <label className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2 flex items-center gap-1.5">
+            <MessageSquare className="w-3.5 h-3.5" />
+            Yêu cầu bổ sung
+          </label>
+          <textarea
+            value={customRequest}
+            onChange={(e) => onCustomRequestChange?.(e.target.value)}
+            placeholder=""
+            rows={2}
+            className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          />
+        </div>
       </div>
     </div>
   );
@@ -402,6 +437,22 @@ const ActivityCard: React.FC<ActivityCardProps> = ({
             <span className="text-xs text-purple-600 dark:text-purple-400">
               {activity.selected_techniques.length} KT
             </span>
+            {activity.activity_format && (
+              <>
+                <span className="text-xs text-slate-300">|</span>
+                <span className="text-xs text-emerald-600 dark:text-emerald-400">
+                  {ACTIVITY_FORMATS.find(f => f.value === activity.activity_format)?.label}
+                </span>
+              </>
+            )}
+            {activity.custom_request && (
+              <>
+                <span className="text-xs text-slate-300">|</span>
+                <span className="text-xs text-amber-600 dark:text-amber-400">
+                  Có yêu cầu
+                </span>
+              </>
+            )}
           </div>
         </div>
         <div className="p-1">
@@ -415,7 +466,29 @@ const ActivityCard: React.FC<ActivityCardProps> = ({
 
       {/* Content */}
       {isExpanded && (
-        <div className="px-4 pb-4 pt-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+        <div className="px-4 pb-4 pt-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 space-y-4">
+          {/* Hình thức kiểm tra/đánh giá */}
+          <div>
+            <label className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2 block">
+              Hình thức kiểm tra/đánh giá
+            </label>
+            <select
+              value={activity.activity_format || ""}
+              onChange={(e) => onUpdate({ 
+                ...activity, 
+                activity_format: e.target.value as "trac_nghiem" | "phieu_hoc_tap" | "bai_tap_code" | undefined || undefined 
+              })}
+              className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">-- Không chọn --</option>
+              {ACTIVITY_FORMATS.map((format) => (
+                <option key={format.value} value={format.value}>
+                  {format.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Drag and Drop Selector for Methods & Techniques */}
           <DragDropSelector
             methodsSelected={activity.selected_methods}
@@ -439,6 +512,10 @@ const ActivityCard: React.FC<ActivityCardProps> = ({
             loadingData={loadingData}
             currentMethodsContent={activity.methods_content || {}}
             currentTechniquesContent={activity.techniques_content || {}}
+            customRequest={activity.custom_request || ""}
+            onCustomRequestChange={(value) =>
+              onUpdate({ ...activity, custom_request: value || undefined })
+            }
           />
         </div>
       )}
@@ -524,6 +601,77 @@ export const ActivityConfigPanel: React.FC<ActivityConfigPanelProps> = ({
     onActivitiesChange(buildActivitiesList());
   };
 
+  // Xử lý thay đổi vị trí cho nhóm hoạt động
+  const handleLocationChange = (group: "group1" | "group2", newLocation: "lop_hoc" | "phong_may") => {
+    const newActivities = activities.map((activity) => {
+      if (group === "group1") {
+        // Nhóm 1: Khởi động + Hình thành kiến thức
+        if (activity.activity_type === "khoi_dong" || activity.activity_type === "hinh_thanh_kien_thuc") {
+          return { ...activity, location: newLocation };
+        }
+      } else {
+        // Nhóm 2: Luyện tập + Vận dụng
+        if (activity.activity_type === "luyen_tap" || activity.activity_type === "van_dung") {
+          return { ...activity, location: newLocation };
+        }
+      }
+      return activity;
+    });
+    onActivitiesChange(newActivities);
+  };
+
+  // Lấy vị trí hiện tại của từng nhóm
+  const getGroupLocation = (group: "group1" | "group2"): "lop_hoc" | "phong_may" => {
+    if (group === "group1") {
+      const khoiDong = activities.find(a => a.activity_type === "khoi_dong");
+      return khoiDong?.location || "lop_hoc";
+    } else {
+      const luyenTap = activities.find(a => a.activity_type === "luyen_tap");
+      return luyenTap?.location || "lop_hoc";
+    }
+  };
+
+  // Tách activities thành 2 nhóm
+  const group1Activities = activities.filter(
+    a => a.activity_type === "khoi_dong" || a.activity_type === "hinh_thanh_kien_thuc"
+  );
+  const group2Activities = activities.filter(
+    a => a.activity_type === "luyen_tap" || a.activity_type === "van_dung"
+  );
+
+  // Component cho Location Selector
+  const LocationSelector: React.FC<{
+    group: "group1" | "group2";
+    label: string;
+  }> = ({ group, label }) => {
+    const currentLocation = getGroupLocation(group);
+    return (
+      <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-slate-100 to-slate-50 dark:from-slate-700/50 dark:to-slate-700/30 border border-slate-200 dark:border-slate-600 rounded-lg">
+        <div className="flex items-center gap-2">
+          <MapPin className="w-4 h-4 text-blue-500" />
+          <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">
+            {label}
+          </span>
+        </div>
+        <div className="flex gap-2 ml-auto">
+          {LESSON_LOCATIONS.map((loc) => (
+            <button
+              key={loc.value}
+              onClick={() => handleLocationChange(group, loc.value as "lop_hoc" | "phong_may")}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                currentLocation === loc.value
+                  ? "bg-blue-500 text-white shadow-sm"
+                  : "bg-white dark:bg-slate-600 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-500 hover:border-blue-300 dark:hover:border-blue-500"
+              }`}
+            >
+              {loc.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-3">
       {/* Header with Reset */}
@@ -545,24 +693,56 @@ export const ActivityConfigPanel: React.FC<ActivityConfigPanelProps> = ({
         </button>
       </div>
 
-      {/* Activities List */}
+      {/* Group 1: Khởi động + Hình thành kiến thức */}
       <div className="space-y-2">
-        {activities.map((activity, index) => (
-          <ActivityCard
-            key={`${activity.activity_type}-${index}`}
-            activity={activity}
-            index={index}
-            chiMucOptions={lessonDetail.chi_muc_list}
-            onUpdate={(updated) => handleActivityUpdate(index, updated)}
-            isExpanded={expandedIndex === index}
-            onToggle={() =>
-              setExpandedIndex(expandedIndex === index ? null : index)
-            }
-            availableMethods={methods}
-            availableTechniques={techniques}
-            loadingData={loadingTeachingData}
-          />
-        ))}
+        <LocationSelector group="group1" label="Vị trí (Khởi động + Hình thành KT)" />
+        {group1Activities.map((activity) => {
+          const originalIndex = activities.findIndex(
+            a => a.activity_name === activity.activity_name && a.activity_type === activity.activity_type
+          );
+          return (
+            <ActivityCard
+              key={`${activity.activity_type}-${originalIndex}`}
+              activity={activity}
+              index={originalIndex}
+              chiMucOptions={lessonDetail.chi_muc_list}
+              onUpdate={(updated) => handleActivityUpdate(originalIndex, updated)}
+              isExpanded={expandedIndex === originalIndex}
+              onToggle={() =>
+                setExpandedIndex(expandedIndex === originalIndex ? null : originalIndex)
+              }
+              availableMethods={methods}
+              availableTechniques={techniques}
+              loadingData={loadingTeachingData}
+            />
+          );
+        })}
+      </div>
+
+      {/* Group 2: Luyện tập + Vận dụng */}
+      <div className="space-y-2 mt-4 pt-4 border-t border-slate-200 dark:border-slate-600">
+        <LocationSelector group="group2" label="Vị trí (Luyện tập + Vận dụng)" />
+        {group2Activities.map((activity) => {
+          const originalIndex = activities.findIndex(
+            a => a.activity_name === activity.activity_name && a.activity_type === activity.activity_type
+          );
+          return (
+            <ActivityCard
+              key={`${activity.activity_type}-${originalIndex}`}
+              activity={activity}
+              index={originalIndex}
+              chiMucOptions={lessonDetail.chi_muc_list}
+              onUpdate={(updated) => handleActivityUpdate(originalIndex, updated)}
+              isExpanded={expandedIndex === originalIndex}
+              onToggle={() =>
+                setExpandedIndex(expandedIndex === originalIndex ? null : originalIndex)
+              }
+              availableMethods={methods}
+              availableTechniques={techniques}
+              loadingData={loadingTeachingData}
+            />
+          );
+        })}
       </div>
     </div>
   );

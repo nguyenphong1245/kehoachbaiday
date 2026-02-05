@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,18 +13,47 @@ from app.models.permission import Permission
 http_bearer = HTTPBearer(auto_error=False)
 
 
+def _extract_token(request: Request, credentials: HTTPAuthorizationCredentials | None) -> str | None:
+    """Extract JWT token: httpOnly cookie first, then Bearer header fallback.
+
+    Supports multi-session: checks teacher_access_token and student_access_token cookies
+    to allow teacher and student login simultaneously.
+    """
+    # 1. Try role-specific httpOnly cookies (multi-session support)
+    teacher_token = request.cookies.get("teacher_access_token")
+    if teacher_token:
+        return teacher_token
+
+    student_token = request.cookies.get("student_access_token")
+    if student_token:
+        return student_token
+
+    # 2. Fallback to legacy cookie name (backward compat)
+    legacy_token = request.cookies.get("access_token")
+    if legacy_token:
+        return legacy_token
+
+    # 3. Fallback to Authorization: Bearer header (backward compat)
+    if credentials and credentials.scheme.lower() == "bearer":
+        return credentials.credentials
+
+    return None
+
+
 async def get_session(session: AsyncSession = Depends(get_db)) -> AsyncSession:
     return session
 
 
 async def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(http_bearer),
     session: AsyncSession = Depends(get_db),
 ) -> User:
-    if not credentials or credentials.scheme.lower() != "bearer":
+    token = _extract_token(request, credentials)
+    if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
-    subject = verify_token(credentials.credentials)
+    subject = verify_token(token)
     if subject is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
 
@@ -51,14 +80,16 @@ async def get_current_user(
 
 
 async def get_current_user_optional(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(http_bearer),
     session: AsyncSession = Depends(get_db),
 ) -> User | None:
     """Get current user if authenticated, otherwise return None (for public endpoints)"""
-    if not credentials or credentials.scheme.lower() != "bearer":
+    token = _extract_token(request, credentials)
+    if not token:
         return None
 
-    subject = verify_token(credentials.credentials)
+    subject = verify_token(token)
     if subject is None:
         return None
 
@@ -104,6 +135,16 @@ def require_role(role_name: str):
 
 
 require_admin = require_role("admin")
+
+
+def require_teacher():
+    """Require 'teacher' or 'user' role (excludes student-only accounts)."""
+    async def dependency(current_user: User = Depends(get_current_user)) -> User:
+        if user_has_role(current_user, "teacher") or user_has_role(current_user, "user") or user_has_role(current_user, "admin"):
+            return current_user
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+
+    return dependency
 
 
 def require_permission(permission_name: str):

@@ -1,11 +1,13 @@
+import logging
 import os
 import json
-import sqlite3
+import time
 import google.generativeai as genai
 from neo4j import GraphDatabase
 from dotenv import load_dotenv
 from typing import List, Dict, Optional, Any
-from pathlib import Path
+
+logger = logging.getLogger("app.lesson_builder")
 
 from app.schemas.lesson_plan_builder import (
     LessonBasicInfo,
@@ -20,10 +22,17 @@ from app.schemas.lesson_plan_builder import (
     TopicsResponse,
     BookType,
     Grade,
-    TeachingMethod,
-    TeachingTechnique
+    TeachingMethodItem,
+    TeachingTechniqueItem
 )
 from app.prompts.lesson_plan_generation import get_system_instruction, build_lesson_plan_prompt
+from app.services.response_parser import (
+    parse_response_to_sections,
+    clean_section_content,
+    sanitize_json_response,
+    repair_truncated_json,
+)
+from app.utils.prompt_sanitize import sanitize_prompt_input, sanitize_dict_values
 
 load_dotenv()
 
@@ -38,29 +47,28 @@ class LessonPlanBuilderService:
             auth=(os.getenv("NEO4J_USERNAME"), os.getenv("NEO4J_PASSWORD"))
         )
         self.neo4j_database = os.getenv("NEO4J_DATABASE", "neo4j")
-        
-        # SQLite database path
-        self.sqlite_db_path = Path(__file__).parent.parent.parent / "app.db"
-        
+
         # Gemini API
         api_key = os.getenv("GEMINI_API_KEY")
         if api_key:
             genai.configure(api_key=api_key)
+            # Model cho lesson plan - dùng model mạnh nhất (Gemini 3 Pro)
+            lesson_plan_model = os.getenv("GEMINI_MODEL_LESSON_PLAN", "gemini-3-pro-preview")
             # Model cho JSON output
             self.model = genai.GenerativeModel(
-                model_name=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+                model_name=lesson_plan_model,
                 system_instruction=self._get_system_instruction(),
                 generation_config={
                     "temperature": float(os.getenv("LESSON_PLAN_TEMPERATURE", "0.2")),
                     "top_p": 0.95,
                     "top_k": 40,
-                    "max_output_tokens": 16384,
+                    "max_output_tokens": 65536,  # Tăng lên max để tránh output bị cắt ngắn
                     "response_mime_type": "application/json",
                 }
             )
             # Model cho text output (improve section)
             self.text_model = genai.GenerativeModel(
-                model_name=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+                model_name=lesson_plan_model,
                 generation_config={
                     "temperature": float(os.getenv("LESSON_PLAN_TEMPERATURE", "0.2")),
                     "top_p": 0.95,
@@ -74,7 +82,47 @@ class LessonPlanBuilderService:
         return get_system_instruction()
     
     def get_static_data(self) -> StaticDataResponse:
-        """Trả về dữ liệu tĩnh cho frontend"""
+        """Trả về dữ liệu tĩnh cho frontend - lấy phương pháp và kỹ thuật từ Neo4j"""
+        
+        methods = []
+        techniques = []
+        
+        with self.driver.session(database=self.neo4j_database) as session:
+            # Lấy phương pháp dạy học từ Neo4j
+            methods_result = session.run("""
+                MATCH (pp:PhuongPhapDayHoc)
+                RETURN pp.ten AS ten, pp.cach_tien_hanh AS cach_tien_hanh, 
+                       pp.uu_diem AS uu_diem, pp.nhuoc_diem AS nhuoc_diem
+                ORDER BY pp.ten
+            """)
+            
+            for record in methods_result:
+                methods.append(TeachingMethodItem(
+                    value=record["ten"],
+                    label=record["ten"],
+                    cach_tien_hanh=record.get("cach_tien_hanh"),
+                    uu_diem=record.get("uu_diem"),
+                    nhuoc_diem=record.get("nhuoc_diem")
+                ))
+            
+            # Lấy kỹ thuật dạy học từ Neo4j
+            techniques_result = session.run("""
+                MATCH (kt:KyThuatDayHoc)
+                RETURN kt.ten AS ten, kt.cach_tien_hanh AS cach_tien_hanh,
+                       kt.uu_diem AS uu_diem, kt.nhuoc_diem AS nhuoc_diem, kt.bo_sung AS bo_sung
+                ORDER BY kt.ten
+            """)
+            
+            for record in techniques_result:
+                techniques.append(TeachingTechniqueItem(
+                    value=record["ten"],
+                    label=record["ten"],
+                    cach_tien_hanh=record.get("cach_tien_hanh"),
+                    uu_diem=record.get("uu_diem"),
+                    nhuoc_diem=record.get("nhuoc_diem"),
+                    bo_sung=record.get("bo_sung")
+                ))
+        
         return StaticDataResponse(
             book_types=[
                 {"value": bt.value, "label": bt.value} for bt in BookType
@@ -82,62 +130,37 @@ class LessonPlanBuilderService:
             grades=[
                 {"value": g.value, "label": f"Lớp {g.value}"} for g in Grade
             ],
-            methods=[
-                {"value": m.value, "label": m.value} for m in TeachingMethod
-            ],
-            techniques=[
-                {"value": t.value, "label": t.value} for t in TeachingTechnique
-            ]
+            methods=methods,
+            techniques=techniques
         )
-    
-    def get_lesson_content_from_sqlite(self, lesson_id: str) -> Optional[str]:
-        """Lấy nội dung markdown từ SQLite theo lesson_id"""
-        try:
-            conn = sqlite3.connect(str(self.sqlite_db_path))
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT content FROM lesson_contents WHERE neo4j_lesson_id = ?",
-                (lesson_id,)
-            )
-            result = cursor.fetchone()
-            conn.close()
-            
-            if result:
-                return result[0]
-            return None
-        except Exception as e:
-            print(f"Error getting lesson content from SQLite: {e}")
-            return None
-    
+
     def get_topics_by_book_and_grade(self, book_type: str, grade: str) -> TopicsResponse:
-        """Lấy danh sách chủ đề từ Neo4j theo loại sách và lớp"""
+        """Lấy danh sách chủ đề từ Neo4j theo lớp"""
         with self.driver.session(database=self.neo4j_database) as session:
             result = session.run("""
                 MATCH (bh:BaiHoc)-[:THUOC_LOP]->(l:Lop {lop: $grade})
-                MATCH (bh)-[:THUOC_LOAI_SACH]->(ls:LoaiSach {ten_loai_sach: $book_type})
                 MATCH (bh)-[:THUOC_CHU_DE]->(cd:ChuDe)
-                RETURN DISTINCT cd.chu_de AS topic
+                RETURN DISTINCT cd.ten AS topic
                 ORDER BY topic
-            """, book_type=book_type, grade=grade)
+            """, grade=grade)
             
             topics = [record["topic"].strip() for record in result if record["topic"]]
             return TopicsResponse(topics=topics)
     
     def search_lessons(
-        self, 
-        book_type: str, 
-        grade: str, 
+        self,
+        book_type: str,
+        grade: str,
         topic: str
     ) -> LessonSearchResponse:
-        """Tìm kiếm bài học từ Neo4j dựa trên loại sách, lớp, chủ đề"""
+        """Tìm kiếm bài học từ Neo4j dựa trên lớp và chủ đề"""
         with self.driver.session(database=self.neo4j_database) as session:
             result = session.run("""
                 MATCH (bh:BaiHoc)-[:THUOC_LOP]->(l:Lop {lop: $grade})
-                MATCH (bh)-[:THUOC_LOAI_SACH]->(ls:LoaiSach {ten_loai_sach: $book_type})
-                MATCH (bh)-[:THUOC_CHU_DE]->(cd:ChuDe {chu_de: $topic})
-                RETURN bh.id AS id, bh.ten AS name, bh.loai AS lesson_type
+                MATCH (bh)-[:THUOC_CHU_DE]->(cd:ChuDe {ten: $topic})
+                RETURN elementId(bh) AS id, bh.ten AS name, bh.loai AS lesson_type
                 ORDER BY bh.ten
-            """, book_type=book_type, grade=grade, topic=topic)
+            """, grade=grade, topic=topic)
             
             lessons = []
             for record in result:
@@ -153,33 +176,31 @@ class LessonPlanBuilderService:
         """Lấy chi tiết bài học từ Neo4j bao gồm danh sách chỉ mục"""
         with self.driver.session(database=self.neo4j_database) as session:
             result = session.run("""
-                MATCH (bh:BaiHoc {id: $lesson_id})
+                MATCH (bh:BaiHoc) WHERE elementId(bh) = $lesson_id
                 OPTIONAL MATCH (bh)-[:THUOC_LOP]->(l:Lop)
                 OPTIONAL MATCH (bh)-[:THUOC_CHU_DE]->(cd:ChuDe)
-                OPTIONAL MATCH (bh)-[:THUOC_LOAI_SACH]->(ls:LoaiSach)
                 OPTIONAL MATCH (bh)-[:THUOC_DINH_HUONG]->(dh:DinhHuong)
-                
+
                 // Năng lực chính và năng lực hỗ trợ
                 OPTIONAL MATCH (bh)-[:CO_NANG_LUC_CHINH]->(nlc:NangLuc)
                 OPTIONAL MATCH (bh)-[:CO_NANG_LUC_HO_TRO]->(nlht:NangLuc)
                 OPTIONAL MATCH (bh)-[:CO_MUC_TIEU]->(mt:MucTieu)
-                
+
                 // Chi mục với số thứ tự
                 OPTIONAL MATCH (bh)-[r:CO_CHI_MUC]->(cm:ChiMuc)
-                
-                WITH bh, l, cd, ls, dh,
+
+                WITH bh, l, cd, dh,
                      collect(DISTINCT nlc.nang_luc_chinh) AS competencies,
                      collect(DISTINCT nlht.nang_luc_chinh) AS supporting_competencies,
-                     collect(DISTINCT mt.muc_tieu) AS objectives,
+                     collect(DISTINCT mt.noi_dung) AS objectives,
                      collect(DISTINCT {order: r.so_thu_tu, content: cm.noi_dung}) AS chi_muc_list
-                
-                RETURN bh.id AS id,
+
+                RETURN elementId(bh) AS id,
                        bh.ten AS name,
                        bh.loai AS lesson_type,
-                       bh.noi_dung AS content,
+                       bh.markdown_content AS content,
                        l.lop AS grade,
-                       cd.chu_de AS topic,
-                       ls.ten_loai_sach AS book_type,
+                       cd.ten AS topic,
                        dh.ten AS orientation,
                        competencies,
                        supporting_competencies,
@@ -194,20 +215,22 @@ class LessonPlanBuilderService:
             
             # Parse chi mục
             chi_muc_raw = record.get("chi_muc_list", [])
+            # Filter và sort chi mục
+            valid_chi_muc = [cm for cm in chi_muc_raw if cm and cm.get("content")]
             chi_muc_sorted = sorted(
-                [cm for cm in chi_muc_raw if cm and cm.get("content")],
-                key=lambda x: x.get("order", 999)
+                valid_chi_muc,
+                key=lambda x: x.get("order") if x.get("order") is not None else 999
             )
             chi_muc_list = [
-                ChiMucInfo(order=cm["order"], content=cm["content"])
-                for cm in chi_muc_sorted
+                ChiMucInfo(order=cm.get("order") or (idx+1), content=cm["content"])
+                for idx, cm in enumerate(chi_muc_sorted)
             ]
             
             return LessonDetailResponse(
                 id=record["id"],
                 name=record["name"],
                 grade=record.get("grade", ""),
-                book_type=record.get("book_type", ""),
+                book_type="Kết nối tri thức với cuộc sống",
                 topic=record.get("topic", ""),
                 lesson_type=record.get("lesson_type"),
                 objectives=[o for o in record.get("objectives", []) if o],
@@ -221,7 +244,8 @@ class LessonPlanBuilderService:
     def generate_lesson_plan(
         self,
         request: GenerateLessonPlanBuilderRequest,
-        reference_documents: Optional[str] = None
+        reference_documents: Optional[str] = None,
+        teacher_preferences_section: str = "",
     ) -> GenerateLessonPlanBuilderResponse:
         """Sinh kế hoạch bài dạy từ thông tin đã chọn"""
         
@@ -230,25 +254,105 @@ class LessonPlanBuilderService:
         if not lesson_detail:
             raise ValueError(f"Không tìm thấy bài học với ID: {request.lesson_id}")
         
-        # 2. Lấy nội dung markdown từ SQLite
-        markdown_content = self.get_lesson_content_from_sqlite(request.lesson_id)
-        
+        # 2. Nội dung bài học đã có trong lesson_detail.content từ Neo4j
+        markdown_content = lesson_detail.content
+
         # 3. Xây dựng prompt với cả Neo4j data và markdown content
-        prompt = self._build_prompt(request, lesson_detail, reference_documents, markdown_content)
+        prompt = self._build_prompt(request, lesson_detail, reference_documents, markdown_content, teacher_preferences_section)
+        
+        # ========== DEBUG: THỐNG KÊ PROMPT ==========
+        prompt_chars = len(prompt)
+        prompt_words = len(prompt.split())
+        # Ước tính token (1 token ≈ 4 ký tự cho tiếng Việt, hoặc ≈ 0.75 từ)
+        estimated_tokens = prompt_chars // 4
+        
+        logger.info(
+            "Prompt stats: chars=%s words=%s est_tokens=~%s cost=~$%.4f",
+            f"{prompt_chars:,}", f"{prompt_words:,}", f"{estimated_tokens:,}",
+            estimated_tokens * 0.000001,
+        )
+        # =============================================
         
         try:
             # Gọi Gemini
+            start_time = time.time()
             response = self.model.generate_content(prompt)
+            end_time = time.time()
+            
             raw_response = (response.text or "").strip()
             
-            # Debug: Log số ký tự response
-            print(f"[DEBUG] Raw response length: {len(raw_response)} chars")
+            # Debug: Log số ký tự response và thời gian
+            response_chars = len(raw_response)
+            response_tokens = response_chars // 4
+            
+            logger.info(
+                "Response stats: chars=%s est_tokens=~%s time=%.2fs total_tokens=~%s",
+                f"{response_chars:,}", f"{response_tokens:,}",
+                end_time - start_time, f"{estimated_tokens + response_tokens:,}",
+            )
+            logger.debug("Raw response start: %s...", raw_response[:300])
+            logger.debug("Raw response end: ...%s", raw_response[-200:])
+            
+            # Kiểm tra response rỗng
+            if not raw_response:
+                logger.error("LLM returned empty response")
+                raise RuntimeError("LLM trả về response rỗng")
+            
+            # Kiểm tra xem JSON có bị cắt ngắn không
+            if not raw_response.strip().endswith('}'):
+                logger.warning("JSON response may be truncated (doesn't end with '}'), tail: ...%s", raw_response[-200:])
             
             # Parse response thành sections
-            sections = self._parse_response_to_sections(raw_response, request, lesson_detail)
-            
+            sections = parse_response_to_sections(raw_response)
+
             # Debug: Log các section đã parse
-            print(f"[DEBUG] Parsed sections: {[s.section_type for s in sections]}")
+            logger.debug("Parsed sections: %s", [s.section_type for s in sections])
+            
+            # Validate: Kiểm tra các section quan trọng có đầy đủ không
+            required_sections = ['muc_tieu', 'thiet_bi', 'khoi_dong', 'hinh_thanh_kien_thuc', 'luyen_tap', 'van_dung']
+            parsed_types = [s.section_type for s in sections]
+            missing_sections = [s for s in required_sections if s not in parsed_types]
+            
+            if missing_sections:
+                logger.warning("Missing required sections: %s (only have: %s)", missing_sections, parsed_types)
+
+                # Thử retry: sinh lại các section thiếu
+                section_titles = {
+                    'muc_tieu': 'Mục tiêu bài học',
+                    'thiet_bi': 'Thiết bị dạy học',
+                    'khoi_dong': 'Hoạt động 1: Khởi động',
+                    'hinh_thanh_kien_thuc': 'Hoạt động 2: Hình thành kiến thức mới',
+                    'luyen_tap': 'Hoạt động 3: Luyện tập',
+                    'van_dung': 'Hoạt động 4: Vận dụng'
+                }
+
+                try:
+                    retry_sections = self._retry_missing_sections(
+                        missing_sections, section_titles, request, sections
+                    )
+                    sections.extend(retry_sections)
+                    logger.info("Retry succeeded: regenerated %d missing sections", len(retry_sections))
+                except Exception as retry_err:
+                    logger.error("Retry failed: %s", retry_err)
+
+                # Kiểm tra lại sau retry
+                parsed_types_after = [s.section_type for s in sections]
+                still_missing = [s for s in required_sections if s not in parsed_types_after]
+
+                if still_missing:
+                    logger.warning("Still missing after retry: %s", still_missing)
+                    for missing in still_missing:
+                        sections.append(LessonPlanSection(
+                            section_id=missing,
+                            section_type=missing,
+                            title=section_titles.get(missing, missing),
+                            content=f"⚠️ **Lỗi:** Section này không được sinh ra. Vui lòng thử lại hoặc bấm nút 'Làm mới' để tạo lại kế hoạch bài dạy.",
+                            editable=True
+                        ))
+
+                # Sắp xếp lại sections theo thứ tự chuẩn
+                order = ['muc_tieu', 'thiet_bi', 'khoi_dong', 'hinh_thanh_kien_thuc', 'luyen_tap', 'van_dung', 'phieu_hoc_tap', 'trac_nghiem']
+                sections.sort(key=lambda s: order.index(s.section_type) if s.section_type in order else 999)
             
             return GenerateLessonPlanBuilderResponse(
                 lesson_info={
@@ -268,7 +372,8 @@ class LessonPlanBuilderService:
         request: GenerateLessonPlanBuilderRequest,
         lesson_detail: LessonDetailResponse,
         reference_documents: Optional[str] = None,
-        markdown_content: Optional[str] = None
+        markdown_content: Optional[str] = None,
+        teacher_preferences_section: str = "",
     ) -> str:
         """Xây dựng prompt chi tiết cho LLM - lấy từ lesson_plan_generator.py"""
         
@@ -276,75 +381,83 @@ class LessonPlanBuilderService:
         activities_info = ""
         teaching_instructions = ""  # Hướng dẫn cách tổ chức chi tiết
         
-        # DEBUG: Hiển thị phương pháp/kỹ thuật người dùng chọn
-        print("\n" + "="*80)
-        print("🎓 PHƯƠNG PHÁP & KỸ THUẬT NGƯỜI DÙNG ĐÃ CHỌN CHO TỪNG HOẠT ĐỘNG:")
-        print("="*80)
+        logger.debug("Building activity config for %d activities", len(request.activities))
         
         for idx, activity in enumerate(request.activities, 1):
+            # Sanitize user-controlled fields before embedding in prompt
+            safe_name = sanitize_prompt_input(activity.activity_name, max_length=200)
+            safe_chi_muc = sanitize_prompt_input(activity.chi_muc, max_length=500) if activity.chi_muc else None
+            safe_custom_request = sanitize_prompt_input(activity.custom_request, max_length=2000) if activity.custom_request else None
+            safe_methods_content = sanitize_dict_values(activity.methods_content) if activity.methods_content else {}
+            safe_techniques_content = sanitize_dict_values(activity.techniques_content) if activity.techniques_content else {}
+
             methods_str = ", ".join(activity.selected_methods) if activity.selected_methods else "Không chọn"
             techniques_str = ", ".join(activity.selected_techniques) if activity.selected_techniques else "Không chọn"
-            
-            # DEBUG: In ra phương pháp/kỹ thuật đã chọn cho mỗi hoạt động
-            print(f"\n📌 Hoạt động {idx}: {activity.activity_name}")
-            print(f"   - Phương pháp: {methods_str}")
-            print(f"   - Kỹ thuật: {techniques_str}")
-            if activity.methods_content:
-                print(f"   - Nội dung PP ({len(activity.methods_content)} mục): {list(activity.methods_content.keys())}")
-            if activity.techniques_content:
-                print(f"   - Nội dung KT ({len(activity.techniques_content)} mục): {list(activity.techniques_content.keys())}")
-            
+
+            # Chuyển đổi location và activity_format sang text dễ hiểu
+            location_text = "Phòng máy" if activity.location == "phong_may" else "Lớp học"
+            format_text = ""
+            if activity.activity_format:
+                format_mapping = {
+                    "trac_nghiem": "Trắc nghiệm",
+                    "phieu_hoc_tap": "Phiếu học tập",
+                    "bai_tap_code": "Bài tập viết code"
+                }
+                format_text = format_mapping.get(activity.activity_format, activity.activity_format)
+
+            logger.debug(
+                "Activity %d: %s | location=%s format=%s methods=[%s] techniques=[%s]",
+                idx, safe_name, location_text,
+                format_text or "N/A", methods_str, techniques_str,
+            )
+
             activities_info += f"""
-### Hoạt động {idx}: {activity.activity_name}
+### Hoạt động {idx}: {safe_name}
 - Loại hoạt động: {activity.activity_type}
-- Chỉ mục nội dung: {activity.chi_muc or 'N/A'}
+- Chỉ mục nội dung: {safe_chi_muc or 'N/A'}
+- Vị trí dạy học: {location_text}
+- Hình thức hoạt động: {format_text if format_text else 'Không chỉ định'}
 - Phương pháp dạy học được chọn: {methods_str}
 - Kỹ thuật dạy học được chọn: {techniques_str}
+- Yêu cầu bổ sung: {safe_custom_request if safe_custom_request else 'Không có'}
 """
-            
+
             # Tạo hướng dẫn cách tổ chức CHI TIẾT cho từng hoạt động
             if activity.selected_methods or activity.selected_techniques:
                 teaching_instructions += f"""
-═══════════════════════════════════════════════════════════════
-🎯 HƯỚNG DẪN TỔ CHỨC CHO HOẠT ĐỘNG: {activity.activity_name.upper()}
-═══════════════════════════════════════════════════════════════
+===============================================================
+[TARGET] HƯỚNG DẪN TỔ CHỨC CHO HOẠT ĐỘNG: {safe_name.upper()}
+===============================================================
 """
                 # Thêm cách tổ chức phương pháp
-                if activity.methods_content:
-                    for method_name, content in activity.methods_content.items():
+                if safe_methods_content:
+                    for method_name, content in safe_methods_content.items():
                         if content:
                             teaching_instructions += f"""
-📘 PHƯƠNG PHÁP: {method_name}
-   ➤ Áp dụng tại: {activity.activity_name}
-   ➤ Cách tổ chức:
+[METHOD] PHƯƠNG PHÁP: {method_name}
+   > Áp dụng tại: {safe_name}
+   > Cách tổ chức:
 {content}
 
 """
-                
+
                 # Thêm cách tổ chức kỹ thuật
-                if activity.techniques_content:
-                    for tech_name, content in activity.techniques_content.items():
+                if safe_techniques_content:
+                    for tech_name, content in safe_techniques_content.items():
                         if content:
                             teaching_instructions += f"""
-📗 KỸ THUẬT: {tech_name}
-   ➤ Áp dụng tại: {activity.activity_name}
-   ➤ Cách tổ chức:
+[TECH] KỸ THUẬT: {tech_name}
+   > Áp dụng tại: {safe_name}
+   > Cách tổ chức:
 {content}
 
 """
         
-        # DEBUG: Hiển thị tổng hợp hướng dẫn phương pháp/kỹ thuật
         if teaching_instructions:
-            print("\n" + "="*80)
-            print("📚 NỘI DUNG PHƯƠNG PHÁP/KỸ THUẬT TRUYỀN VÀO PROMPT:")
-            print("="*80)
-            print(teaching_instructions[:2000] + "..." if len(teaching_instructions) > 2000 else teaching_instructions)
-            print("="*80)
-            print(f"📊 Tổng độ dài: {len(teaching_instructions)} ký tự")
-            print("="*80 + "\n")
+            logger.debug("Teaching instructions: %d chars", len(teaching_instructions))
         else:
-            print("\n⚠️ Không có phương pháp/kỹ thuật nào được chọn cho các hoạt động!\n")
-        
+            logger.warning("No teaching methods/techniques selected for any activity")
+
         # Chuẩn bị chi mục
         chi_muc_info = "\n".join([
             f"  {cm.order}. {cm.content}" 
@@ -369,15 +482,7 @@ class LessonPlanBuilderService:
         # Xử lý tài liệu tham khảo
         docs_instruction = ""
         if reference_documents:
-            # DEBUG: Hiển thị nội dung năng lực phẩm chất được thêm vào prompt
-            print("\n" + "="*80)
-            print("📚 NỘI DUNG NĂNG LỰC PHẨM CHẤT TRUYỀN VÀO PROMPT LLM:")
-            print("="*80)
-            # Hiển thị đầy đủ nội dung (không cắt ngắn)
-            print(reference_documents)
-            print("="*80)
-            print(f"📊 Tổng độ dài: {len(reference_documents)} ký tự")
-            print("="*80 + "\n")
+            logger.debug("Reference documents: %d chars", len(reference_documents))
             
             docs_instruction = f"""
 <tai_lieu_tham_khao>
@@ -385,30 +490,21 @@ class LessonPlanBuilderService:
 </tai_lieu_tham_khao>
 """
 
-        # Xử lý nội dung bài học từ SQLite (markdown)
+        # Xử lý nội dung bài học (markdown)
         lesson_content_section = ""
         if markdown_content:
-            # DEBUG: Hiển thị nội dung bài học được truyền vào prompt
-            print("\n" + "="*80)
-            print("📖 NỘI DUNG BÀI HỌC (MARKDOWN) TRUYỀN VÀO PROMPT LLM:")
-            print("="*80)
-            print(markdown_content[:1500] + "..." if len(markdown_content) > 1500 else markdown_content)
-            print("="*80)
-            print(f"📊 Tổng độ dài nội dung bài học: {len(markdown_content)} ký tự")
-            print("="*80 + "\n")
+            logger.debug("Lesson content (markdown): %d chars", len(markdown_content))
             
             lesson_content_section = f"""
 <noi_dung_bai_hoc_chi_tiet>
 {markdown_content}
 </noi_dung_bai_hoc_chi_tiet>
 
-⚠️ NỘI DUNG BÀI HỌC CHI TIẾT: Sử dụng nội dung trên để thiết kế các hoạt động dạy học phù hợp.
+[WARN] NỘI DUNG BÀI HỌC CHI TIẾT: Sử dụng nội dung trên để thiết kế các hoạt động dạy học phù hợp.
 Đây là nội dung sách giáo khoa của bài học, hãy tham khảo để tạo các hoạt động dạy học cụ thể.
 """
         else:
-            print("\n" + "="*80)
-            print("⚠️ KHÔNG TÌM THẤY NỘI DUNG BÀI HỌC (MARKDOWN) TRONG DATABASE!")
-            print("="*80 + "\n")
+            logger.warning("No lesson content (markdown) found in database")
 
         # Gọi function từ prompts module để xây dựng prompt
         prompt = build_lesson_plan_prompt(
@@ -420,361 +516,112 @@ class LessonPlanBuilderService:
             topic=request.topic,
             lesson_name=request.lesson_name,
             grade=request.grade,
-            book_type=request.book_type
+            book_type=request.book_type,
+            teacher_preferences_section=teacher_preferences_section,
         )
+
+        # Prompt component stats
+        neo4j_json = json.dumps(neo4j_data, ensure_ascii=False)
+        components = {
+            "neo4j_data": len(neo4j_json),
+            "activities_info": len(activities_info),
+            "teaching_instructions": len(teaching_instructions),
+            "lesson_content": len(lesson_content_section),
+            "reference_docs": len(docs_instruction),
+        }
+        logger.debug(
+            "Prompt components (chars): %s | total=%d",
+            components, len(prompt),
+        )
+        
         return prompt
-    
-    def _sanitize_json_response(self, raw_response: str) -> str:
-        """Sanitize JSON response để fix các escape characters không hợp lệ"""
-        import re
-        
-        # Fix các escape sequences không hợp lệ trong JSON
-        # JSON chỉ cho phép: \", \\, \/, \b, \f, \n, \r, \t, \uXXXX
-        # Các escape khác như \e, \s, \a, etc. không hợp lệ
-        
-        # Thay thế các backslash đơn trước các ký tự không phải escape hợp lệ
-        # Pattern: backslash + ký tự không phải trong ["\\/bfnrtu]
-        def fix_invalid_escape(match):
-            char = match.group(1)
-            # Nếu là ký tự escape hợp lệ, giữ nguyên
-            if char in '"\\/bfnrtu':
-                return match.group(0)
-            # Nếu không hợp lệ, thay bằng double backslash hoặc bỏ backslash
-            return char  # Bỏ backslash, giữ ký tự
-        
-        # Fix invalid escapes
-        sanitized = re.sub(r'\\([^"\\/bfnrtu])', fix_invalid_escape, raw_response)
-        
-        # Cũng fix trường hợp \\ bị viết sai
-        # Nhưng cẩn thận không làm hỏng \n, \t, etc.
-        
-        return sanitized
-    
-    def _parse_response_to_sections(
+
+    def _retry_missing_sections(
         self,
-        raw_response: str,
+        missing_sections: List[str],
+        section_titles: Dict[str, str],
         request: GenerateLessonPlanBuilderRequest,
-        lesson_detail: LessonDetailResponse
+        existing_sections: List[LessonPlanSection]
     ) -> List[LessonPlanSection]:
-        """Parse JSON response từ LLM thành các sections"""
-        
-        sections = []
-        
+        """Thử sinh lại các section bị thiếu bằng cách gọi LLM riêng cho từng section"""
+
+        # Tóm tắt nội dung đã sinh để LLM có context
+        existing_summary = ""
+        for s in existing_sections:
+            if s.section_type in ['muc_tieu', 'thiet_bi', 'khoi_dong', 'hinh_thanh_kien_thuc', 'luyen_tap', 'van_dung']:
+                # Chỉ lấy 500 ký tự đầu để không quá dài
+                content_preview = s.content[:500] + "..." if len(s.content) > 500 else s.content
+                existing_summary += f"\n--- {s.title} ---\n{content_preview}\n"
+
+        result_sections = []
+        missing_types_str = ", ".join([section_titles.get(m, m) for m in missing_sections])
+
+        # Sinh tất cả sections thiếu trong 1 lần gọi
+        retry_prompt = f"""Bạn đã sinh một Kế hoạch bài dạy nhưng THIẾU các section sau: {missing_types_str}
+
+Thông tin bài học:
+- Bài: {request.lesson_name}
+- Lớp: {request.grade}
+- Chủ đề: {request.topic}
+- Sách: {request.book_type}
+
+Nội dung đã sinh (để tham khảo):
+{existing_summary}
+
+Hãy sinh NỘI DUNG CHI TIẾT cho CÁC SECTION BỊ THIẾU. Trả về JSON:
+{{
+  "sections": [
+    {', '.join([
+        f'{{"section_type": "{st}", "title": "{section_titles.get(st, st)}", "content": "[NỘI DUNG MARKDOWN CHI TIẾT]"}}'
+        for st in missing_sections
+    ])}
+  ]
+}}
+
+YÊU CẦU:
+- Nội dung phải chi tiết, đầy đủ, theo đúng cấu trúc KHBD
+- Mỗi hoạt động phải có: a) Mục tiêu, b) Nội dung, c) Sản phẩm, d) Tổ chức thực hiện (B1-B4)
+- Trả về JSON thuần túy, không có gì khác
+"""
+
+        logger.info("Retrying %d missing sections...", len(missing_sections))
+
+        response = self.model.generate_content(retry_prompt)
+        retry_raw = (response.text or "").strip()
+
+        if not retry_raw:
+            return []
+
+        # Parse retry response
         try:
-            # Sanitize JSON response trước khi parse
-            sanitized_response = self._sanitize_json_response(raw_response)
-            
-            # Parse JSON response
-            data = json.loads(sanitized_response)
-            
-            if "sections" in data:
-                for idx, item in enumerate(data["sections"]):
-                    section_type = item.get("section_type", "unknown")
-                    title = item.get("title", f"Section {idx + 1}")
-                    content = item.get("content", "")
-                    questions = item.get("questions", None)
-                    
-                    # Tạo section_id unique
-                    if section_type == "phieu_hoc_tap":
-                        # Đếm số phiếu học tập đã có
-                        phieu_count = sum(1 for s in sections if s.section_type == "phieu_hoc_tap")
-                        section_id = f"phieu_hoc_tap_{phieu_count + 1}"
-                    else:
-                        section_id = section_type
-                    
-                    # Xử lý đặc biệt cho trac_nghiem - có questions array
-                    if section_type == "trac_nghiem" and questions:
-                        # Tạo content từ questions để hiển thị đẹp trên UI
-                        content_lines = []
-                        for q_idx, q in enumerate(questions, 1):
-                            content_lines.append(f"**Câu {q_idx}:** {q.get('question', '')}")
-                            content_lines.append("")
-                            content_lines.append(f"A. {q.get('A', '')}")
-                            content_lines.append(f"B. {q.get('B', '')}")
-                            content_lines.append(f"C. {q.get('C', '')}")
-                            content_lines.append(f"D. {q.get('D', '')}")
-                            # Đánh dấu đáp án đúng
-                            answer = q.get('answer', '').upper()
-                            content_lines.append(f"*Đáp án: {answer}*")
-                            content_lines.append("")
-                        content = "\n".join(content_lines)
-                        
-                        sections.append(LessonPlanSection(
-                            section_id=section_id,
-                            section_type=section_type,
-                            title=title,
-                            content=content,
-                            questions=questions,
-                            editable=True
-                        ))
-                    else:
-                        # Lấy code_exercises nếu có (cho bài thực hành lập trình)
-                        code_exercises = item.get("code_exercises", None)
-                        
-                        sections.append(LessonPlanSection(
-                            section_id=section_id,
-                            section_type=section_type,
-                            title=title,
-                            content=content,
-                            code_exercises=code_exercises,
-                            editable=True
-                        ))
-                    
-        except json.JSONDecodeError as e:
-            # Fallback 1: Thử parse với cách sanitize mạnh hơn
-            print(f"JSON parse error: {e}. Trying aggressive sanitization...")
-            
-            try:
-                # Cách sanitize mạnh hơn: decode các unicode escapes và re-encode
-                import codecs
-                # Thử replace tất cả invalid escapes bằng cách regex mạnh hơn
-                import re
-                
-                # Tìm và fix tất cả backslash không hợp lệ
-                def aggressive_fix(text):
-                    result = []
-                    i = 0
-                    while i < len(text):
-                        if text[i] == '\\' and i + 1 < len(text):
-                            next_char = text[i + 1]
-                            if next_char in '"\\/bfnrt':
-                                result.append(text[i:i+2])
-                                i += 2
-                            elif next_char == 'u' and i + 5 < len(text):
-                                # Check if it's a valid unicode escape
-                                unicode_seq = text[i:i+6]
-                                if re.match(r'\\u[0-9a-fA-F]{4}', unicode_seq):
-                                    result.append(unicode_seq)
-                                    i += 6
-                                else:
-                                    result.append(next_char)
-                                    i += 2
-                            else:
-                                # Invalid escape - skip the backslash
-                                result.append(next_char)
-                                i += 2
-                        else:
-                            result.append(text[i])
-                            i += 1
-                    return ''.join(result)
-                
-                aggressive_sanitized = aggressive_fix(raw_response)
-                data = json.loads(aggressive_sanitized)
-                
-                if "sections" in data:
-                    for idx, item in enumerate(data["sections"]):
-                        section_type = item.get("section_type", "unknown")
-                        title = item.get("title", f"Section {idx + 1}")
-                        content = item.get("content", "")
-                        questions = item.get("questions", None)
-                        
-                        if section_type == "phieu_hoc_tap":
-                            phieu_count = sum(1 for s in sections if s.section_type == "phieu_hoc_tap")
-                            section_id = f"phieu_hoc_tap_{phieu_count + 1}"
-                        else:
-                            section_id = section_type
-                        
-                        code_exercises = item.get("code_exercises", None)
-                        
-                        sections.append(LessonPlanSection(
-                            section_id=section_id,
-                            section_type=section_type,
-                            title=title,
-                            content=content,
-                            code_exercises=code_exercises,
-                            questions=questions if section_type == "trac_nghiem" else None,
-                            editable=True
-                        ))
-                    print(f"[DEBUG] Aggressive sanitization worked! Parsed {len(sections)} sections")
-                        
-            except json.JSONDecodeError as e2:
-                print(f"Aggressive sanitization failed: {e2}. Falling back to marker parsing.")
-                sections = self._parse_response_with_markers(raw_response, request, lesson_detail)
-        
-        # Nếu không parse được sections, tạo một section duy nhất
-        if not sections:
-            sections.append(LessonPlanSection(
-                section_id="full_content",
-                section_type="full",
-                title="Kế hoạch bài dạy",
-                content=raw_response,
-                editable=True
-            ))
-        
-        return sections
-    
-    def _parse_response_with_markers(
-        self,
-        raw_response: str,
-        request: GenerateLessonPlanBuilderRequest,
-        lesson_detail: LessonDetailResponse
-    ) -> List[LessonPlanSection]:
-        """Fallback: Parse response theo cách cũ dùng markers [SECTION:XXX]"""
-        import re
-        sections = []
-        
-        # Định nghĩa các section markers
-        section_markers = [
-            ("THONG_TIN_CHUNG", "Thông tin chung", "thong_tin_chung"),
-            ("MUC_TIEU", "Mục tiêu bài học", "muc_tieu"),
-            ("THIET_BI", "Thiết bị dạy học", "thiet_bi"),
-            ("KHOI_DONG", "Hoạt động 1: Khởi động", "khoi_dong"),
-            ("HINH_THANH_KIEN_THUC", "Hoạt động 2: Hình thành kiến thức mới", "hinh_thanh_kien_thuc"),
-            ("LUYEN_TAP", "Hoạt động 3: Luyện tập", "luyen_tap"),
-            ("VAN_DUNG", "Hoạt động 4: Vận dụng", "van_dung"),
-            ("PHU_LUC", "Phụ lục", "phu_luc"),
-            ("TRAC_NGHIEM", "Phụ lục: Trắc nghiệm", "trac_nghiem"),
-        ]
-        
-        for idx, (marker_id, title, section_type) in enumerate(section_markers):
-            marker = f"[SECTION:{marker_id}]"
-            
-            # Tìm vị trí bắt đầu
-            start_pos = raw_response.find(marker)
-            if start_pos == -1:
-                # Thử tìm không có marker
-                content = self._extract_section_by_title(raw_response, title)
+            sanitized = sanitize_json_response(retry_raw)
+            data = json.loads(sanitized)
+        except json.JSONDecodeError:
+            repaired = repair_truncated_json(sanitize_json_response(retry_raw))
+            if repaired:
+                data = json.loads(repaired)
             else:
-                # Tìm vị trí kết thúc (marker tiếp theo hoặc cuối)
-                end_pos = len(raw_response)
-                for next_marker_id, _, _ in section_markers[idx + 1:]:
-                    next_marker = f"[SECTION:{next_marker_id}]"
-                    next_pos = raw_response.find(next_marker)
-                    if next_pos != -1:
-                        end_pos = next_pos
-                        break
-                
-                content = raw_response[start_pos + len(marker):end_pos].strip()
-                
-                # Loại bỏ tất cả markers còn sót lại trong content
-                import re
-                content = re.sub(r'\[SECTION:[^\]]+\]', '', content).strip()
-                # Loại bỏ các dấu --- thừa ở đầu/cuối
-                content = content.strip('-').strip()
-            
-            # Skip PHU_LUC vì chỉ là wrapper container, các phiếu học tập sẽ được parse riêng
-            if content and marker_id != "PHU_LUC":
-                sections.append(LessonPlanSection(
-                    section_id=marker_id.lower(),
+                return []
+
+        if "sections" not in data:
+            return []
+
+        for item in data["sections"]:
+            section_type = item.get("section_type", "unknown")
+            title = item.get("title", section_titles.get(section_type, section_type))
+            content = item.get("content", "")
+
+            if section_type in missing_sections and content:
+                result_sections.append(LessonPlanSection(
+                    section_id=section_type,
                     section_type=section_type,
                     title=title,
                     content=content,
                     editable=True
                 ))
-        
-        # Parse các PHIEU_HOC_TAP_X sections riêng biệt
-        import re
-        phieu_pattern = re.compile(r'\[SECTION:PHIEU_HOC_TAP_(\d+)\](.*?)(?=\[SECTION:PHIEU_HOC_TAP_\d+\]|\[SECTION:TRAC_NGHIEM\]|---\s*$|$)', re.DOTALL)
-        for match in phieu_pattern.finditer(raw_response):
-            phieu_num = match.group(1)
-            phieu_content = match.group(2).strip()
-            
-            # Loại bỏ dấu --- ở đầu/cuối
-            while phieu_content.startswith('---'):
-                phieu_content = phieu_content[3:].strip()
-            while phieu_content.endswith('---'):
-                phieu_content = phieu_content[:-3].strip()
-            
-            if phieu_content:
-                sections.append(LessonPlanSection(
-                    section_id=f"phieu_hoc_tap_{phieu_num}",
-                    section_type="phieu_hoc_tap",
-                    title=f"Phiếu học tập số {phieu_num}",
-                    content=phieu_content,
-                    editable=True
-                ))
-        
-        # Xử lý đặc biệt cho TRAC_NGHIEM: chỉ lấy phần câu hỏi trắc nghiệm thực sự
-        # Tìm section TRAC_NGHIEM đã được parse
-        for i, section in enumerate(sections):
-            if section.section_type == "trac_nghiem":
-                content = section.content
-                
-                # Tìm vị trí bắt đầu câu hỏi trắc nghiệm thực sự
-                # Pattern: **Câu 1:** hoặc Câu 1: hoặc **Câu 1.**
-                quiz_start_pattern = re.search(r'(\*\*)?Câu\s*1[:.]\*?\*?', content)
-                
-                if quiz_start_pattern:
-                    # Chỉ lấy từ Câu 1 trở đi
-                    quiz_content = content[quiz_start_pattern.start():].strip()
-                    sections[i] = LessonPlanSection(
-                        section_id=section.section_id,
-                        section_type=section.section_type,
-                        title=section.title,
-                        content=quiz_content,
-                        editable=True
-                    )
-                break
-        
-        # Parse phiếu học tập từ nội dung không có marker (fallback)
-        # Tìm pattern: **PHIẾU HỌC TẬP SỐ X** hoặc PHIẾU HỌC TẬP SỐ X
-        phieu_exists = any(s.section_type == "phieu_hoc_tap" for s in sections)
-        if not phieu_exists:
-            # Tìm trong toàn bộ raw_response
-            phieu_fallback_pattern = re.compile(
-                r'\*?\*?PHIẾU\s*HỌC\s*TẬP\s*(?:SỐ\s*)?(\d+)\*?\*?(.*?)(?=\*?\*?PHIẾU\s*HỌC\s*TẬP\s*(?:SỐ\s*)?\d+|\*?\*?Câu\s*1[:.]\*?\*?|$)',
-                re.DOTALL | re.IGNORECASE
-            )
-            for match in phieu_fallback_pattern.finditer(raw_response):
-                phieu_num = match.group(1)
-                phieu_content = match.group(2).strip()
-                
-                # Loại bỏ dấu --- ở đầu/cuối
-                while phieu_content.startswith('---'):
-                    phieu_content = phieu_content[3:].strip()
-                while phieu_content.endswith('---'):
-                    phieu_content = phieu_content[:-3].strip()
-                
-                # Kiểm tra xem phiếu này đã tồn tại chưa
-                existing_ids = [s.section_id for s in sections]
-                if phieu_content and f"phieu_hoc_tap_{phieu_num}" not in existing_ids:
-                    sections.append(LessonPlanSection(
-                        section_id=f"phieu_hoc_tap_{phieu_num}",
-                        section_type="phieu_hoc_tap",
-                        title=f"Phiếu học tập số {phieu_num}",
-                        content=phieu_content,
-                        editable=True
-                    ))
-        
-        # Nếu không parse được sections, tạo một section duy nhất
-        if not sections:
-            sections.append(LessonPlanSection(
-                section_id="full_content",
-                section_type="full",
-                title="Kế hoạch bài dạy",
-                content=raw_response,
-                editable=True
-            ))
-        
-        return sections
-    
-    def _extract_section_by_title(self, content: str, title: str) -> str:
-        """Trích xuất nội dung section theo tiêu đề"""
-        # Tìm tiêu đề trong nội dung
-        import re
-        
-        # Các pattern có thể có
-        patterns = [
-            rf"##\s*{re.escape(title)}",
-            rf"###\s*{re.escape(title)}",
-            rf"\*\*{re.escape(title)}\*\*",
-            rf"{re.escape(title)}:"
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, content, re.IGNORECASE)
-            if match:
-                start = match.start()
-                # Tìm section tiếp theo
-                next_section = re.search(r'\n##\s|\n###\s|\n\*\*[A-Z]', content[match.end():])
-                if next_section:
-                    end = match.end() + next_section.start()
-                else:
-                    end = len(content)
-                return content[start:end].strip()
-        
-        return ""
-    
+
+        return result_sections
+
     def improve_section(
         self,
         section_type: str,
@@ -788,23 +635,27 @@ class LessonPlanBuilderService:
         """Cải thiện nội dung một section với AI, kèm theo phụ lục liên quan nếu có"""
         from app.schemas.lesson_plan_builder import ImproveSectionResponse, UpdatedAppendix
         from app.prompts import get_section_improvement_prompt
-        
+
+        # Sanitize user-controlled input before passing to prompt
+        safe_user_request = sanitize_prompt_input(user_request, max_length=2000)
+        safe_lesson_info = sanitize_dict_values(lesson_info)
+
         # Xây dựng prompt cơ bản
         base_prompt = get_section_improvement_prompt(
             section_type=section_type,
             section_title=section_title,
             current_content=current_content,
-            user_request=user_request,
-            lesson_info=lesson_info
+            user_request=safe_user_request,
+            lesson_info=safe_lesson_info
         )
         
         # Thêm tài liệu tham khảo nếu có (năng lực, phẩm chất, thiết bị)
         if reference_documents:
             base_prompt += f"""
 
-═══════════════════════════════════════════════════════════════════
-📚 TÀI LIỆU THAM KHẢO (NĂNG LỰC, PHẨM CHẤT, THIẾT BỊ)
-═══════════════════════════════════════════════════════════════════
+===================================================================
+[REF] TÀI LIỆU THAM KHẢO (NĂNG LỰC, PHẨM CHẤT, THIẾT BỊ)
+===================================================================
 Sử dụng thông tin từ tài liệu tham khảo sau để cải thiện nội dung:
 
 <tai_lieu_tham_khao>
@@ -814,9 +665,9 @@ Sử dụng thông tin từ tài liệu tham khảo sau để cải thiện nộ
         
         # Nếu có phụ lục liên quan, thêm vào prompt
         if related_appendices and len(related_appendices) > 0:
-            appendix_context = "\n\n═══════════════════════════════════════════════════════════════════\n"
-            appendix_context += "📎 PHỤ LỤC LIÊN QUAN (CẦN CẬP NHẬT ĐỒNG BỘ)\n"
-            appendix_context += "═══════════════════════════════════════════════════════════════════\n"
+            appendix_context = "\n\n===================================================================\n"
+            appendix_context += "[APPENDIX] PHỤ LỤC LIÊN QUAN (CẦN CẬP NHẬT ĐỒNG BỘ)\n"
+            appendix_context += "===================================================================\n"
             appendix_context += "Khi thay đổi nội dung hoạt động, CẦN CẬP NHẬT phụ lục liên quan để đồng bộ.\n\n"
             
             for appendix in related_appendices:
@@ -824,9 +675,9 @@ Sử dụng thông tin từ tài liệu tham khảo sau để cải thiện nộ
                 appendix_context += f"{appendix.get('content', '')}\n\n"
             
             appendix_context += """
-═══════════════════════════════════════════════════════════════════
-📤 OUTPUT FORMAT (BẮT BUỘC)
-═══════════════════════════════════════════════════════════════════
+===================================================================
+[OUTPUT] OUTPUT FORMAT (BẮT BUỘC)
+===================================================================
 Trả về theo format sau:
 
 [IMPROVED_CONTENT]
@@ -895,6 +746,191 @@ Lưu ý: Nếu có nhiều phụ lục, tạo nhiều block [UPDATED_APPENDIX] t
             )
         except Exception as e:
             raise RuntimeError(f"Lỗi cải thiện section: {str(e)}")
+
+    def generate_mindmap(
+        self,
+        lesson_name: str,
+        lesson_id: str,
+        activity_content: str,
+        activity_name: str,
+    ) -> str:
+        """Sinh sơ đồ tư duy (markdown headings) cho một hoạt động.
+
+        AI 2 chuyên biệt: nhận nội dung hoạt động + chi_muc + SGK content,
+        trả về chuỗi markdown headings (# ## ### ####) dùng cho Markmap.
+        """
+        import re
+
+        # Lấy chi tiết bài học từ Neo4j
+        lesson_detail = self.get_lesson_detail(lesson_id)
+        if not lesson_detail:
+            raise RuntimeError(f"Không tìm thấy bài học với ID: {lesson_id}")
+
+        # Chuẩn bị chi_muc
+        chi_muc_lines = []
+        if lesson_detail.chi_muc_list:
+            for cm in lesson_detail.chi_muc_list:
+                chi_muc_lines.append(f"  {cm.order}. {cm.content}")
+        chi_muc_str = "\n".join(chi_muc_lines) if chi_muc_lines else "  Không có"
+
+        # Chuẩn bị nội dung SGK (cắt ngắn nếu quá dài)
+        sgk_content = (lesson_detail.content or "")[:8000]
+
+        # Cho phép nội dung dài hơn khi tạo cho "Toàn bộ bài học"
+        is_whole_lesson = activity_name == "Toàn bộ bài học"
+        content_limit = 8000 if is_whole_lesson else 4000
+        task_label = f"toàn bộ bài \"{lesson_name}\"" if is_whole_lesson else f"hoạt động \"{activity_name}\" của bài \"{lesson_name}\""
+
+        prompt = f"""Bạn là chuyên gia thiết kế sơ đồ tư duy cho giáo dục.
+
+NHIỆM VỤ: Tạo sơ đồ tư duy bằng Markdown headings cho {task_label}.
+
+NỘI DUNG HOẠT ĐỘNG:
+{activity_content[:content_limit]}
+
+CHI MỤC BÀI HỌC:
+{chi_muc_str}
+
+NỘI DUNG SÁCH GIÁO KHOA:
+{sgk_content}
+
+QUY TẮC BẮT BUỘC:
+1. GỐC (# ): Tên bài học "{lesson_name}"
+2. NHÁNH CHÍNH (## ): Các mục trong chi_muc ở trên (giữ đúng thứ tự)
+3. NHÁNH PHỤ (### ): Kiến thức quan trọng từ SGK tương ứng mỗi chi_muc (2-4 nhánh/mục)
+4. NHÁNH CON (#### ): Chi tiết bổ sung nếu cần (ví dụ, công thức, phân loại)
+5. Nội dung PHẢI chính xác từ SGK, KHÔNG bịa đặt
+6. Tối thiểu 2 cấp (##, ###), tối đa 4 cấp
+
+OUTPUT: CHỈ trả về markdown headings, KHÔNG giải thích, KHÔNG wrap trong code block.
+
+VÍ DỤ OUTPUT:
+# Tên bài học
+## 1. Mục đầu tiên
+### Khái niệm
+### Đặc điểm
+#### Chi tiết 1
+#### Chi tiết 2
+## 2. Mục thứ hai
+### Nội dung A
+### Nội dung B
+"""
+
+        try:
+            response = self.text_model.generate_content(prompt)
+            raw = (response.text or "").strip()
+
+            # Loại bỏ code block wrapper nếu có
+            if raw.startswith("```"):
+                raw = re.sub(r"^```[a-zA-Z]*\n?", "", raw)
+            if raw.endswith("```"):
+                raw = raw[:-3]
+            raw = raw.strip()
+
+            # Validate: phải có ít nhất 1 heading cấp 1 và 1 heading cấp 2
+            if not re.search(r"^# ", raw, re.MULTILINE) or not re.search(r"^## ", raw, re.MULTILINE):
+                raise RuntimeError("AI trả về không đúng format markdown headings")
+
+            logger.info("Mindmap generated for '%s': %d chars", activity_name, len(raw))
+            return raw
+        except Exception as e:
+            raise RuntimeError(f"Lỗi sinh sơ đồ tư duy: {str(e)}")
+
+    def get_reference_documents_from_neo4j(self) -> Optional[str]:
+        """Lấy tài liệu tham khảo từ Neo4j: Năng lực tin học, Năng lực chung, Phẩm chất"""
+        with self.driver.session(database=self.neo4j_database) as session:
+            result_text = ""
+            
+            # 1. Lấy Năng lực tin học
+            logger.debug("Fetching competencies & qualities from Neo4j...")
+            
+            try:
+                nang_luc_result = session.run("""
+                    MATCH (nl:NangLucTinHoc)
+                    RETURN nl.id AS id, nl.ten AS ten, nl.bieu_hien AS bieu_hien
+                    ORDER BY nl.id
+                """)
+                nang_luc_records = list(nang_luc_result)
+                
+                if nang_luc_records:
+                    result_text += "## NĂNG LỰC TIN HỌC\n\n"
+                    for record in nang_luc_records:
+                        id_nl = record.get("id", "")
+                        ten = record.get("ten", "")
+                        bieu_hien = record.get("bieu_hien", [])
+                        result_text += f"**{id_nl} - {ten}**\n"
+                        if bieu_hien and isinstance(bieu_hien, list):
+                            result_text += "Biểu hiện:\n"
+                            for bh in bieu_hien:
+                                result_text += f"  - {bh}\n"
+                        result_text += "\n"
+                    logger.info("Found %d NangLucTinHoc", len(nang_luc_records))
+            except Exception as e:
+                logger.error("Error fetching NangLucTinHoc: %s", e)
+            
+            # 2. Lấy Năng lực chung
+            try:
+                nang_luc_chung_result = session.run("""
+                    MATCH (nlc:NangLucChung)
+                    RETURN nlc.id AS id, nlc.ten AS ten, nlc.bieu_hien AS bieu_hien
+                    ORDER BY nlc.id
+                """)
+                nlc_records = list(nang_luc_chung_result)
+                
+                if nlc_records:
+                    result_text += "## NĂNG LỰC CHUNG\n\n"
+                    for record in nlc_records:
+                        id_nlc = record.get("id", "")
+                        ten = record.get("ten", "")
+                        bieu_hien = record.get("bieu_hien", [])
+                        result_text += f"**{ten}**\n"
+                        if bieu_hien and isinstance(bieu_hien, list):
+                            result_text += "Biểu hiện:\n"
+                            for bh in bieu_hien:
+                                result_text += f"  - {bh}\n"
+                        result_text += "\n"
+                    logger.info("Found %d NangLucChung", len(nlc_records))
+            except Exception as e:
+                logger.error("Error fetching NangLucChung: %s", e)
+            
+            # 3. Lấy Phẩm chất
+            try:
+                pham_chat_result = session.run("""
+                    MATCH (pc:PhamChat)
+                    RETURN pc.id AS id, pc.ten AS ten, pc.bieu_hien AS bieu_hien
+                    ORDER BY pc.id
+                """)
+                pc_records = list(pham_chat_result)
+                
+                if pc_records:
+                    result_text += "## PHẨM CHẤT\n\n"
+                    for record in pc_records:
+                        id_pc = record.get("id", "")
+                        ten = record.get("ten", "")
+                        bieu_hien = record.get("bieu_hien", [])
+                        result_text += f"**{ten}**\n"
+                        if bieu_hien and isinstance(bieu_hien, list):
+                            result_text += "Biểu hiện:\n"
+                            for bh in bieu_hien:
+                                result_text += f"  - {bh}\n"
+                        result_text += "\n"
+                    logger.info("Found %d PhamChat", len(pc_records))
+            except Exception as e:
+                logger.error("Error fetching PhamChat: %s", e)
+            
+            try:
+                labels_result = session.run("CALL db.labels()")
+                labels = [record[0] for record in labels_result]
+                logger.debug("Neo4j labels: %s", labels)
+            except Exception as e:
+                logger.debug("Could not list Neo4j labels: %s", e)
+            
+            if result_text:
+                logger.info("Reference documents: %d chars", len(result_text))
+                return result_text
+            else:
+                logger.warning("No competency/quality data found in Neo4j")
+                return None
     
     def close(self):
         """Đóng kết nối"""

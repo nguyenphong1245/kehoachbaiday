@@ -6,7 +6,6 @@
 // NOTE: BOOK_TYPES và GRADES dùng làm fallback, thực tế sẽ lấy từ API
 export const BOOK_TYPES = [
   { value: "Kết nối tri thức với cuộc sống", label: "Kết nối tri thức với cuộc sống" },
-  { value: "Cánh diều", label: "Cánh diều" },
 ] as const;
 
 export const GRADES = [
@@ -42,6 +41,19 @@ export const TEACHING_TECHNIQUES = [
   { value: "Trắc nghiệm", label: "Trắc nghiệm" },
   { value: "Flashcard", label: "Flashcard" },
   { value: "Dạy học đồng đẳng", label: "Dạy học đồng đẳng" },
+] as const;
+
+// Vị trí dạy học
+export const LESSON_LOCATIONS = [
+  { value: "lop_hoc", label: "Lớp học" },
+  { value: "phong_may", label: "Phòng máy" },
+] as const;
+
+// Hình thức kiểm tra/đánh giá cho từng hoạt động
+export const ACTIVITY_FORMATS = [
+  { value: "trac_nghiem", label: "Trắc nghiệm" },
+  { value: "phieu_hoc_tap", label: "Phiếu học tập" },
+  { value: "bai_tap_code", label: "Bài tập code" },
 ] as const;
 
 // ============== INTERFACES ==============
@@ -80,19 +92,61 @@ export interface ActivityConfig {
   // Lưu nội dung cách tổ chức của phương pháp/kỹ thuật đã chọn
   methods_content?: { [key: string]: string };
   techniques_content?: { [key: string]: string };
+  // Hình thức kiểm tra/đánh giá: trắc nghiệm, phiếu học tập, bài tập code
+  activity_format?: "trac_nghiem" | "phieu_hoc_tap" | "bai_tap_code";
+  // Yêu cầu bổ sung từ người dùng
+  custom_request?: string;
+  // Vị trí dạy học: lớp học hoặc phòng máy
+  location?: "lop_hoc" | "phong_may";
 }
 
 export interface QuizQuestionItem {
   question: string;
-  A: string;
-  B: string;
-  C: string;
-  D: string;
-  answer: string;
+  type?: string; // multiple_choice | multiple_select
+  A?: string;
+  B?: string;
+  C?: string;
+  D?: string;
+  answer?: string; // "A" hoặc "A,C"
 }
 
-// Import code exercise types
-import { CodeExercise } from './codeExercise';
+// ============== WORKSHEET DATA INTERFACES ==============
+
+export interface WorksheetBlank {
+  label: string;
+  width?: "short" | "medium" | "long";
+}
+
+export interface WorksheetFillBlank {
+  before: string;
+  after?: string;
+}
+
+export interface WorksheetSubItem {
+  id: string;
+  text: string;
+  blanks?: WorksheetBlank[];
+  answer_lines?: number;
+}
+
+export interface WorksheetQuestion {
+  id: string;
+  text: string;
+  answer_lines?: number;
+  sub_items?: WorksheetSubItem[];
+  blanks?: WorksheetBlank[];
+  fill_blanks?: WorksheetFillBlank[];
+  code_template?: string;
+  code?: string; // Code block for question type 3
+  kwl_table?: boolean;
+}
+
+export interface WorksheetData {
+  worksheet_number: number;
+  type: "group" | "individual";
+  task: string;
+  questions: WorksheetQuestion[];
+}
 
 export interface LessonPlanSection {
   section_id: string;
@@ -100,7 +154,8 @@ export interface LessonPlanSection {
   title: string;
   content: string;
   questions?: QuizQuestionItem[]; // Chỉ cho section trac_nghiem
-  code_exercises?: CodeExercise[]; // Bài tập code (Parsons/Coding)
+  mindmap_data?: string | null; // Dữ liệu sơ đồ tư duy (Markdown headings)
+  worksheet_data?: WorksheetData | null; // Dữ liệu phiếu học tập JSON
   editable: boolean;
 }
 
@@ -119,6 +174,7 @@ export interface GenerateLessonPlanResponse {
     grade: string;
     topic: string;
     lesson_name: string;
+    lesson_id?: string;
   };
   sections: LessonPlanSection[];
   full_content: string;

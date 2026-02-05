@@ -31,29 +31,34 @@ const ResetPasswordPage = () => {
     setError(null);
     setSuccess(null);
 
-    if (code.length !== 6) {
-      setError("Please enter the 6-digit reset code.");
+    if (code.length !== 8) {
+      setError("Vui lòng nhập mã đặt lại 8 chữ số.");
+      return;
+    }
+
+    if (!email) {
+      setError("Không tìm thấy email. Vui lòng quay lại trang quên mật khẩu.");
       return;
     }
 
     if (password.length < 8) {
-      setError("Choose a password with at least 8 characters.");
+      setError("Mật khẩu phải có ít nhất 8 ký tự.");
       return;
     }
 
     if (password !== confirmPassword) {
-      setError("Passwords do not match.");
+      setError("Mật khẩu xác nhận không khớp.");
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const response = await resetPassword({ token: code, password });
+      const response = await resetPassword({ email, token: code, password });
       setSuccess(response.message);
       setPassword("");
       setConfirmPassword("");
     } catch (err: unknown) {
-      setError("Reset failed. Your code may have expired.");
+      setError("Đặt lại thất bại. Mã của bạn có thể đã hết hạn.");
       console.error(err);
     } finally {
       setIsSubmitting(false);
@@ -62,52 +67,52 @@ const ResetPasswordPage = () => {
 
   return (
     <AuthCard
-      title="Reset your password"
+      title="Đặt lại mật khẩu"
       description={
         <span>
-          Need a code? <Link to="/forgot-password">Request a reset code</Link>
+          Cần mã? <Link to="/forgot-password">Yêu cầu mã đặt lại</Link>
         </span>
       }
     >
       <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
         {email && (
-          <p className="text-sm text-slate-600">
-            We sent a 6-digit code to <strong>{email}</strong>. Check your inbox.
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            Chúng tôi đã gửi mã 8 chữ số đến <strong>{email}</strong>. Kiểm tra hộp thư của bạn.
           </p>
         )}
         {error ? <FormAlert>{error}</FormAlert> : null}
         {success ? <FormAlert variant="success">{success}</FormAlert> : null}
         <OtpInput
-          length={6}
+          length={8}
           value={code}
           onChange={setCode}
-          label="Enter 6-digit reset code"
+          label="Nhập mã đặt lại 8 chữ số"
           error={error}
         />
         <TextInput
-          label="New password"
+          label="Mật khẩu mới"
           name="password"
           type="password"
           autoComplete="new-password"
-          placeholder="Choose a new password"
+          placeholder="Chọn mật khẩu mới"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           required
         />
         <TextInput
-          label="Confirm password"
+          label="Xác nhận mật khẩu"
           name="confirm-password"
           type="password"
           autoComplete="new-password"
-          placeholder="Repeat new password"
+          placeholder="Nhập lại mật khẩu mới"
           value={confirmPassword}
           onChange={(event) => setConfirmPassword(event.target.value)}
           required
         />
-        <SubmitButton label="Reset password" isLoading={isSubmitting} />
+        <SubmitButton label="Đặt lại mật khẩu" isLoading={isSubmitting} />
       </form>
-      <p className="mt-4 text-center text-sm text-slate-500">
-        Remembered your password? <Link to="/login">Go to login</Link>
+      <p className="mt-4 text-center text-sm text-slate-500 dark:text-slate-400">
+        Đã nhớ mật khẩu? <Link to="/login">Đăng nhập</Link>
       </p>
     </AuthCard>
   );

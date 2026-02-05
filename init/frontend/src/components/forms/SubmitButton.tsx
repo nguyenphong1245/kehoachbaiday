@@ -13,7 +13,7 @@ const SubmitButton = ({ isLoading = false, label, disabled, ...props }: SubmitBu
       disabled={isLoading || disabled}
       {...props}
     >
-      {isLoading ? "Please wait..." : label}
+      {isLoading ? "Vui lòng chờ..." : label}
     </button>
   );
 };

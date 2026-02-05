@@ -1,2 +1,1 @@
-export { PublicParsonsPage } from "./PublicParsonsPage";
-export { PublicCodingPage } from "./PublicCodingPage";
+export { PublicCodeExercisePage } from "./PublicCodeExercisePage";

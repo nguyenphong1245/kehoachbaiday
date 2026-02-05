@@ -4,13 +4,24 @@
 
 html {
   height: 100%;
-  overflow-y: scroll;
+  overflow-x: hidden;
 }
 
 body {
   @apply bg-slate-100 dark:bg-gray-900 text-slate-900 dark:text-gray-100 antialiased;
   min-height: 100%;
-  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Ẩn scrollbar nhưng vẫn cho phép scroll */
+html, body {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE và Edge */
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
 }
 
 #root {
@@ -95,9 +106,16 @@ a {
   hyphens: auto;
 }
 
-/* Style for dotted lines in worksheets - make them consistent */
-.prose p {
-  /* If paragraph contains mostly dots, display as single line with scroll */
+/* Worksheet answer line - dòng kẻ chấm để học sinh điền đáp án */
+.worksheet-answer-line {
+  border-bottom: 1px dotted #6b7280;
+  height: 1.8em;
+  margin: 0.25em 0;
+  width: 100%;
+}
+
+.dark .worksheet-answer-line {
+  border-bottom-color: #9ca3af;
 }
 
 /* Worksheet line - replaces dotted text with CSS border */
@@ -110,13 +128,6 @@ a {
 
 .dark .worksheet-line {
   border-bottom-color: #6b7280;
-}
-
-/* Dotted line styling - convert dot sequences to underlines */
-.dotted-line-container p {
-  overflow-x: auto;
-  white-space: nowrap;
-  -webkit-overflow-scrolling: touch;
 }
 
 /* Table responsive for mobile */

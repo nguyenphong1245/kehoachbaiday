@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 
-import { getStoredAccessToken, getStoredAuthUser } from "@/utils/authStorage";
+import { getStoredAuthUser } from "@/utils/authStorage";
 
 interface RequireAuthProps {
   children: ReactNode;
@@ -10,6 +10,11 @@ interface RequireAuthProps {
   requiredRoles?: string[];
 }
 
+/**
+ * Route guard that checks for a stored user.
+ * Token validity is enforced server-side via httpOnly cookies;
+ * the 401-refresh interceptor in authService handles expiration.
+ */
 const RequireAuth = ({
   children,
   unauthenticatedPath = "/login",
@@ -17,10 +22,9 @@ const RequireAuth = ({
   requiredRoles,
 }: RequireAuthProps) => {
   const location = useLocation();
-  const token = getStoredAccessToken();
   const user = getStoredAuthUser();
 
-  if (!token || !user) {
+  if (!user) {
     return <Navigate to={unauthenticatedPath} replace state={{ from: location.pathname }} />;
   }
 

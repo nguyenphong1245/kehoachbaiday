@@ -5,8 +5,10 @@ from .auth import (
     EmailVerificationConfirm,
     EmailVerificationResend,
     LoginRequest,
+    LoginResponse,
     PasswordResetConfirm,
     PasswordResetRequest,
+    StudentLoginRequest,
     Token,
     TokenPayload,
 )
@@ -15,14 +17,14 @@ from .profile import UserProfileRead, UserProfileUpdate
 from .role import RoleCreate, RolePermissionUpdate, RoleRead
 from .settings import UserSettingsRead, UserSettingsUpdate
 from .user import UserCreate, UserRead, UserRoleUpdate
-from .category import CategoryCreate, CategoryRead
-from .document import DocumentCreate, DocumentRead
 
 __all__ = [
     "Token",
     "TokenPayload",
     "LoginRequest",
+    "StudentLoginRequest",
     "AuthResponse",
+    "LoginResponse",
     "AuthMessage",
     "ChangePassword",
     "EmailVerificationConfirm",
@@ -41,8 +43,4 @@ __all__ = [
     "RolePermissionUpdate",
     "PermissionCreate",
     "PermissionRead",
-    "CategoryCreate",
-    "CategoryRead",
-    "DocumentCreate",
-    "DocumentRead",
 ]

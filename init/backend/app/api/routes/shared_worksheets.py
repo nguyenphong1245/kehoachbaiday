@@ -8,15 +8,18 @@ from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy import select, func, delete
+from app.core.rate_limiter import limiter
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
 from app.models.shared_worksheet import SharedWorksheet, WorksheetResponse
+from app.models.submission_session import SubmissionSession
 from app.schemas.shared_worksheet import (
     CreateSharedWorksheetRequest,
     CreateSharedWorksheetResponse,
+    UpdateWorksheetRequest,
     SharedWorksheetResponse,
     SharedWorksheetListResponse,
     WorksheetPublicResponse,
@@ -25,6 +28,7 @@ from app.schemas.shared_worksheet import (
     WorksheetResponsesListResponse,
     WorksheetResponseItem,
 )
+from app.schemas.shared_quiz import StartSessionRequest, StartSessionResponse
 from app.core.config import get_settings
 
 router = APIRouter(prefix="/worksheets", tags=["Shared Worksheets"])
@@ -160,6 +164,7 @@ async def get_my_shared_worksheets(
             max_submissions=ws.max_submissions,
             response_count=response_count,
             created_at=ws.created_at,
+            lesson_info=ws.lesson_info,
         ))
     
     return SharedWorksheetListResponse(
@@ -238,6 +243,70 @@ async def delete_shared_worksheet(
     return {"message": "Đã xóa phiếu học tập"}
 
 
+@router.get("/{worksheet_id}/detail")
+async def get_worksheet_detail(
+    worksheet_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Lấy chi tiết phiếu học tập (bao gồm content) - chỉ dành cho chủ sở hữu"""
+    query = select(SharedWorksheet).where(
+        SharedWorksheet.id == worksheet_id,
+        SharedWorksheet.user_id == current_user.id
+    )
+    result = await db.execute(query)
+    worksheet = result.scalar_one_or_none()
+
+    if not worksheet:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy phiếu học tập"
+        )
+
+    return {
+        "id": worksheet.id,
+        "title": worksheet.title,
+        "content": worksheet.content,
+    }
+
+
+@router.patch("/{worksheet_id}")
+async def update_worksheet(
+    worksheet_id: int,
+    request: UpdateWorksheetRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Cập nhật nội dung phiếu học tập"""
+    query = select(SharedWorksheet).where(
+        SharedWorksheet.id == worksheet_id,
+        SharedWorksheet.user_id == current_user.id
+    )
+    result = await db.execute(query)
+    worksheet = result.scalar_one_or_none()
+
+    if not worksheet:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy phiếu học tập"
+        )
+
+    if request.title is not None:
+        worksheet.title = request.title
+
+    if request.content is not None:
+        worksheet.content = request.content
+        # Re-parse câu hỏi từ nội dung mới
+        worksheet.questions = parse_questions_from_content(request.content)
+
+    await db.commit()
+    await db.refresh(worksheet)
+
+    logger.info(f"Updated worksheet {worksheet_id} by user {current_user.id}")
+
+    return {"message": "Đã cập nhật phiếu học tập", "id": worksheet.id}
+
+
 @router.patch("/{worksheet_id}/toggle-active")
 async def toggle_worksheet_active(
     worksheet_id: int,
@@ -268,7 +337,9 @@ async def toggle_worksheet_active(
 # ============== PUBLIC ENDPOINTS (Học sinh) ==============
 
 @router.get("/public/{share_code}", response_model=WorksheetPublicResponse)
+@limiter.limit("30/minute")
 async def get_public_worksheet(
+    request: Request,
     share_code: str,
     db: AsyncSession = Depends(get_db),
 ):
@@ -338,22 +409,79 @@ async def get_public_worksheet(
     )
 
 
-# ❌ KHÔNG dùng /{share_code} trực tiếp vì sẽ conflict với các routes khác
-# Frontend phải gọi /public/{share_code}
+# [NOTE] KHONG dung /{share_code} truc tiep vi se conflict voi cac routes khac
+# Frontend phai goi /public/{share_code}
+
+
+@router.post("/public/{share_code}/start-session", response_model=StartSessionResponse)
+@limiter.limit("10/minute")
+async def start_worksheet_session(
+    request: Request,
+    share_code: str,
+    body: StartSessionRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Bắt đầu phiên làm phiếu học tập - trả về session token"""
+    result = await db.execute(
+        select(SharedWorksheet).where(SharedWorksheet.share_code == share_code)
+    )
+    worksheet = result.scalar_one_or_none()
+
+    if not worksheet or not worksheet.is_active:
+        raise HTTPException(status_code=404, detail="Không tìm thấy phiếu học tập")
+
+    if worksheet.expires_at and worksheet.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=410, detail="Phiếu học tập đã hết hạn")
+
+    client_ip = request.client.host if request.client else None
+    session = SubmissionSession(
+        share_code=share_code,
+        resource_type="worksheet",
+        student_name=body.student_name,
+        student_class=body.student_class or "",
+        ip_address=client_ip,
+    )
+    db.add(session)
+    await db.commit()
+    await db.refresh(session)
+
+    return StartSessionResponse(session_token=session.session_token)
 
 
 @router.post("/public/{share_code}/submit", response_model=SubmitWorksheetResponse)
+@limiter.limit("5/minute")
 async def submit_worksheet(
+    request: Request,
     share_code: str,
-    request: SubmitWorksheetRequest,
-    req: Request,
+    body: SubmitWorksheetRequest,
     db: AsyncSession = Depends(get_db),
 ):
     """Học sinh nộp phiếu học tập (public, không cần đăng nhập)"""
+    # Verify session token
+    session_result = await db.execute(
+        select(SubmissionSession).where(
+            SubmissionSession.session_token == body.session_token,
+            SubmissionSession.share_code == share_code,
+            SubmissionSession.resource_type == "worksheet",
+            SubmissionSession.student_name == body.student_name,
+        )
+    )
+    session = session_result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Phiên làm bài không hợp lệ. Vui lòng bắt đầu lại."
+        )
+    if session.expires_at and session.expires_at < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Phiên làm bài đã hết hạn. Vui lòng bắt đầu lại."
+        )
+
     query = select(SharedWorksheet).where(SharedWorksheet.share_code == share_code)
     result = await db.execute(query)
     worksheet = result.scalar_one_or_none()
-    
+
     if not worksheet:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -386,21 +514,22 @@ async def submit_worksheet(
             )
     
     # Lấy IP
-    client_ip = req.client.host if req.client else None
-    
+    client_ip = request.client.host if request.client else None
+
     # Lưu câu trả lời
     response = WorksheetResponse(
         worksheet_id=worksheet.id,
-        student_name=request.student_name,
-        student_class=request.student_class,
-        answers=request.answers,
+        student_name=body.student_name,
+        student_class=body.student_class,
+        student_group=body.student_group,
+        answers=body.answers,
         ip_address=client_ip,
     )
-    
+
     db.add(response)
     await db.commit()
-    
-    logger.info(f"Student {request.student_name} submitted worksheet {worksheet.id}")
+
+    logger.info(f"Student {body.student_name} submitted worksheet {worksheet.id}")
     
     return SubmitWorksheetResponse(
         success=True,

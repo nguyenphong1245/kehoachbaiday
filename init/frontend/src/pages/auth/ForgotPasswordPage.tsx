@@ -21,10 +21,9 @@ const ForgotPasswordPage = () => {
     setIsSubmitting(true);
     try {
       await requestPasswordReset({ email });
-      // Redirect to reset-password page
       navigate("/reset-password", { state: { email } });
     } catch (err: unknown) {
-      setError("Unable to process your request right now. Please try again in a moment.");
+      setError("Không thể xử lý yêu cầu. Vui lòng thử lại sau.");
       console.error(err);
     } finally {
       setIsSubmitting(false);
@@ -33,10 +32,10 @@ const ForgotPasswordPage = () => {
 
   return (
     <AuthCard
-      title="Forgot your password?"
+      title="Quên mật khẩu?"
       description={
         <span>
-          Need to verify instead? <Link to="/resend-verification">Resend verification email</Link>
+          Cần xác minh email? <Link to="/resend-verification">Gửi lại email xác minh</Link>
         </span>
       }
     >
@@ -44,19 +43,19 @@ const ForgotPasswordPage = () => {
         {error ? <FormAlert>{error}</FormAlert> : null}
         {success ? <FormAlert variant="success">{success}</FormAlert> : null}
         <TextInput
-          label="Account email"
+          label="Email tài khoản"
           name="email"
           type="email"
           autoComplete="email"
-          placeholder="jane@example.com"
+          placeholder="email@example.com"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           required
         />
-        <SubmitButton label="Send reset link" isLoading={isSubmitting} />
+        <SubmitButton label="Gửi liên kết đặt lại" isLoading={isSubmitting} />
       </form>
-      <p className="mt-4 text-center text-sm text-slate-500">
-        Remembered your password? <Link to="/login">Đăng nhập</Link>
+      <p className="mt-4 text-center text-sm text-slate-500 dark:text-slate-400">
+        Đã nhớ mật khẩu? <Link to="/login">Đăng nhập</Link>
       </p>
     </AuthCard>
   );

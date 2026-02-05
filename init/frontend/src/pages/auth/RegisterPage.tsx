@@ -23,13 +23,12 @@ const RegisterPage = () => {
     setLocalError(null);
 
     if (password !== confirmPassword) {
-      setLocalError("Passwords do not match");
+      setLocalError("Mật khẩu xác nhận không khớp");
       return;
     }
 
     try {
       await registerUser({ email, password });
-      // Redirect to verify-email page
       navigate("/verify-email", { state: { email } });
     } catch (err) {
       console.error("Registration failed", err);
@@ -38,54 +37,54 @@ const RegisterPage = () => {
 
   return (
     <AuthCard
-      title="Create an account"
+      title="Tạo tài khoản"
       description={
         <span>
-          Already registered? <Link to="/login">Sign in</Link>
+          Đã có tài khoản? <Link to="/login">Đăng nhập</Link>
         </span>
       }
     >
       <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-        <p className="text-sm text-slate-500">
-          After signing up we send a verification email. Complete that step before your first sign in.
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Sau khi đăng ký, chúng tôi sẽ gửi email xác minh. Hoàn thành bước đó trước khi đăng nhập.
         </p>
         {localError ? <FormAlert>{localError}</FormAlert> : null}
         {error ? <FormAlert>{error}</FormAlert> : null}
         {success ? <FormAlert variant="success">{success}</FormAlert> : null}
         <TextInput
-          label="Email address"
+          label="Địa chỉ email"
           name="email"
           type="email"
           autoComplete="email"
-          placeholder="john@example.com"
+          placeholder="email@example.com"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           required
         />
         <TextInput
-          label="Password"
+          label="Mật khẩu"
           name="password"
           type="password"
           autoComplete="new-password"
-          placeholder="Choose a secure password"
+          placeholder="Chọn mật khẩu an toàn"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           required
         />
         <TextInput
-          label="Confirm password"
+          label="Xác nhận mật khẩu"
           name="confirmPassword"
           type="password"
           autoComplete="new-password"
-          placeholder="Repeat your password"
+          placeholder="Nhập lại mật khẩu"
           value={confirmPassword}
           onChange={(event) => setConfirmPassword(event.target.value)}
           required
         />
-        <SubmitButton label="Create account" isLoading={isLoading} />
+        <SubmitButton label="Tạo tài khoản" isLoading={isLoading} />
       </form>
-      <div className="mt-4 text-center text-sm text-slate-500">
-        Didn't get the email? <Link to="/resend-verification">Resend verification</Link>
+      <div className="mt-4 text-center text-sm text-slate-500 dark:text-slate-400">
+        Chưa nhận được email? <Link to="/resend-verification">Gửi lại xác minh</Link>
       </div>
     </AuthCard>
   );

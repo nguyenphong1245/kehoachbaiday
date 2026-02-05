@@ -1,5 +1,5 @@
 /**
- * SavedLessonPlansPage - Trang hiển thị danh sách giáo án đã lưu
+ * SavedLessonPlansPage - Trang hiển thị danh sách KHBD đã lưu
  */
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -9,14 +9,12 @@ import {
   Trash2,
   Eye,
   Calendar,
-  BookOpen,
   GraduationCap,
   Loader2,
   ChevronLeft,
   ChevronRight,
   AlertCircle,
   FolderOpen,
-  ArrowLeft,
 } from "lucide-react";
 import {
   getSavedLessonPlans,
@@ -50,7 +48,7 @@ const SavedLessonPlansPage: React.FC = () => {
       setTotal(response.total);
       setTotalPages(Math.ceil(response.total / PAGE_SIZE));
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Lỗi tải danh sách giáo án");
+      setError(err.response?.data?.detail || "Lỗi tải danh sách KHBD");
     } finally {
       setIsLoading(false);
     }
@@ -61,14 +59,14 @@ const SavedLessonPlansPage: React.FC = () => {
   }, [page, searchQuery]);
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Bạn có chắc muốn xóa giáo án này?")) return;
+    if (!confirm("Bạn có chắc muốn xóa KHBD này?")) return;
 
     setDeletingId(id);
     try {
       await deleteSavedLessonPlan(String(id));
       fetchLessonPlans();
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Lỗi xóa giáo án");
+      setError(err.response?.data?.detail || "Lỗi xóa KHBD");
     } finally {
       setDeletingId(null);
     }
@@ -102,19 +100,9 @@ const SavedLessonPlansPage: React.FC = () => {
           <div className="flex items-center gap-1.5 text-sm">
             <span className="text-slate-500 dark:text-slate-400">Kế hoạch bài dạy</span>
             <ChevronRight className="w-4 h-4 text-slate-300" />
-            <span className="text-slate-700 dark:text-slate-300 font-medium">Giáo án đã lưu</span>
+            <span className="text-slate-700 dark:text-slate-300 font-medium">KHBD đã lưu</span>
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate("/lesson-builder")}
-              className="px-3 py-1.5 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex items-center gap-1.5"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Quay lại
-            </button>
-          </div>
         </div>
       </header>
 
@@ -125,10 +113,10 @@ const SavedLessonPlansPage: React.FC = () => {
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-3">
               <FileText className="w-7 h-7 text-blue-500" />
-              Giáo án đã lưu
+              KHBD đã lưu
             </h1>
             <p className="mt-1 text-slate-600 dark:text-slate-400">
-              Xem lại và quản lý các giáo án đã tạo
+              Xem lại và quản lý các KHBD đã tạo
             </p>
           </div>
 
@@ -167,21 +155,21 @@ const SavedLessonPlansPage: React.FC = () => {
               <FolderOpen className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
               <p className="text-slate-500 dark:text-slate-400">
                 {searchQuery
-                  ? "Không tìm thấy giáo án nào"
-                  : "Chưa có giáo án nào được lưu"}
+                  ? "Không tìm thấy KHBD nào"
+                  : "Chưa có KHBD nào được lưu"}
               </p>
               <button
                 onClick={() => navigate("/lesson-builder")}
                 className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
               >
-                Tạo giáo án mới
+                Tạo KHBD mới
               </button>
             </div>
           ) : (
             <>
               {/* Stats */}
               <div className="mb-3 text-sm text-slate-500 dark:text-slate-400">
-                Tổng cộng {total} giáo án
+                Tổng cộng {total} KHBD
               </div>
 
               {/* List */}
@@ -197,10 +185,6 @@ const SavedLessonPlansPage: React.FC = () => {
                           {plan.lesson_name}
                         </h3>
                         <div className="flex flex-wrap gap-3 text-sm text-slate-600 dark:text-slate-400">
-                          <span className="flex items-center gap-1">
-                            <BookOpen className="w-3.5 h-3.5" />
-                            {plan.book_type}
-                          </span>
                           <span className="flex items-center gap-1">
                             <GraduationCap className="w-3.5 h-3.5" />
                             Lớp {plan.grade}

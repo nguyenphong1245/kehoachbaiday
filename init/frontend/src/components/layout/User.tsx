@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { getStoredAuthUser, clearStoredAuth } from '@/utils/authStorage'
-import { IconButton } from '../common/IconButton'
-import { User as UserIcon, LogOut, UserRoundCog, MessageSquare, BarChart3, FileText } from 'lucide-react'
+import { getStoredAuthUser } from '@/utils/authStorage'
+import { logoutUser } from '@/services/authService'
+import { LogOut, BookOpen, Settings } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { User as UserType } from '@/types/auth'
 
@@ -25,45 +25,104 @@ const User: React.FC = () => {
     return () => document.removeEventListener('click', onClick)
   }, [])
 
-  const logout = () => {
-    clearStoredAuth()
-    // reload app and navigate to login
+  // Lock body scroll khi sidebar mở
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [open])
+
+  const logout = async () => {
+    await logoutUser()
     navigate('/login')
   }
 
   if (!user) {
-    return <Link to="/login">Login</Link>
+    return <Link to="/login" className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-brand">Đăng nhập</Link>
+  }
+
+  const displayEmail = user.email || 'Chưa có email'
+
+  // Lấy 2 chữ cái đầu từ email để làm avatar
+  const getInitials = (email: string) => {
+    const name = email.split('@')[0]
+    return name.substring(0, 2).toUpperCase()
   }
 
   return (
-    <div className="relative" ref={ref}>
-      <IconButton
-        className="ml-2"
-        icon={UserIcon}
+    <div ref={ref}>
+      {/* Avatar Button */}
+      <button
         onClick={() => setOpen((v) => !v)}
-        aria-label="User menu"
-      />
-      {/* Dropdown menu */}
+        className="flex items-center justify-center w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 font-medium text-sm hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+        aria-label="Menu người dùng"
+      >
+        {getInitials(displayEmail)}
+      </button>
+
+      {/* Backdrop */}
       {open && (
-        <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-900 border dark:border-gray-800 rounded-md shadow-lg z-50">
-          <div>
-            <div className="px-4 py-3 border-b space-y-1 dark:border-gray-800">
-              <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{(user?.profile?.first_name +' ' + user?.profile?.last_name) || 'Guest'}</p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">{user?.email || 'No email'}</p>
-              {user?.roles && (<div className="text-sm text-gray-500 dark:text-gray-400">
-                Roles: {user.roles.map(role => role.name).join(', ')}
-              </div>
+        <div
+          className="fixed inset-0 bg-black/20 dark:bg-black/40 z-40 transition-opacity duration-300"
+          onClick={() => setOpen(false)}
+        />
+      )}
+
+      {/* Sidebar Panel - Slide in from right */}
+      <div
+        className={`fixed top-0 right-0 h-screen w-72 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 shadow-lg z-50 transform transition-all duration-300 ease-out flex flex-col overflow-hidden ${
+          open ? 'translate-x-0 opacity-100 visible' : 'translate-x-full opacity-0 invisible'
+        }`}
+      >
+        {/* Header với avatar và info */}
+        <div className="flex-shrink-0 px-5 py-5 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-semibold text-base">
+              {getInitials(displayEmail)}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{displayEmail}</p>
+              {user.roles && user.roles.length > 0 && (
+                <p className="text-xs text-gray-500 dark:text-gray-400">{user.roles.map(r => r.name).join(', ')}</p>
               )}
             </div>
           </div>
-          <div className="py-2">
-            <button className="w-full flex items-center text-left space-x-2 px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-white/5" onClick={() => navigate('/chat')}> <MessageSquare className='w-4 h-4' /> <span>Chat AI</span></button>
-            <button className="w-full flex items-center text-left space-x-2 px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-white/5" onClick={() => navigate('/quiz-management')}> <BarChart3 className='w-4 h-4' /> <span>Quản lý Quiz</span></button>
-            <button className="w-full flex items-center text-left space-x-2 px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-white/5" onClick={() => navigate('/worksheet-management')}> <FileText className='w-4 h-4' /> <span>Phiếu học tập</span></button>
-            <button className="w-full flex items-center text-left text-red-500 space-x-2 px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-white/5" onClick={logout}> <LogOut className='w-4 h-4' /> <span>Đăng xuất</span></button>
-          </div>
         </div>
-      )}
+
+        {/* Menu Items */}
+        <div className="flex-1 overflow-y-auto py-2">
+          <button
+            className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            onClick={() => { setOpen(false); navigate('/lesson-builder'); }}
+          >
+            <BookOpen className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+            <span>Soạn KHBD</span>
+          </button>
+
+          <button
+            className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            onClick={() => { setOpen(false); navigate('/account'); }}
+          >
+            <Settings className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+            <span>Cài đặt tài khoản</span>
+          </button>
+
+          <div className="my-2 mx-5 border-t border-gray-100 dark:border-gray-800"></div>
+
+          <button
+            className="w-full flex items-center gap-3 px-5 py-3 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+            onClick={logout}
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Đăng xuất</span>
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

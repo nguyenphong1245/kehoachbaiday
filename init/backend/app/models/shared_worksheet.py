@@ -35,6 +35,7 @@ class WorksheetResponse(Base):
     worksheet_id = Column(Integer, ForeignKey("shared_worksheets.id", ondelete="CASCADE"), nullable=False)
     student_name = Column(String(255), nullable=False)
     student_class = Column(String(50), nullable=True)
+    student_group = Column(String(50), nullable=True)
     answers = Column(JSON, nullable=False)
     submitted_at = Column(DateTime(timezone=True), server_default=func.now())
     ip_address = Column(String(50), nullable=True)

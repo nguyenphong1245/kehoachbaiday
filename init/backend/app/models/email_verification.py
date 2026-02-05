@@ -14,5 +14,6 @@ class EmailVerificationToken(Base):
     user_id: int = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     expires_at: datetime = Column(DateTime(timezone=True), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    attempts: int = Column(Integer, nullable=False, server_default="0")
 
     user = relationship("User", back_populates="verification_tokens")

@@ -3,8 +3,9 @@ import { api } from "./authService";
 export interface QuizQuestion {
   id: string;
   question: string;
+  type: string; // Luôn là "multiple_choice"
   options: Record<string, string>; // {A: "...", B: "...", C: "...", D: "..."}
-  correct_answer?: string;
+  correct_answer: string; // 1 chữ cái: A, B, C, hoặc D
 }
 
 export interface QuizPublic {
@@ -15,12 +16,23 @@ export interface QuizPublic {
   questions: QuizQuestion[];
 }
 
+export interface StartQuizSessionRequest {
+  student_name: string;
+  student_class: string;
+}
+
+export interface StartQuizSessionResponse {
+  session_token: string;
+}
+
 export interface SubmitQuizRequest {
   student_name: string;
   student_class: string;
+  student_group?: string;
   student_email?: string;
   answers: Record<string, string>; // {question_1: "A", question_2: "B", ...}
   time_spent?: number;
+  session_token: string;
 }
 
 export interface SubmitQuizResponse {
@@ -34,11 +46,19 @@ export interface SubmitQuizResponse {
 
 export interface QuizQuestionInput {
   question: string;
-  A: string;
-  B: string;
-  C: string;
-  D: string;
-  answer: string;
+  type?: string;
+  A?: string;
+  B?: string;
+  C?: string;
+  D?: string;
+  answer?: string;
+}
+
+export interface LessonInfo {
+  book_type?: string;
+  grade?: string;
+  topic?: string;
+  lesson_name?: string;
 }
 
 export interface CreateQuizRequest {
@@ -50,6 +70,7 @@ export interface CreateQuizRequest {
   expires_in_days?: number;
   show_correct_answers?: boolean;
   allow_multiple_attempts?: boolean;
+  lesson_info?: LessonInfo;
 }
 
 export interface CreateQuizResponse {
@@ -74,12 +95,14 @@ export interface SharedQuiz {
   show_correct_answers: boolean;
   allow_multiple_attempts: boolean;
   response_count: number;
+  lesson_info?: LessonInfo;
 }
 
 export interface QuizResponseItem {
   id: number;
   student_name: string;
   student_class: string;
+  student_group?: string;
   student_email?: string;
   score: number;
   total_correct: number;
@@ -100,6 +123,17 @@ export interface QuizResponsesList {
  */
 export const getPublicQuiz = async (shareCode: string): Promise<QuizPublic> => {
   const response = await api.get(`/quizzes/public/${shareCode}`);
+  return response.data;
+};
+
+/**
+ * Bắt đầu phiên làm bài quiz - trả về session token
+ */
+export const startQuizSession = async (
+  shareCode: string,
+  request: StartQuizSessionRequest
+): Promise<StartQuizSessionResponse> => {
+  const response = await api.post(`/quizzes/public/${shareCode}/start-session`, request);
   return response.data;
 };
 
@@ -143,6 +177,38 @@ export const getQuizResponses = async (
 };
 
 /**
+ * Lấy chi tiết quiz (bao gồm questions với đáp án đúng)
+ */
+export const getQuizDetail = async (
+  quizId: number
+): Promise<{
+  id: number;
+  title: string;
+  questions: QuizQuestion[];
+  time_limit?: number;
+  show_correct_answers: boolean;
+}> => {
+  const response = await api.get(`/quizzes/${quizId}/detail`);
+  return response.data;
+};
+
+/**
+ * Cập nhật quiz
+ */
+export const updateQuiz = async (
+  quizId: number,
+  data: {
+    title?: string;
+    questions?: QuizQuestion[];
+    time_limit?: number;
+    show_correct_answers?: boolean;
+  }
+): Promise<{ message: string; id: number }> => {
+  const response = await api.patch(`/quizzes/${quizId}`, data);
+  return response.data;
+};
+
+/**
  * Xóa quiz
  */
 export const deleteQuiz = async (quizId: number): Promise<void> => {
@@ -154,5 +220,24 @@ export const deleteQuiz = async (quizId: number): Promise<void> => {
  */
 export const toggleQuizActive = async (quizId: number): Promise<SharedQuiz> => {
   const response = await api.patch(`/quizzes/${quizId}/toggle-active`);
+  return response.data;
+};
+
+/**
+ * Lấy thống kê quiz
+ */
+export interface QuizStatistics {
+  total_responses: number;
+  average_score: number;
+  highest_score: number;
+  lowest_score: number;
+  average_time_spent?: number;
+  score_distribution: Record<string, number>;
+}
+
+export const getQuizStatistics = async (
+  quizId: number
+): Promise<QuizStatistics> => {
+  const response = await api.get(`/quizzes/${quizId}/statistics`);
   return response.data;
 };

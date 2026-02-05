@@ -12,7 +12,7 @@ import ServerErrorPage from "@/pages/error/ServerErrorPage";
 import UnauthorizedPage from "@/pages/error/UnauthorizedPage";
 import { PublicWorksheetPage } from "@/pages/worksheet";
 import { PublicSharedQuizPage } from "@/pages/quiz";
-import { PublicParsonsPage, PublicCodingPage } from "@/pages/code-exercise";
+import { PublicCodeExercisePage } from "@/pages/code-exercise";
 
 export const publicRoutes: RouteObject[] = [
   {
@@ -31,14 +31,9 @@ export const publicRoutes: RouteObject[] = [
     element: <PublicWorksheetPage />,
   },
   {
-    // Route công khai cho bài tập ghép thẻ code (Parsons)
-    path: "/code/parsons/:shareCode",
-    element: <PublicParsonsPage />,
-  },
-  {
-    // Route công khai cho bài tập viết code
-    path: "/code/coding/:shareCode",
-    element: <PublicCodingPage />,
+    // Route công khai cho học sinh làm bài tập lập trình
+    path: "/code/:shareCode",
+    element: <PublicCodeExercisePage />,
   },
   {
     element: <AuthLayout />,

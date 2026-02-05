@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { useParams } from "react-router-dom";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useParams, Link } from "react-router-dom";
 import {
   Clock,
   CheckCircle,
-  XCircle,
   AlertCircle,
   Loader2,
   Trophy,
@@ -14,33 +13,48 @@ import {
   User,
   Users,
   Mail,
+  Settings,
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   getPublicQuiz,
+  startQuizSession,
   submitQuiz,
   type QuizPublic,
   type QuizQuestion,
   type SubmitQuizResponse,
 } from "@/services/sharedQuizService";
+import { getStoredAuthUser } from "@/utils/authStorage";
+import { useToast } from "@/contexts/Toast";
 
 // Form đăng ký thông tin học sinh
 interface StudentInfo {
   name: string;
   className: string;
+  group?: string;
   email?: string;
 }
 
 export const PublicSharedQuizPage: React.FC = () => {
   const { shareCode } = useParams<{ shareCode: string }>();
-  
+  const toast = useToast();
+
+  // Check if current user is a teacher
+  const isTeacher = useMemo(() => {
+    const user = getStoredAuthUser();
+    return user?.roles?.some(r => r.name === "teacher" || r.name === "admin") ?? false;
+  }, []);
+
   // States
   const [quiz, setQuiz] = useState<QuizPublic | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Student info
   const [studentInfo, setStudentInfo] = useState<StudentInfo | null>(null);
-  const [studentForm, setStudentForm] = useState({ name: "", className: "", email: "" });
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
+  const [studentForm, setStudentForm] = useState({ name: "", className: "", group: "", email: "" });
   
   // Quiz states
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -51,6 +65,7 @@ export const PublicSharedQuizPage: React.FC = () => {
   // Result states
   const [result, setResult] = useState<SubmitQuizResponse | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   // Load quiz
   useEffect(() => {
@@ -97,20 +112,29 @@ export const PublicSharedQuizPage: React.FC = () => {
     return () => clearInterval(interval);
   }, [startTime, quiz?.time_limit, result]);
 
-  const handleStartQuiz = () => {
-    if (!studentForm.name.trim() || !studentForm.className.trim()) {
-      alert("Vui lòng nhập đầy đủ họ tên và lớp!");
+  const handleStartQuiz = async () => {
+    if (!shareCode || !studentForm.name.trim() || !studentForm.className.trim()) {
+      toast.push({ type: "warning", title: "Vui lòng nhập đầy đủ họ tên và lớp!" });
       return;
     }
-    
-    setStudentInfo({
-      name: studentForm.name.trim(),
-      className: studentForm.className.trim(),
-      email: studentForm.email.trim() || undefined,
-    });
-    setStartTime(Date.now());
-    if (quiz?.time_limit) {
-      setTimeLeft(quiz.time_limit * 60);
+    try {
+      const session = await startQuizSession(shareCode, {
+        student_name: studentForm.name.trim(),
+        student_class: studentForm.className.trim(),
+      });
+      setSessionToken(session.session_token);
+      setStudentInfo({
+        name: studentForm.name.trim(),
+        className: studentForm.className.trim(),
+        group: studentForm.group.trim() || undefined,
+        email: studentForm.email.trim() || undefined,
+      });
+      setStartTime(Date.now());
+      if (quiz?.time_limit) {
+        setTimeLeft(quiz.time_limit * 60);
+      }
+    } catch {
+      toast.push({ type: "error", title: "Không thể bắt đầu phiên làm bài", description: "Vui lòng thử lại." });
     }
   };
 
@@ -119,8 +143,9 @@ export const PublicSharedQuizPage: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    if (!shareCode || !studentInfo || !quiz) return;
-    
+    if (!shareCode || !studentInfo || !quiz || !sessionToken) return;
+    if (isSubmittingRef.current) return;
+
     // Kiểm tra đã trả lời hết chưa
     const unanswered = quiz.questions.filter(q => !answers[q.id]);
     if (unanswered.length > 0 && timeLeft !== 0) {
@@ -130,25 +155,29 @@ export const PublicSharedQuizPage: React.FC = () => {
       if (!confirm) return;
     }
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
-    
+
     try {
       const timeSpent = startTime ? Math.floor((Date.now() - startTime) / 1000) : undefined;
-      
+
       const response = await submitQuiz(shareCode, {
         student_name: studentInfo.name,
         student_class: studentInfo.className,
+        student_group: studentInfo.group,
         student_email: studentInfo.email,
         answers,
         time_spent: timeSpent,
+        session_token: sessionToken,
       });
-      
+
       setResult(response);
     } catch (err) {
       console.error("Error submitting quiz:", err);
-      alert("Có lỗi khi nộp bài. Vui lòng thử lại!");
+      toast.push({ type: "error", title: "Nộp bài thất bại", description: "Có lỗi khi nộp bài. Vui lòng thử lại!" });
     } finally {
       setIsSubmitting(false);
+      isSubmittingRef.current = false;
     }
   };
 
@@ -247,6 +276,22 @@ export const PublicSharedQuizPage: React.FC = () => {
                 </div>
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Nhóm (nếu có)
+                </label>
+                <div className="relative">
+                  <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    type="text"
+                    value={studentForm.group}
+                    onChange={(e) => setStudentForm(prev => ({ ...prev, group: e.target.value }))}
+                    placeholder="Ví dụ: Nhóm 1"
+                    className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none placeholder:text-slate-400 text-slate-900"
+                  />
+                </div>
+              </div>
+
               <button
                 onClick={handleStartQuiz}
                 disabled={!studentForm.name.trim() || !studentForm.className.trim()}
@@ -254,6 +299,16 @@ export const PublicSharedQuizPage: React.FC = () => {
               >
                 Bắt đầu làm bài
               </button>
+
+              {isTeacher && (
+                <Link
+                  to="/sharing-management"
+                  className="w-full py-2.5 flex items-center justify-center gap-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                >
+                  <Settings className="w-4 h-4" />
+                  Quản lý chia sẻ
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -339,18 +394,30 @@ export const PublicSharedQuizPage: React.FC = () => {
             {studentInfo.name} - {studentInfo.className}
           </p>
         </div>
-        
-        {/* Timer */}
-        {timeLeft !== null && (
-          <div className={`flex items-center gap-2 px-4 py-2 rounded-lg font-mono font-bold ${
-            timeLeft <= 60 ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' :
-            timeLeft <= 300 ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400' :
-            'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
-          }`}>
-            <Clock className="w-5 h-5" />
-            {formatTime(timeLeft)}
-          </div>
-        )}
+
+        <div className="flex items-center gap-3">
+          {isTeacher && (
+            <Link
+              to="/sharing-management"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+            >
+              <Settings className="w-3.5 h-3.5" />
+              Quản lý
+            </Link>
+          )}
+
+          {/* Timer */}
+          {timeLeft !== null && (
+            <div className={`flex items-center gap-2 px-4 py-2 rounded-lg font-mono font-bold ${
+              timeLeft <= 60 ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' :
+              timeLeft <= 300 ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400' :
+              'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+            }`}>
+              <Clock className="w-5 h-5" />
+              {formatTime(timeLeft)}
+            </div>
+          )}
+        </div>
       </header>
 
       {/* Progress */}
@@ -376,42 +443,99 @@ export const PublicSharedQuizPage: React.FC = () => {
               <span className="text-sm font-medium text-blue-600 mb-2 block">
                 Câu {currentQuestion + 1}
               </span>
-              <p className="text-lg text-slate-900 dark:text-white whitespace-pre-wrap">
-                {currentQ?.question}
-              </p>
+              <div className="text-lg text-slate-900 dark:text-white quiz-question-content">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    code({ className, children, ...props }) {
+                      const isInline = !className;
+                      if (isInline) {
+                        return (
+                          <code className="bg-slate-100 dark:bg-slate-700 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded text-sm font-mono" {...props}>
+                            {children}
+                          </code>
+                        );
+                      }
+                      // Block code with syntax highlighting
+                      const codeStr = String(children).replace(/\n$/, '');
+                      return (
+                        <pre className="bg-slate-900 text-slate-100 rounded-lg p-4 my-3 overflow-x-auto text-sm leading-relaxed">
+                          <code className="font-mono">
+                            {codeStr.split('\n').map((line, i) => {
+                              let highlighted = line;
+                              // Comment
+                              if (line.trimStart().startsWith('#')) {
+                                return <div key={i}><span style={{color:'#6a9955'}}>{line}</span></div>;
+                              }
+                              // Highlight keywords
+                              highlighted = line
+                                .replace(/\b(def|class|return|if|elif|else|for|while|import|from|in|not|and|or|True|False|None|print|input|range|len|int|float|str|list)\b/g,
+                                  '<kw>$1</kw>');
+                              // Highlight strings
+                              highlighted = highlighted
+                                .replace(/(["'])(.*?)\1/g, '<str>$1$2$1</str>');
+                              // Parse and render
+                              const parts: React.ReactNode[] = [];
+                              let remaining = highlighted;
+                              let partKey = 0;
+                              while (remaining.length > 0) {
+                                const kwMatch = remaining.match(/^(.*?)<kw>(.*?)<\/kw>/);
+                                const strMatch = remaining.match(/^(.*?)<str>(.*?)<\/str>/);
+                                if (kwMatch && (!strMatch || kwMatch.index! <= strMatch.index!)) {
+                                  if (kwMatch[1]) parts.push(<span key={partKey++}>{kwMatch[1]}</span>);
+                                  parts.push(<span key={partKey++} style={{color:'#569cd6'}}>{kwMatch[2]}</span>);
+                                  remaining = remaining.slice(kwMatch[0].length);
+                                } else if (strMatch) {
+                                  if (strMatch[1]) parts.push(<span key={partKey++}>{strMatch[1]}</span>);
+                                  parts.push(<span key={partKey++} style={{color:'#ce9178'}}>{strMatch[2]}</span>);
+                                  remaining = remaining.slice(strMatch[0].length);
+                                } else {
+                                  parts.push(<span key={partKey++}>{remaining.replace(/<\/?kw>|<\/?str>/g, '')}</span>);
+                                  break;
+                                }
+                              }
+                              return <div key={i}>{parts}</div>;
+                            })}
+                          </code>
+                        </pre>
+                      );
+                    },
+                    p({ children }) {
+                      return <p className="mb-2 last:mb-0">{children}</p>;
+                    },
+                  }}
+                >
+                  {currentQ?.question || ''}
+                </ReactMarkdown>
+              </div>
             </div>
 
-            {/* Options */}
-            <div className="space-y-3">
-              {currentQ && Object.entries(currentQ.options).map(([key, value]) => {
-                const isSelected = answers[currentQ.id] === key;
-                
-                return (
-                  <button
-                    key={key}
-                    onClick={() => handleSelectAnswer(currentQ.id, key)}
-                    className={`w-full p-4 text-left rounded-lg border-2 transition-all ${
-                      isSelected
-                        ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/30'
-                        : 'border-slate-200 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-700'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className={`w-8 h-8 flex items-center justify-center rounded-lg font-semibold flex-shrink-0 ${
+            {/* Answer area - Multiple choice only */}
+            {currentQ && (
+              <div className="space-y-3">
+                {currentQ.options && Object.entries(currentQ.options).map(([key, value]) => {
+                  const isSelected = answers[currentQ.id] === key;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => handleSelectAnswer(currentQ.id, key)}
+                      className={`w-full p-4 text-left rounded-lg border-2 transition-all ${
                         isSelected
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
-                      }`}>
-                        {key}
-                      </span>
-                      <span className="text-slate-900 dark:text-white pt-1">
-                        {value}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+                          ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/30'
+                          : 'border-slate-200 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-700'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className={`w-8 h-8 flex items-center justify-center rounded-lg font-semibold flex-shrink-0 ${
+                          isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                        }`}>{key}</span>
+                        <span className="text-slate-900 dark:text-white pt-1">{value}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>

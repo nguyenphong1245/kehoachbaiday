@@ -28,6 +28,12 @@ export interface SharedWorksheet {
   max_submissions?: number;
   response_count: number;
   created_at: string;
+  lesson_info?: {
+    book_type?: string;
+    grade?: string;
+    topic?: string;
+    lesson_name?: string;
+  };
 }
 
 export interface WorksheetQuestion {
@@ -57,16 +63,28 @@ export interface WorksheetPublic {
   teacher_name?: string;
 }
 
+export interface StartWorksheetSessionRequest {
+  student_name: string;
+  student_class: string;
+}
+
+export interface StartWorksheetSessionResponse {
+  session_token: string;
+}
+
 export interface SubmitWorksheetRequest {
   student_name: string;
   student_class?: string;
+  student_group?: string;
   answers: Record<string, string>;
+  session_token: string;
 }
 
 export interface WorksheetResponseItem {
   id: number;
   student_name: string;
   student_class?: string;
+  student_group?: string;
   answers: Record<string, string>;
   submitted_at: string;
 }
@@ -131,6 +149,27 @@ export const toggleWorksheetActive = async (
   return data;
 };
 
+/**
+ * Lấy chi tiết phiếu học tập (bao gồm content)
+ */
+export const getWorksheetDetail = async (
+  worksheetId: number
+): Promise<{ id: number; title: string; content: string }> => {
+  const { data } = await api.get(`/worksheets/${worksheetId}/detail`);
+  return data;
+};
+
+/**
+ * Cập nhật phiếu học tập
+ */
+export const updateWorksheet = async (
+  worksheetId: number,
+  data: { title?: string; content?: string }
+): Promise<{ message: string; id: number }> => {
+  const { data: res } = await api.patch(`/worksheets/${worksheetId}`, data);
+  return res;
+};
+
 // ============== PUBLIC API (Không cần auth) ==============
 
 /**
@@ -140,6 +179,17 @@ export const getPublicWorksheet = async (
   shareCode: string
 ): Promise<WorksheetPublic> => {
   const { data } = await api.get(`/worksheets/public/${shareCode}`);
+  return data;
+};
+
+/**
+ * Bắt đầu phiên làm bài worksheet - trả về session token
+ */
+export const startWorksheetSession = async (
+  shareCode: string,
+  request: StartWorksheetSessionRequest
+): Promise<StartWorksheetSessionResponse> => {
+  const { data } = await api.post(`/worksheets/public/${shareCode}/start-session`, request);
   return data;
 };
 

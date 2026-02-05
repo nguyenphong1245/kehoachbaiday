@@ -13,6 +13,10 @@ class User(Base):
     hashed_password: str = Column("password", String(255), nullable=False)
     is_active: bool = Column(Boolean, nullable=False, server_default="1")
     is_verified: bool = Column(Boolean, nullable=False, server_default="0")
+    token_balance: int = Column(Integer, nullable=False, server_default="20000")
+    tokens_used: int = Column(Integer, nullable=False, server_default="0")
+    failed_login_attempts: int = Column(Integer, nullable=False, server_default="0")
+    locked_until = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     roles = relationship("Role", secondary=user_roles_table, back_populates="users")
@@ -61,7 +65,18 @@ class User(Base):
         cascade="all, delete-orphan",
     )
     code_exercises = relationship(
-        "SharedCodeExercise",
+        "CodeExercise",
         back_populates="creator",
+        cascade="all, delete-orphan",
+    )
+    # Classroom relationships
+    classrooms = relationship(
+        "Classroom",
+        back_populates="teacher",
+        cascade="all, delete-orphan",
+    )
+    class_enrollments = relationship(
+        "ClassStudent",
+        back_populates="user",
         cascade="all, delete-orphan",
     )

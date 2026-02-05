@@ -78,7 +78,7 @@ const OtpInput = ({ length = 6, value, onChange, label, error }: OtpInputProps) 
   return (
     <div className="flex flex-col gap-2">
       {label && (
-        <label className="text-left text-sm font-medium text-slate-700">
+        <label className="text-left text-sm font-medium text-slate-700 dark:text-slate-300">
           {label}
         </label>
       )}
@@ -97,9 +97,9 @@ const OtpInput = ({ length = 6, value, onChange, label, error }: OtpInputProps) 
             className={`w-12 h-14 text-center text-2xl font-semibold rounded-lg border ${
               error
                 ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
-                : "border-slate-300 focus:border-brand focus:ring-brand/30"
-            } bg-white text-slate-900 shadow-sm transition focus:outline-none focus:ring-2`}
-            aria-label={`Digit ${index + 1}`}
+                : "border-slate-300 dark:border-slate-600 focus:border-brand focus:ring-brand/30"
+            } bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm transition focus:outline-none focus:ring-2`}
+            aria-label={`Chữ số ${index + 1}`}
           />
         ))}
       </div>

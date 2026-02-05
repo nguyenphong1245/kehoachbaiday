@@ -1,19 +1,40 @@
+import logging
+import re
 import smtplib
 from email.message import EmailMessage
 
 from app.core.config import get_settings
 
+logger = logging.getLogger("app.email")
+
+_EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+
+
+def _sanitize_header(value: str) -> str:
+    """Strip CR/LF để chống email header injection."""
+    return value.replace("\r", "").replace("\n", "").strip()
+
+
+def _is_valid_email(email: str) -> bool:
+    return bool(_EMAIL_RE.match(email))
+
 
 def _log_email(subject: str, recipient: str, body: str) -> None:
     settings = get_settings()
-    print("-- Email Notification (console fallback) --")
-    print(f"To: {recipient}")
-    print(f"Subject: {subject}")
-    print(body)
-    print(f"(Configure SMTP settings to send real emails; frontend base URL: {settings.frontend_base_url})")
+    logger.info(
+        "Email (console fallback) To=%s Subject=%s FrontendURL=%s\n%s",
+        recipient, subject, settings.frontend_base_url, body,
+    )
 
 
 def send_email(subject: str, recipient: str, body: str) -> None:
+    subject = _sanitize_header(subject)
+    recipient = _sanitize_header(recipient)
+
+    if not _is_valid_email(recipient):
+        logger.warning("email.invalid_recipient recipient=%s", recipient)
+        return
+
     settings = get_settings()
 
     if not settings.smtp_host or settings.smtp_port is None or not settings.smtp_default_sender:
@@ -27,7 +48,7 @@ def send_email(subject: str, recipient: str, body: str) -> None:
     message.set_content(body)
 
     try:
-        # Port 587 dùng STARTTLS, Port 465 dùng SSL
+        # Port 587 dng STARTTLS, Port 465 dng SSL
         if settings.smtp_use_ssl or settings.smtp_port == 465:
             server = smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=15)
         else:
@@ -39,9 +60,9 @@ def send_email(subject: str, recipient: str, body: str) -> None:
             if settings.smtp_username and settings.smtp_password:
                 server.login(settings.smtp_username, settings.smtp_password)
             server.send_message(message)
-            print(f"✅ Email sent successfully to {recipient}")
+            logger.info("Email sent successfully to %s", recipient)
     except Exception as exc:  # pragma: no cover - depends on external SMTP service
-        print(f"❌ Email delivery failed ({exc!r}). Falling back to console output.")
+        logger.warning("Email delivery failed (%r). Falling back to console output.", exc)
         _log_email(subject, recipient, body)
 
 

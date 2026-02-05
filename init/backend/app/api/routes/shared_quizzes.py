@@ -1,21 +1,25 @@
 """
 API Routes cho Quiz chia sẻ (Trắc nghiệm)
 """
+import json
 import secrets
 import re
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.rate_limiter import limiter
 
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
 from app.models.shared_quiz import SharedQuiz, QuizResponse
+from app.models.submission_session import SubmissionSession
 from app.schemas.shared_quiz import (
     CreateSharedQuizRequest,
     CreateSharedQuizResponse,
+    UpdateQuizRequest,
     SharedQuizResponse,
     QuizPublicResponse,
     QuizQuestion,
@@ -23,6 +27,9 @@ from app.schemas.shared_quiz import (
     SubmitQuizResponse,
     QuizResponseItem,
     QuizResponsesListResponse,
+    QuizStatisticsResponse,
+    StartSessionRequest,
+    StartSessionResponse,
 )
 from app.core.config import get_settings
 
@@ -110,27 +117,32 @@ def parse_quiz_questions(content: str) -> list[QuizQuestion]:
                 options=options,
                 correct_answer=correct_answer
             ))
-            logger.info(f"✓ Question {idx + 1}: '{question_text[:50]}...', {len(options)} options, answer={correct_answer}")
+            logger.info(f"OK Question {idx + 1}: '{question_text[:50]}...', {len(options)} options, answer={correct_answer}")
         else:
-            logger.warning(f"⚠️ Skipped question {num}: text={bool(question_text)}, options={len(options)}, answer={correct_answer}")
+            logger.warning(f"[WARN] Skipped question {num}: text={bool(question_text)}, options={len(options)}, answer={correct_answer}")
     
     return questions
 
 
 def convert_questions_input_to_quiz(questions_input: list) -> list[QuizQuestion]:
-    """Chuyển đổi questions array từ LLM JSON sang QuizQuestion"""
+    """Chuyển đổi questions array từ LLM JSON sang QuizQuestion
+    CHỈ hỗ trợ multiple_choice (chọn 1 đáp án đúng)
+    """
     questions = []
     for idx, q in enumerate(questions_input):
+        options = {
+            "A": q.A,
+            "B": q.B,
+            "C": q.C,
+            "D": q.D,
+        }
+
         questions.append(QuizQuestion(
             id=f"question_{idx + 1}",
             question=q.question,
-            options={
-                "A": q.A,
-                "B": q.B,
-                "C": q.C,
-                "D": q.D
-            },
-            correct_answer=q.answer.upper()
+            type="multiple_choice",
+            options=options,
+            correct_answer=q.answer.upper(),
         ))
     return questions
 
@@ -187,11 +199,11 @@ async def create_shared_quiz(
         lines = []
         for idx, q in enumerate(request.questions, 1):
             lines.append(f"Câu {idx}: {q.question}")
-            lines.append(f"A. {q.A}")
-            lines.append(f"B. {q.B}")
-            lines.append(f"C. {q.C}")
-            lines.append(f"D. {q.D}")
-            lines.append(f"Đáp án: {q.answer}")
+            if q.A: lines.append(f"A. {q.A}")
+            if q.B: lines.append(f"B. {q.B}")
+            if q.C: lines.append(f"C. {q.C}")
+            if q.D: lines.append(f"D. {q.D}")
+            if q.answer: lines.append(f"Đáp án: {q.answer}")
             lines.append("")
         content_to_save = "\n".join(lines)
     
@@ -208,6 +220,7 @@ async def create_shared_quiz(
         expires_at=expires_at,
         show_correct_answers=request.show_correct_answers,
         allow_multiple_attempts=request.allow_multiple_attempts,
+        lesson_info=request.lesson_info,
     )
     
     db.add(quiz)
@@ -217,7 +230,7 @@ async def create_shared_quiz(
     settings = get_settings()
     share_url = f"{settings.frontend_base_url}/quiz/{share_code}"
     
-    logger.info(f"✅ Created quiz {quiz.id} with code {share_code}")
+    logger.info(f"[OK] Created quiz {quiz.id} with code {share_code}")
     
     return CreateSharedQuizResponse(
         quiz_id=quiz.id,
@@ -260,13 +273,16 @@ async def get_my_quizzes(
             show_correct_answers=quiz.show_correct_answers,
             allow_multiple_attempts=quiz.allow_multiple_attempts,
             response_count=response_count or 0,
+            lesson_info=quiz.lesson_info,
         ))
-    
+
     return quizzes
 
 
 @router.get("/public/{share_code}", response_model=QuizPublicResponse)
+@limiter.limit("30/minute")
 async def get_public_quiz(
+    request: Request,
     share_code: str,
     db: AsyncSession = Depends(get_db),
 ):
@@ -299,14 +315,16 @@ async def get_public_quiz(
     # Parse questions và xóa đáp án đúng
     questions = [QuizQuestion(**q) for q in quiz.questions]
     public_questions = []
-    
+
     for q in questions:
-        public_questions.append(QuizQuestion(
+        public_q = QuizQuestion(
             id=q.id,
             question=q.question,
+            type=q.type,
             options=q.options,
-            correct_answer=""  # Ẩn đáp án đúng
-        ))
+            correct_answer="",  # Ẩn đáp án đúng
+        )
+        public_questions.append(public_q)
     
     return QuizPublicResponse(
         title=quiz.title,
@@ -317,35 +335,94 @@ async def get_public_quiz(
     )
 
 
-@router.post("/public/{share_code}/submit", response_model=SubmitQuizResponse)
-async def submit_quiz(
+@router.post("/public/{share_code}/start-session", response_model=StartSessionResponse)
+@limiter.limit("10/minute")
+async def start_quiz_session(
+    request: Request,
     share_code: str,
-    request: SubmitQuizRequest,
+    body: StartSessionRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Bắt đầu phiên làm bài - trả về session token"""
+    result = await db.execute(
+        select(SharedQuiz).where(SharedQuiz.share_code == share_code)
+    )
+    quiz = result.scalar_one_or_none()
+
+    if not quiz or not quiz.is_active:
+        raise HTTPException(status_code=404, detail="Không tìm thấy bài trắc nghiệm")
+
+    if quiz.expires_at and quiz.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=410, detail="Bài trắc nghiệm đã hết hạn")
+
+    client_ip = request.client.host if request.client else None
+    session = SubmissionSession(
+        share_code=share_code,
+        resource_type="quiz",
+        student_name=body.student_name,
+        student_class=body.student_class,
+        ip_address=client_ip,
+    )
+    db.add(session)
+    await db.commit()
+    await db.refresh(session)
+
+    return StartSessionResponse(session_token=session.session_token)
+
+
+@router.post("/public/{share_code}/submit", response_model=SubmitQuizResponse)
+@limiter.limit("5/minute")
+async def submit_quiz(
+    request: Request,
+    share_code: str,
+    body: SubmitQuizRequest,
     db: AsyncSession = Depends(get_db),
 ):
     """
     Nộp bài trắc nghiệm
     """
+    # Verify session token
+    session_result = await db.execute(
+        select(SubmissionSession).where(
+            SubmissionSession.session_token == body.session_token,
+            SubmissionSession.share_code == share_code,
+            SubmissionSession.resource_type == "quiz",
+            SubmissionSession.student_name == body.student_name,
+            SubmissionSession.student_class == body.student_class,
+        )
+    )
+    session = session_result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Phiên làm bài không hợp lệ. Vui lòng bắt đầu lại."
+        )
+    if session.expires_at and session.expires_at < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Phiên làm bài đã hết hạn. Vui lòng bắt đầu lại."
+        )
+
     # Lấy quiz
     result = await db.execute(
         select(SharedQuiz).where(SharedQuiz.share_code == share_code)
     )
     quiz = result.scalar_one_or_none()
-    
+
     if not quiz or not quiz.is_active:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Không tìm thấy bài trắc nghiệm"
         )
-    
+
     # Kiểm tra cho phép làm lại không
     if not quiz.allow_multiple_attempts:
         result = await db.execute(
             select(QuizResponse)
             .where(
                 QuizResponse.quiz_id == quiz.id,
-                QuizResponse.student_name == request.student_name,
-                QuizResponse.student_class == request.student_class,
+                QuizResponse.student_name == body.student_name,
+                QuizResponse.student_class == body.student_class,
             )
         )
         existing = result.scalar_one_or_none()
@@ -355,15 +432,16 @@ async def submit_quiz(
                 detail="Bạn đã nộp bài này rồi"
             )
     
-    # Chấm điểm
+    # Chấm điểm - CHỈ hỗ trợ multiple_choice (chọn 1 đáp án)
     questions = [QuizQuestion(**q) for q in quiz.questions]
     total_correct = 0
     correct_answers = {}
-    
+
     for q in questions:
+        student_answer = body.answers.get(q.id, "")
         correct_answers[q.id] = q.correct_answer
-        student_answer = request.answers.get(q.id, "").upper()
-        if student_answer == q.correct_answer:
+
+        if student_answer.upper() == q.correct_answer.upper():
             total_correct += 1
     
     total_questions = len(questions)
@@ -372,21 +450,22 @@ async def submit_quiz(
     # Lưu kết quả
     response = QuizResponse(
         quiz_id=quiz.id,
-        student_name=request.student_name,
-        student_class=request.student_class,
-        student_email=request.student_email,
-        answers=request.answers,
+        student_name=body.student_name,
+        student_class=body.student_class,
+        student_group=body.student_group,
+        student_email=body.student_email,
+        answers=body.answers,
         score=score,
         total_correct=total_correct,
         total_questions=total_questions,
-        time_spent=request.time_spent,
+        time_spent=body.time_spent,
     )
     
     db.add(response)
     await db.commit()
     await db.refresh(response)
     
-    logger.info(f"✅ Quiz response {response.id}: {total_correct}/{total_questions} correct")
+    logger.info(f"[OK] Quiz response {response.id}: {total_correct}/{total_questions} correct")
     
     return SubmitQuizResponse(
         response_id=response.id,
@@ -396,6 +475,88 @@ async def submit_quiz(
         percentage=round((total_correct / total_questions) * 100, 1) if total_questions > 0 else 0,
         correct_answers=correct_answers if quiz.show_correct_answers else None,
     )
+
+
+@router.get("/{quiz_id}/detail")
+async def get_quiz_detail(
+    quiz_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Lấy chi tiết quiz (bao gồm questions với đáp án đúng) - chỉ dành cho chủ sở hữu"""
+    result = await db.execute(
+        select(SharedQuiz).where(
+            SharedQuiz.id == quiz_id,
+            SharedQuiz.creator_id == current_user.id
+        )
+    )
+    quiz = result.scalar_one_or_none()
+
+    if not quiz:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy bài trắc nghiệm"
+        )
+
+    return {
+        "id": quiz.id,
+        "title": quiz.title,
+        "questions": quiz.questions,
+        "time_limit": quiz.time_limit,
+        "show_correct_answers": quiz.show_correct_answers,
+    }
+
+
+@router.patch("/{quiz_id}")
+async def update_quiz(
+    quiz_id: int,
+    request: UpdateQuizRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Cập nhật quiz (câu hỏi, tiêu đề, cài đặt)"""
+    result = await db.execute(
+        select(SharedQuiz).where(
+            SharedQuiz.id == quiz_id,
+            SharedQuiz.creator_id == current_user.id
+        )
+    )
+    quiz = result.scalar_one_or_none()
+
+    if not quiz:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy bài trắc nghiệm"
+        )
+
+    if request.title is not None:
+        quiz.title = request.title
+
+    if request.questions is not None:
+        quiz.questions = [q.dict() for q in request.questions]
+        quiz.total_questions = len(request.questions)
+        # Tạo lại content backup từ questions
+        lines = []
+        for idx, q in enumerate(request.questions, 1):
+            lines.append(f"Câu {idx}: {q.question}")
+            for key, value in q.options.items():
+                lines.append(f"{key}. {value}")
+            lines.append(f"Đáp án: {q.correct_answer}")
+            lines.append("")
+        quiz.content = "\n".join(lines)
+
+    if request.time_limit is not None:
+        quiz.time_limit = request.time_limit
+
+    if request.show_correct_answers is not None:
+        quiz.show_correct_answers = request.show_correct_answers
+
+    await db.commit()
+    await db.refresh(quiz)
+
+    logger.info(f"Updated quiz {quiz_id} by user {current_user.id}")
+
+    return {"message": "Đã cập nhật bài trắc nghiệm", "id": quiz.id}
 
 
 @router.delete("/{quiz_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -424,7 +585,7 @@ async def delete_quiz(
     await db.delete(quiz)
     await db.commit()
     
-    logger.info(f"✅ Deleted quiz {quiz_id}")
+    logger.info(f"[OK] Deleted quiz {quiz_id}")
 
 
 @router.patch("/{quiz_id}/toggle-active", response_model=SharedQuizResponse)
@@ -460,7 +621,7 @@ async def toggle_quiz_active(
     )
     response_count = count_result.scalar() or 0
     
-    logger.info(f"✅ Toggled quiz {quiz_id} active to {quiz.is_active}")
+    logger.info(f"[OK] Toggled quiz {quiz_id} active to {quiz.is_active}")
     
     return SharedQuizResponse(
         id=quiz.id,
@@ -475,6 +636,7 @@ async def toggle_quiz_active(
         show_correct_answers=quiz.show_correct_answers,
         allow_multiple_attempts=quiz.allow_multiple_attempts,
         response_count=response_count,
+        lesson_info=quiz.lesson_info,
     )
 
 
@@ -529,4 +691,81 @@ async def get_quiz_responses(
         quiz_title=quiz.title,
         total_responses=len(response_items),
         responses=response_items,
+    )
+
+
+@router.get("/{quiz_id}/statistics", response_model=QuizStatisticsResponse)
+async def get_quiz_statistics(
+    quiz_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Lấy thống kê quiz: điểm trung bình, cao nhất, thấp nhất, phân phối điểm"""
+    # Kiểm tra quyền
+    result = await db.execute(
+        select(SharedQuiz).where(
+            SharedQuiz.id == quiz_id,
+            SharedQuiz.creator_id == current_user.id
+        )
+    )
+    quiz = result.scalar_one_or_none()
+
+    if not quiz:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy bài trắc nghiệm"
+        )
+
+    # Lấy tất cả responses
+    result = await db.execute(
+        select(QuizResponse).where(QuizResponse.quiz_id == quiz_id)
+    )
+    responses = result.scalars().all()
+
+    if not responses:
+        return QuizStatisticsResponse(
+            total_responses=0,
+            average_score=0,
+            highest_score=0,
+            lowest_score=0,
+            average_time_spent=None,
+            score_distribution={"0-20": 0, "21-40": 0, "41-60": 0, "61-80": 0, "81-100": 0},
+        )
+
+    # Tính percentages cho từng response
+    percentages = []
+    time_spent_list = []
+    for r in responses:
+        pct = round((r.total_correct / r.total_questions) * 100, 1) if r.total_questions > 0 else 0
+        percentages.append(pct)
+        if r.time_spent is not None:
+            time_spent_list.append(r.time_spent)
+
+    # Thống kê
+    avg_score = round(sum(percentages) / len(percentages), 1)
+    highest = max(percentages)
+    lowest = min(percentages)
+    avg_time = round(sum(time_spent_list) / len(time_spent_list)) if time_spent_list else None
+
+    # Phân phối điểm
+    dist = {"0-20": 0, "21-40": 0, "41-60": 0, "61-80": 0, "81-100": 0}
+    for pct in percentages:
+        if pct <= 20:
+            dist["0-20"] += 1
+        elif pct <= 40:
+            dist["21-40"] += 1
+        elif pct <= 60:
+            dist["41-60"] += 1
+        elif pct <= 80:
+            dist["61-80"] += 1
+        else:
+            dist["81-100"] += 1
+
+    return QuizStatisticsResponse(
+        total_responses=len(responses),
+        average_score=avg_score,
+        highest_score=highest,
+        lowest_score=lowest,
+        average_time_spent=avg_time,
+        score_distribution=dist,
     )

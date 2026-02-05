@@ -185,7 +185,7 @@ const WorksheetManagementPage: React.FC = () => {
               Chưa có phiếu học tập nào
             </h3>
             <p className="text-gray-600 dark:text-gray-400">
-              Tạo giáo án và chia sẻ phiếu học tập để bắt đầu
+              Tạo KHBD và chia sẻ phiếu học tập để bắt đầu
             </p>
           </div>
         ) : (

@@ -1,3 +1,33 @@
-from . import auth, roles, users, categories, documents, chat, lesson_builder, shared_worksheets, shared_quizzes
+from . import (
+    admin,
+    auth,
+    roles,
+    users,
+    chat,
+    lesson_builder,
+    shared_worksheets,
+    shared_quizzes,
+    code_exercises,
+    lesson_contents,
+    classrooms,
+    assignments,
+    student,
+    peer_review,
+)
 
-__all__ = ["auth", "roles", "users", "categories", "documents", "chat", "lesson_builder", "shared_worksheets", "shared_quizzes"]
+__all__ = [
+    "admin",
+    "auth",
+    "roles",
+    "users",
+    "chat",
+    "lesson_builder",
+    "shared_worksheets",
+    "shared_quizzes",
+    "code_exercises",
+    "lesson_contents",
+    "classrooms",
+    "assignments",
+    "student",
+    "peer_review",
+]

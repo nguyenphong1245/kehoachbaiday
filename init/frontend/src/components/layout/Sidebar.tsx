@@ -1,10 +1,11 @@
 import React, { useState } from 'react'
-import { Home, Folder, FileText, PanelLeftOpen, PanelLeftClose, X } from 'lucide-react'
+import { useLocation } from 'react-router-dom'
+import { LayoutDashboard, Users, PanelLeftOpen, PanelLeftClose, X, School } from 'lucide-react'
 
 const items = [
-  { key: 'home', label: 'Trang chủ', href: '/admin', icon: Home },
-  { key: 'categories', label: 'Danh mục', href: '/admin/categories', icon: Folder },
-  { key: 'documents', label: 'Tài liệu', href: '/admin/documents', icon: FileText },
+  { key: 'dashboard', label: 'Tổng quan', href: '/admin', icon: LayoutDashboard },
+  { key: 'users', label: 'Tài khoản', href: '/admin/users', icon: Users },
+  { key: 'teachers', label: 'Lớp học', href: '/admin/teachers', icon: School },
 ]
 type SidebarContentProps = {
   expanded: boolean
@@ -12,10 +13,16 @@ type SidebarContentProps = {
 }
 
 const SidebarContent: React.FC<SidebarContentProps> = ({ expanded, setExpanded }) => {
+  const location = useLocation()
+  const isActive = (href: string) => {
+    if (href === '/admin') return location.pathname === '/admin'
+    return location.pathname.startsWith(href)
+  }
+
   return (
     <>
       <div className="h-16 flex items-center justify-center">
-        <img src="/src/assets/favicon.ico" alt="Logo" className="h-10 w-10" />
+        <img src="/favicon.ico" alt="Logo" className="h-10 w-10" />
         {expanded && (
           <span className="ml-2 text-lg font-semibold text-gray-800 dark:text-gray-200">Admin</span>
         )}
@@ -24,14 +31,15 @@ const SidebarContent: React.FC<SidebarContentProps> = ({ expanded, setExpanded }
         <ul className="space-y-1.5 flex flex-col items-center xl:items-stretch">
           {items.map((it) => {
             const Icon = it.icon as any
+            const active = isActive(it.href)
             return (
               <li key={it.key} className="w-full">
                 <a
                   href={it.href}
-                  className={`group flex items-center gap-3 px-3 py-3 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 ${expanded ? 'justify-start' : 'justify-center'}`}
+                  className={`group flex items-center gap-3 px-3 py-3 rounded-md transition-colors ${expanded ? 'justify-start' : 'justify-center'} ${active ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'}`}
                 >
-                  <Icon className="h-5 w-5 text-gray-600 dark:text-gray-300" />
-                  {expanded && <span className="ml-1 text-gray-800 dark:text-gray-200">{it.label}</span>}
+                  <Icon className={`h-5 w-5 ${active ? 'text-blue-600 dark:text-blue-400' : ''}`} />
+                  {expanded && <span className={`ml-1 ${active ? 'font-medium' : ''}`}>{it.label}</span>}
                 </a>
               </li>
             )

@@ -1,15 +1,16 @@
 import { useCallback, useState } from "react";
 import axios from "axios";
 
-import type { AuthResponse, LoginPayload, RegisterPayload, User } from "@/types/auth";
-import { loginUser, registerUser } from "@/services/authService";
+import type { LoginPayload, LoginResponse, RegisterPayload, StudentLoginPayload, User } from "@/types/auth";
+import { loginUser, registerUser, studentLoginUser } from "@/services/authService";
 import { getUserSettings } from "@/services/accountService";
-import { setStoredAccessToken, setStoredAuthUser } from "@/utils/authStorage";
+import { setStoredAuthUser } from "@/utils/authStorage";
 import { useTheme } from "@/contexts/Theme";
 
 interface UseAuthResult {
   register: (payload: RegisterPayload) => Promise<User>;
-  login: (payload: LoginPayload) => Promise<AuthResponse>;
+  login: (payload: LoginPayload) => Promise<LoginResponse>;
+  studentLogin: (payload: StudentLoginPayload) => Promise<LoginResponse>;
   isLoading: boolean;
   error: string | null;
   resetError: () => void;
@@ -24,7 +25,11 @@ const useAuth = (): UseAuthResult => {
     if (axios.isAxiosError(err)) {
       const detail = err.response?.data?.detail;
       if (detail) {
-        setError(Array.isArray(detail) ? detail.join(", ") : String(detail));
+        if (Array.isArray(detail)) {
+          setError(detail.map((d: { msg?: string }) => d.msg ?? String(d)).join(", "));
+        } else {
+          setError(String(detail));
+        }
         return;
       }
     }
@@ -50,15 +55,15 @@ const useAuth = (): UseAuthResult => {
     setError(null);
     try {
       const response = await loginUser(payload);
-      setStoredAccessToken(response.access_token);
-      
+      // Tokens are now in httpOnly cookies — only store user data
+
       // Load user settings và áp dụng theme
       try {
         const settings = await getUserSettings(response.user.id);
         // Cập nhật user với settings
         const userWithSettings = { ...response.user, settings };
         setStoredAuthUser(userWithSettings);
-        
+
         // Áp dụng theme từ settings của user
         if (settings.theme) {
           setTheme(settings.theme as "light" | "dark" | "system");
@@ -67,7 +72,7 @@ const useAuth = (): UseAuthResult => {
         // Nếu không load được settings, vẫn lưu user
         setStoredAuthUser(response.user);
       }
-      
+
       return response;
     } catch (err) {
       parseError(err);
@@ -77,11 +82,27 @@ const useAuth = (): UseAuthResult => {
     }
   }, [parseError, setTheme]);
 
+  const studentLogin = useCallback(async (payload: StudentLoginPayload) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await studentLoginUser(payload);
+      setStoredAuthUser(response.user);
+      return response;
+    } catch (err) {
+      parseError(err);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [parseError]);
+
   const resetError = useCallback(() => setError(null), []);
 
   return {
     register,
     login,
+    studentLogin,
     isLoading,
     error,
     resetError,
@@ -90,4 +111,4 @@ const useAuth = (): UseAuthResult => {
 
 export default useAuth;
 
-export { clearStoredAuth, getStoredAccessToken, getStoredAuthUser } from "@/utils/authStorage";
+export { clearStoredAuth, getStoredAuthUser } from "@/utils/authStorage";
