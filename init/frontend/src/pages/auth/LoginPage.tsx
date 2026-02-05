@@ -61,7 +61,7 @@ const LoginPage = () => {
           name="credential"
           type="text"
           autoComplete="username"
-          placeholder="email@example.com hoặc hs_xxx"
+          placeholder="email@example.com"
           value={credential}
           onChange={(event) => setCredential(event.target.value)}
           required
@@ -86,6 +86,9 @@ const LoginPage = () => {
         </span>
         <span>
           Cần email xác minh? <Link to="/resend-verification">Gửi lại xác minh</Link>
+        </span>
+        <span className="mt-2 border-t pt-3">
+          Chưa có tài khoản? <Link className="font-medium text-brand" to="/register">Đăng ký ngay</Link>
         </span>
       </div>
     </AuthCard>
