@@ -47,21 +47,24 @@ const ICON_MAP: Record<string, React.FC<{ className?: string }>> = {
 };
 
 /* ---------- Convert any YouTube URL to embed format ---------- */
-const toYouTubeEmbed = (url: string): string => {
+const toYouTubeEmbed = (url: string): string | null => {
   try {
     const u = new URL(url);
     let videoId = "";
     if (u.hostname === "youtu.be") {
       videoId = u.pathname.slice(1);
     } else if (u.hostname.includes("youtube.com")) {
-      if (u.pathname.startsWith("/embed/")) return url; // already embed
-      videoId = u.searchParams.get("v") || "";
+      if (u.pathname.startsWith("/embed/")) {
+        videoId = u.pathname.replace("/embed/", "");
+      } else {
+        videoId = u.searchParams.get("v") || "";
+      }
     }
-    return videoId
-      ? `https://www.youtube.com/embed/${videoId}`
-      : url;
+    // Reject placeholder or invalid video IDs
+    if (!videoId || videoId === "VIDEO_ID" || videoId.length < 5) return null;
+    return `https://www.youtube.com/embed/${videoId}`;
   } catch {
-    return url;
+    return null;
   }
 };
 
@@ -343,12 +346,12 @@ const UserGuidePage: React.FC = () => {
                 dangerouslySetInnerHTML={{ __html: sanitizeHTML(marked.parse(activeCard.content_html) as string) }}
               />
 
-              {/* Video iframe (if video card) */}
-              {activeCard.video_url && (
+              {/* Video iframe (if video card with valid URL) */}
+              {activeCard.video_url && toYouTubeEmbed(activeCard.video_url) && (
                 <div className="aspect-video rounded-lg overflow-hidden bg-stone-100 dark:bg-stone-700 mt-4">
                   <iframe
                     className="w-full h-full"
-                    src={toYouTubeEmbed(activeCard.video_url)}
+                    src={toYouTubeEmbed(activeCard.video_url)!}
                     title="Video hướng dẫn sử dụng"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen

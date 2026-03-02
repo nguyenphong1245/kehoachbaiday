@@ -75,6 +75,7 @@ class GroupMemberInfo(BaseModel):
     student_id: int
     full_name: str
     student_code: Optional[str] = None
+    is_leader: bool = False
 
 
 class MyGroupInfo(BaseModel):
@@ -154,39 +155,46 @@ async def _get_submission_status(
     assignment: ClassAssignment, student: ClassStudent, db: AsyncSession
 ) -> str:
     """Get the submission status for a student on an assignment"""
-    if assignment.work_type == "group":
-        # Find the student's group in this classroom
-        group_result = await db.execute(
-            select(GroupMember.group_id).where(
-                GroupMember.student_id == student.id
+    try:
+        if assignment.work_type == "group":
+            # Find the student's groups in this classroom only
+            group_result = await db.execute(
+                select(GroupMember.group_id)
+                .join(StudentGroup, GroupMember.group_id == StudentGroup.id)
+                .where(
+                    GroupMember.student_id == student.id,
+                    StudentGroup.classroom_id == assignment.classroom_id,
+                )
             )
-        )
-        group_ids = [r for r in group_result.scalars().all()]
-        if not group_ids:
-            return "not_started"
+            group_ids = [r for r in group_result.scalars().all()]
+            if not group_ids:
+                return "not_started"
 
-        # Check if there's a work session for any of the student's groups
-        ws_result = await db.execute(
-            select(GroupWorkSession.status).where(
-                GroupWorkSession.assignment_id == assignment.id,
-                GroupWorkSession.group_id.in_(group_ids),
+            # Check if there's a work session for any of the student's groups
+            ws_result = await db.execute(
+                select(GroupWorkSession.status).where(
+                    GroupWorkSession.assignment_id == assignment.id,
+                    GroupWorkSession.group_id.in_(group_ids),
+                )
             )
-        )
-        ws_status = ws_result.scalar_one_or_none()
-        if not ws_status:
-            return "not_started"
-        return ws_status
-    else:
-        sub_result = await db.execute(
-            select(IndividualSubmission.status).where(
-                IndividualSubmission.assignment_id == assignment.id,
-                IndividualSubmission.student_id == student.id,
+            ws_status = ws_result.scalars().first()
+            if not ws_status:
+                return "not_started"
+            return ws_status
+        else:
+            sub_result = await db.execute(
+                select(IndividualSubmission.status).where(
+                    IndividualSubmission.assignment_id == assignment.id,
+                    IndividualSubmission.student_id == student.id,
+                )
             )
-        )
-        sub_status = sub_result.scalar_one_or_none()
-        if not sub_status:
-            return "not_started"
-        return sub_status
+            sub_status = sub_result.scalar_one_or_none()
+            if not sub_status:
+                return "not_started"
+            return sub_status
+    except Exception as e:
+        logger.error(f"Error getting submission status for assignment {assignment.id}, student {student.id}: {e}")
+        return "not_started"
 
 
 # ==================== Routes ====================
@@ -399,16 +407,7 @@ async def _get_my_group_for_assignment(
     for membership in memberships:
         group = membership.group
         if group.classroom_id == assignment.classroom_id:
-            members_info = [
-                GroupMemberInfo(
-                    student_id=m.student_id,
-                    full_name=m.student.full_name if m.student else "",
-                    student_code=m.student.student_code if m.student else None,
-                )
-                for m in group.members
-            ]
-
-            # Check for existing work session
+            # Check for existing work session to get leader_id
             ws_result = await db.execute(
                 select(GroupWorkSession).where(
                     GroupWorkSession.assignment_id == assignment.id,
@@ -416,6 +415,17 @@ async def _get_my_group_for_assignment(
                 )
             )
             ws = ws_result.scalar_one_or_none()
+            leader_id = ws.leader_id if ws else None
+
+            members_info = [
+                GroupMemberInfo(
+                    student_id=m.student_id,
+                    full_name=m.student.full_name if m.student else "",
+                    student_code=m.student.student_code if m.student else None,
+                    is_leader=(m.student_id == leader_id) if leader_id else False,
+                )
+                for m in group.members
+            ]
 
             return MyGroupInfo(
                 group_id=group.id,

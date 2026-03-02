@@ -236,7 +236,7 @@ CARDS = [
         "description": "Xem video hướng dẫn chi tiết",
         "sort_order": 7,
         "is_active": True,
-        "video_url": "https://www.youtube.com/embed/VIDEO_ID",
+        "video_url": None,
         "content_html": '<p>Video hướng dẫn chi tiết các chức năng của hệ thống:</p>',
     },
 ]
