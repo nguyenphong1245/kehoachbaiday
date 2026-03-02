@@ -307,21 +307,21 @@ export const TableContextMenu: React.FC<{
     <div
       ref={menuRef}
       style={adjustedStyle}
-      className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-xl py-1 min-w-[200px]"
+      className="bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-600 rounded-lg shadow-xl py-1 min-w-[200px]"
     >
-      <div className="px-3 py-1.5 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider border-b border-gray-100 dark:border-gray-700 flex items-center gap-1.5">
+      <div className="px-3 py-1.5 text-xs font-semibold text-stone-400 dark:text-stone-500 uppercase tracking-wider border-b border-stone-100 dark:border-stone-700 flex items-center gap-1.5">
         <Rows className="w-3 h-3" /> Hàng
       </div>
       {TABLE_CONTEXT_ITEMS.slice(0, 2).map((item) => (
         <button
           key={item.action}
-          className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 flex items-center gap-2 transition-colors"
+          className="w-full px-3 py-2 text-left text-sm text-stone-700 dark:text-stone-300 hover:bg-sky-50 dark:hover:bg-sky-900/30 flex items-center gap-2 transition-colors"
           onClick={() => {
             onAction(item.action, cell);
             onClose();
           }}
         >
-          <item.icon className="w-4 h-4 text-blue-500" />
+          <item.icon className="w-4 h-4 text-brand" />
           {item.label}
         </button>
       ))}
@@ -336,19 +336,19 @@ export const TableContextMenu: React.FC<{
         Xóa hàng
       </button>
 
-      <div className="px-3 py-1.5 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider border-y border-gray-100 dark:border-gray-700 flex items-center gap-1.5 mt-1">
+      <div className="px-3 py-1.5 text-xs font-semibold text-stone-400 dark:text-stone-500 uppercase tracking-wider border-y border-stone-100 dark:border-stone-700 flex items-center gap-1.5 mt-1">
         <Columns className="w-3 h-3" /> Cột
       </div>
       {TABLE_CONTEXT_ITEMS.slice(2, 4).map((item) => (
         <button
           key={item.action}
-          className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 flex items-center gap-2 transition-colors"
+          className="w-full px-3 py-2 text-left text-sm text-stone-700 dark:text-stone-300 hover:bg-sky-50 dark:hover:bg-sky-900/30 flex items-center gap-2 transition-colors"
           onClick={() => {
             onAction(item.action, cell);
             onClose();
           }}
         >
-          <item.icon className="w-4 h-4 text-blue-500" />
+          <item.icon className="w-4 h-4 text-brand" />
           {item.label}
         </button>
       ))}
@@ -363,37 +363,37 @@ export const TableContextMenu: React.FC<{
         Xóa cột
       </button>
 
-      <div className="px-3 py-1.5 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider border-y border-gray-100 dark:border-gray-700 flex items-center gap-1.5 mt-1">
+      <div className="px-3 py-1.5 text-xs font-semibold text-stone-400 dark:text-stone-500 uppercase tracking-wider border-y border-stone-100 dark:border-stone-700 flex items-center gap-1.5 mt-1">
         <AlignCenter className="w-3 h-3" /> Căn chỉnh
       </div>
       <button
-        className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 flex items-center gap-2 transition-colors"
+        className="w-full px-3 py-2 text-left text-sm text-stone-700 dark:text-stone-300 hover:bg-sky-50 dark:hover:bg-sky-900/30 flex items-center gap-2 transition-colors"
         onClick={() => {
           onAction("alignLeft", cell);
           onClose();
         }}
       >
-        <AlignLeft className="w-4 h-4 text-blue-500" />
+        <AlignLeft className="w-4 h-4 text-brand" />
         Căn trái
       </button>
       <button
-        className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 flex items-center gap-2 transition-colors"
+        className="w-full px-3 py-2 text-left text-sm text-stone-700 dark:text-stone-300 hover:bg-sky-50 dark:hover:bg-sky-900/30 flex items-center gap-2 transition-colors"
         onClick={() => {
           onAction("alignCenter", cell);
           onClose();
         }}
       >
-        <AlignCenter className="w-4 h-4 text-blue-500" />
+        <AlignCenter className="w-4 h-4 text-brand" />
         Căn giữa
       </button>
       <button
-        className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 flex items-center gap-2 transition-colors"
+        className="w-full px-3 py-2 text-left text-sm text-stone-700 dark:text-stone-300 hover:bg-sky-50 dark:hover:bg-sky-900/30 flex items-center gap-2 transition-colors"
         onClick={() => {
           onAction("alignRight", cell);
           onClose();
         }}
       >
-        <AlignRight className="w-4 h-4 text-blue-500" />
+        <AlignRight className="w-4 h-4 text-brand" />
         Căn phải
       </button>
     </div>
@@ -413,10 +413,10 @@ export const TableGridPicker: React.FC<{
 
   return (
     <div
-      className="absolute top-full left-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-xl p-3 z-[60]"
+      className="absolute top-full left-0 mt-1 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-600 rounded-lg shadow-xl p-3 z-[60]"
       onMouseLeave={onClose}
     >
-      <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 text-center">
+      <p className="text-xs text-stone-500 dark:text-stone-400 mb-2 text-center">
         {hoverRow > 0 ? `${hoverRow} × ${hoverCol}` : "Chọn kích thước bảng"}
       </p>
       <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${maxCols}, 1fr)` }}>
@@ -429,8 +429,8 @@ export const TableGridPicker: React.FC<{
               key={idx}
               className={`w-5 h-5 border rounded-sm cursor-pointer transition-colors ${
                 isHighlighted
-                  ? "bg-blue-500 border-blue-600"
-                  : "bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-500 hover:bg-blue-100 dark:hover:bg-blue-900/30"
+                  ? "bg-brand border-brand"
+                  : "bg-stone-100 dark:bg-stone-700 border-stone-300 dark:border-stone-500 hover:bg-sky-100 dark:hover:bg-sky-900/30"
               }`}
               onMouseEnter={() => {
                 setHoverRow(r);
@@ -459,10 +459,10 @@ export const ColorPickerPopup: React.FC<{
 }> = ({ colors, onSelect, onClose, title }) => {
   return (
     <div
-      className="absolute top-full left-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-xl p-3 z-[60]"
+      className="absolute top-full left-0 mt-1 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-600 rounded-lg shadow-xl p-3 z-[60]"
       onMouseLeave={onClose}
     >
-      <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 text-center font-medium">{title}</p>
+      <p className="text-xs text-stone-500 dark:text-stone-400 mb-2 text-center font-medium">{title}</p>
       <div
         className="grid gap-1"
         style={{
@@ -478,7 +478,7 @@ export const ColorPickerPopup: React.FC<{
               onSelect(c.color);
               onClose();
             }}
-            className="w-5 h-5 border border-gray-400 dark:border-gray-500 hover:border-gray-800 dark:hover:border-white hover:border-2 transition-all cursor-pointer"
+            className="w-5 h-5 border border-stone-400 dark:border-stone-500 hover:border-stone-800 dark:hover:border-white hover:border-2 transition-all cursor-pointer"
             style={{
               backgroundColor: c.color === "transparent" ? "#fff" : c.color,
               boxSizing: 'border-box'
@@ -810,7 +810,7 @@ export const TableCornerMenu: React.FC<TableCornerMenuProps> = ({
       {showMenu && (
         <div
           ref={menuRef}
-          className="absolute bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-xl px-1 py-1 flex items-center gap-0.5"
+          className="absolute bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-600 rounded-lg shadow-xl px-1 py-1 flex items-center gap-0.5"
           style={{
             left: tableLeft,
             top: tableTop - 44,
@@ -818,9 +818,9 @@ export const TableCornerMenu: React.FC<TableCornerMenuProps> = ({
           }}
         >
           {/* Hàng buttons */}
-          <div className="flex items-center border-r border-gray-200 dark:border-gray-600 pr-1 mr-0.5">
+          <div className="flex items-center border-r border-stone-200 dark:border-stone-600 pr-1 mr-0.5">
             <button
-              className="p-1.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+              className="p-1.5 rounded hover:bg-sky-50 dark:hover:bg-sky-900/30 text-stone-600 dark:text-stone-400 hover:text-brand dark:hover:text-sky-400 transition-colors"
               onClick={() => handleAction('addRowAbove')}
               title="Thêm hàng phía trên"
             >
@@ -830,7 +830,7 @@ export const TableCornerMenu: React.FC<TableCornerMenuProps> = ({
               </svg>
             </button>
             <button
-              className="p-1.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+              className="p-1.5 rounded hover:bg-sky-50 dark:hover:bg-sky-900/30 text-stone-600 dark:text-stone-400 hover:text-brand dark:hover:text-sky-400 transition-colors"
               onClick={() => handleAction('addRowBelow')}
               title="Thêm hàng phía dưới"
             >
@@ -840,7 +840,7 @@ export const TableCornerMenu: React.FC<TableCornerMenuProps> = ({
               </svg>
             </button>
             <button
-              className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/30 text-gray-600 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+              className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/30 text-stone-600 dark:text-stone-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
               onClick={() => handleAction('deleteRow')}
               title="Xóa hàng"
             >
@@ -852,9 +852,9 @@ export const TableCornerMenu: React.FC<TableCornerMenuProps> = ({
           </div>
 
           {/* Cột buttons */}
-          <div className="flex items-center border-r border-gray-200 dark:border-gray-600 pr-1 mr-0.5">
+          <div className="flex items-center border-r border-stone-200 dark:border-stone-600 pr-1 mr-0.5">
             <button
-              className="p-1.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+              className="p-1.5 rounded hover:bg-sky-50 dark:hover:bg-sky-900/30 text-stone-600 dark:text-stone-400 hover:text-brand dark:hover:text-sky-400 transition-colors"
               onClick={() => handleAction('addColLeft')}
               title="Thêm cột bên trái"
             >
@@ -864,7 +864,7 @@ export const TableCornerMenu: React.FC<TableCornerMenuProps> = ({
               </svg>
             </button>
             <button
-              className="p-1.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+              className="p-1.5 rounded hover:bg-sky-50 dark:hover:bg-sky-900/30 text-stone-600 dark:text-stone-400 hover:text-brand dark:hover:text-sky-400 transition-colors"
               onClick={() => handleAction('addColRight')}
               title="Thêm cột bên phải"
             >
@@ -874,7 +874,7 @@ export const TableCornerMenu: React.FC<TableCornerMenuProps> = ({
               </svg>
             </button>
             <button
-              className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/30 text-gray-600 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+              className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/30 text-stone-600 dark:text-stone-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
               onClick={() => handleAction('deleteCol')}
               title="Xóa cột"
             >
@@ -886,23 +886,23 @@ export const TableCornerMenu: React.FC<TableCornerMenuProps> = ({
           </div>
 
           {/* Căn chỉnh bảng buttons */}
-          <div className="flex items-center border-r border-gray-200 dark:border-gray-600 pr-1 mr-0.5">
+          <div className="flex items-center border-r border-stone-200 dark:border-stone-600 pr-1 mr-0.5">
             <button
-              className="p-1.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+              className="p-1.5 rounded hover:bg-sky-50 dark:hover:bg-sky-900/30 text-stone-600 dark:text-stone-400 hover:text-brand dark:hover:text-sky-400 transition-colors"
               onClick={() => handleAction('alignTableLeft')}
               title="Căn trái bảng"
             >
               <AlignLeft className="w-4 h-4" />
             </button>
             <button
-              className="p-1.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+              className="p-1.5 rounded hover:bg-sky-50 dark:hover:bg-sky-900/30 text-stone-600 dark:text-stone-400 hover:text-brand dark:hover:text-sky-400 transition-colors"
               onClick={() => handleAction('alignTableCenter')}
               title="Căn giữa bảng"
             >
               <AlignCenter className="w-4 h-4" />
             </button>
             <button
-              className="p-1.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+              className="p-1.5 rounded hover:bg-sky-50 dark:hover:bg-sky-900/30 text-stone-600 dark:text-stone-400 hover:text-brand dark:hover:text-sky-400 transition-colors"
               onClick={() => handleAction('alignTableRight')}
               title="Căn phải bảng"
             >

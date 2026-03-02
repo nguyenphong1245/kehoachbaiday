@@ -4,7 +4,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  FileText,
   Search,
   Trash2,
   Eye,
@@ -92,15 +91,15 @@ const SavedLessonPlansPage: React.FC = () => {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-slate-50 dark:bg-slate-900">
+    <div className="h-screen flex flex-col bg-stone-50 dark:bg-stone-900">
       {/* Header - Giống trang chủ */}
-      <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+      <header className="bg-white dark:bg-stone-800 border-b border-stone-200 dark:border-stone-700">
         <div className="px-5 py-2.5 flex items-center justify-between">
           {/* Breadcrumb */}
           <div className="flex items-center gap-1.5 text-sm">
-            <span className="text-slate-500 dark:text-slate-400">Kế hoạch bài dạy</span>
-            <ChevronRight className="w-4 h-4 text-slate-300" />
-            <span className="text-slate-700 dark:text-slate-300 font-medium">KHBD đã lưu</span>
+            <span className="text-stone-500 dark:text-stone-400">Kế hoạch bài dạy</span>
+            <ChevronRight className="w-4 h-4 text-stone-300" />
+            <span className="text-stone-700 dark:text-stone-300 font-medium">KHBD đã lưu</span>
           </div>
 
         </div>
@@ -109,21 +108,10 @@ const SavedLessonPlansPage: React.FC = () => {
       {/* Main Content */}
       <div className="flex-1 overflow-auto">
         <div className="max-w-5xl mx-auto px-4 py-6">
-          {/* Page Header */}
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-3">
-              <FileText className="w-7 h-7 text-blue-500" />
-              KHBD đã lưu
-            </h1>
-            <p className="mt-1 text-slate-600 dark:text-slate-400">
-              Xem lại và quản lý các KHBD đã tạo
-            </p>
-          </div>
-
           {/* Search */}
           <div className="mb-5">
             <div className="relative max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
               <input
                 type="text"
                 placeholder="Tìm kiếm theo tên bài..."
@@ -132,7 +120,7 @@ const SavedLessonPlansPage: React.FC = () => {
                   setSearchQuery(e.target.value);
                   setPage(1);
                 }}
-                className="w-full pl-9 pr-4 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-800 dark:text-white text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full pl-9 pr-4 py-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-stone-800 dark:text-white text-sm focus:ring-1 focus:ring-brand focus:border-brand"
               />
             </div>
           </div>
@@ -148,19 +136,19 @@ const SavedLessonPlansPage: React.FC = () => {
           {/* Content */}
           {isLoading ? (
             <div className="flex items-center justify-center py-16">
-              <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
+              <Loader2 className="w-6 h-6 text-brand animate-spin" />
             </div>
           ) : lessonPlans.length === 0 ? (
             <div className="text-center py-16">
-              <FolderOpen className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-              <p className="text-slate-500 dark:text-slate-400">
+              <FolderOpen className="w-12 h-12 text-stone-300 dark:text-stone-600 mx-auto mb-3" />
+              <p className="text-stone-500 dark:text-stone-400">
                 {searchQuery
                   ? "Không tìm thấy KHBD nào"
                   : "Chưa có KHBD nào được lưu"}
               </p>
               <button
                 onClick={() => navigate("/lesson-builder")}
-                className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
+                className="mt-4 px-4 py-2 bg-brand text-white text-sm rounded-md hover:bg-brand-dark transition-colors"
               >
                 Tạo KHBD mới
               </button>
@@ -168,7 +156,7 @@ const SavedLessonPlansPage: React.FC = () => {
           ) : (
             <>
               {/* Stats */}
-              <div className="mb-3 text-sm text-slate-500 dark:text-slate-400">
+              <div className="mb-3 text-sm text-stone-500 dark:text-stone-400">
                 Tổng cộng {total} KHBD
               </div>
 
@@ -177,14 +165,14 @@ const SavedLessonPlansPage: React.FC = () => {
                 {lessonPlans.map((plan) => (
                   <div
                     key={plan.id}
-                    className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 hover:border-blue-300 dark:hover:border-blue-700 transition-colors"
+                    className="bg-white dark:bg-stone-800 rounded-lg border border-stone-200 dark:border-stone-700 p-4 hover:border-sky-300 dark:hover:border-sky-700 transition-colors"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
-                        <h3 className="text-base font-semibold text-slate-800 dark:text-white mb-1.5">
+                        <h3 className="text-base font-semibold text-stone-800 dark:text-white mb-1.5">
                           {plan.lesson_name}
                         </h3>
-                        <div className="flex flex-wrap gap-3 text-sm text-slate-600 dark:text-slate-400">
+                        <div className="flex flex-wrap gap-3 text-sm text-stone-600 dark:text-stone-400">
                           <span className="flex items-center gap-1">
                             <GraduationCap className="w-3.5 h-3.5" />
                             Lớp {plan.grade}
@@ -196,7 +184,7 @@ const SavedLessonPlansPage: React.FC = () => {
                         </div>
                         {plan.topic && (
                           <div className="mt-2">
-                            <span className="inline-block px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs rounded">
+                            <span className="inline-block px-2 py-0.5 bg-sky-100 dark:bg-sky-900/30 text-brand-dark dark:text-sky-300 text-xs rounded">
                               {plan.topic}
                             </span>
                           </div>
@@ -205,7 +193,7 @@ const SavedLessonPlansPage: React.FC = () => {
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => handleView(plan.id)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-md transition-colors"
+                          className="p-2 text-brand hover:bg-sky-50 dark:hover:bg-sky-900/30 rounded-md transition-colors"
                           title="Xem chi tiết"
                         >
                           <Eye className="w-4 h-4" />
@@ -234,17 +222,17 @@ const SavedLessonPlansPage: React.FC = () => {
                   <button
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                     disabled={page === 1}
-                    className="p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="p-2 text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
-                  <span className="px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300">
+                  <span className="px-3 py-1.5 text-sm text-stone-700 dark:text-stone-300">
                     Trang {page} / {totalPages}
                   </span>
                   <button
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                     disabled={page === totalPages}
-                    className="p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="p-2 text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </button>

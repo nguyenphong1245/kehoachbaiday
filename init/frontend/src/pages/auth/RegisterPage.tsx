@@ -37,7 +37,7 @@ const RegisterPage = () => {
 
   return (
     <AuthCard
-      title="Tạo tài khoản"
+      title="ĐĂNG KÝ"
       description={
         <span>
           Đã có tài khoản? <Link to="/login">Đăng nhập</Link>
@@ -45,9 +45,6 @@ const RegisterPage = () => {
       }
     >
       <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Sau khi đăng ký, chúng tôi sẽ gửi email xác minh. Hoàn thành bước đó trước khi đăng nhập.
-        </p>
         {localError ? <FormAlert>{localError}</FormAlert> : null}
         {error ? <FormAlert>{error}</FormAlert> : null}
         {success ? <FormAlert variant="success">{success}</FormAlert> : null}
@@ -81,11 +78,8 @@ const RegisterPage = () => {
           onChange={(event) => setConfirmPassword(event.target.value)}
           required
         />
-        <SubmitButton label="Tạo tài khoản" isLoading={isLoading} />
+        <SubmitButton label="Đăng ký" isLoading={isLoading} />
       </form>
-      <div className="mt-4 text-center text-sm text-slate-500 dark:text-slate-400">
-        Chưa nhận được email? <Link to="/resend-verification">Gửi lại xác minh</Link>
-      </div>
     </AuthCard>
   );
 };

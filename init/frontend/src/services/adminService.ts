@@ -95,3 +95,62 @@ export const updateTokenBalance = async (
   });
   return data;
 };
+
+// ============== GUIDE CARDS ==============
+
+export interface GuideCardPublic {
+  id: number;
+  card_key: string;
+  icon_name: string;
+  color: string;
+  icon_color: string;
+  title: string;
+  description: string;
+  content_html: string;
+  video_url: string | null;
+  sort_order: number;
+}
+
+export interface GuideCardAdmin extends GuideCardPublic {
+  is_active: boolean;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface GuideCardUpdatePayload {
+  title?: string;
+  description?: string;
+  content_html?: string;
+  video_url?: string | null;
+  icon_name?: string;
+  color?: string;
+  icon_color?: string;
+  is_active?: boolean;
+}
+
+export const getPublicGuideCards = async (): Promise<GuideCardPublic[]> => {
+  const { data } = await api.get("/guide-cards/");
+  return data;
+};
+
+export const getAdminGuideCards = async (): Promise<GuideCardAdmin[]> => {
+  const { data } = await api.get("/guide-cards/admin/all");
+  return data;
+};
+
+export const updateGuideCard = async (
+  cardId: number,
+  payload: GuideCardUpdatePayload
+): Promise<GuideCardAdmin> => {
+  const { data } = await api.put(`/guide-cards/admin/${cardId}`, payload);
+  return data;
+};
+
+export const reorderGuideCards = async (
+  cardIds: number[]
+): Promise<GuideCardAdmin[]> => {
+  const { data } = await api.put("/guide-cards/admin/reorder", {
+    card_ids: cardIds,
+  });
+  return data;
+};

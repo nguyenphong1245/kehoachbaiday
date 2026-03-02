@@ -4,7 +4,7 @@ API Routes cho Lesson Plan Builder - Giao diện mới cho việc soạn kế ho
 from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
 from fastapi.responses import StreamingResponse
 from typing import Optional
-from sqlalchemy import select, func
+from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 import json
 import asyncio
@@ -23,6 +23,7 @@ from app.schemas.lesson_plan_builder import (
     GenerateLessonPlanBuilderResponse,
     StaticDataResponse,
     TopicsResponse,
+    SubjectsResponse,
     SaveLessonPlanRequest,
     SaveLessonPlanResponse,
     SavedLessonPlanRead,
@@ -33,6 +34,9 @@ from app.schemas.lesson_plan_builder import (
     UpdateLessonPlanRequest,
     GenerateMindmapRequest,
     GenerateMindmapResponse,
+    NLSMienNangLucResponse,
+    NLSNangLucThanhPhanResponse,
+    NLSChiBaoResponse,
 )
 from app.services.lesson_plan_builder_service import get_lesson_plan_builder_service
 from app.services.response_parser import parse_response_to_sections
@@ -40,6 +44,41 @@ from app.prompts.lesson_plan_generation import build_teacher_preferences_section
 from app.utils.prompt_sanitize import sanitize_prompt_input
 
 router = APIRouter()
+
+# Token tracking constants
+_LESSON_PLAN_RESERVE_TOKENS = 5000  # Reserve more tokens for lesson plan generation
+_IMPROVE_RESERVE_TOKENS = 1000      # Reserve for section improvement
+_MINDMAP_RESERVE_TOKENS = 500       # Reserve for mindmap generation
+
+
+async def _deduct_tokens(session: AsyncSession, user_id: int, amount: int) -> bool:
+    """Deduct tokens from user balance and track usage. Returns True if successful."""
+    if amount <= 0:
+        return True
+    result = await session.execute(
+        update(User)
+        .where(User.id == user_id, User.token_balance >= amount)
+        .values(
+            token_balance=User.token_balance - amount,
+            tokens_used=User.tokens_used + amount,
+        )
+        .returning(User.token_balance)
+    )
+    row = result.first()
+    if row is None:
+        return False
+    await session.flush()
+    logger.info("lesson_builder.token_deducted user_id=%s amount=%s new_balance=%s", user_id, amount, row[0])
+    return True
+
+
+async def _check_token_balance(session: AsyncSession, user_id: int, required: int) -> bool:
+    """Check if user has enough token balance."""
+    result = await session.execute(
+        select(User.token_balance).where(User.id == user_id)
+    )
+    balance = result.scalar()
+    return balance is not None and balance >= required
 
 
 @router.get("/static-data", response_model=StaticDataResponse)
@@ -55,19 +94,31 @@ async def get_static_data(
     return service.get_static_data()
 
 
+@router.get("/subjects", response_model=SubjectsResponse)
+@limiter.limit("30/minute")
+async def get_subjects(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+) -> SubjectsResponse:
+    """Lấy danh sách môn học từ Neo4j"""
+    service = get_lesson_plan_builder_service()
+    return SubjectsResponse(subjects=service.get_subjects())
+
+
 @router.get("/topics", response_model=TopicsResponse)
 @limiter.limit("30/minute")
 async def get_topics(
     request: Request,
     book_type: str,
     grade: str,
+    subject: str = "",
     current_user: User = Depends(get_current_user),
 ) -> TopicsResponse:
     """
-    Lấy danh sách chủ đề từ Neo4j theo loại sách và lớp
+    Lấy danh sách chủ đề từ Neo4j theo loại sách, lớp và môn học
     """
     service = get_lesson_plan_builder_service()
-    return service.get_topics_by_book_and_grade(book_type=book_type, grade=grade)
+    return service.get_topics_by_book_and_grade(book_type=book_type, grade=grade, subject=subject)
 
 
 @router.post("/lessons/search", response_model=LessonSearchResponse)
@@ -86,7 +137,8 @@ async def search_lessons(
         result = service.search_lessons(
             book_type=payload.book_type,
             grade=payload.grade,
-            topic=payload.topic
+            topic=payload.topic,
+            subject=getattr(payload, "subject", ""),
         )
 
         logger.info(
@@ -156,6 +208,13 @@ async def generate_lesson_plan(
     Sinh kế hoạch bài dạy từ thông tin đã chọn.
     Tự động lấy tài liệu tham khảo (năng lực, phẩm chất) từ Neo4j.
     """
+    # Check token balance before starting
+    if not await _check_token_balance(db, current_user.id, _LESSON_PLAN_RESERVE_TOKENS):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bạn đã hết token. Vui lòng liên hệ quản trị viên để nâng hạn mức.",
+        )
+
     service = get_lesson_plan_builder_service()
 
     try:
@@ -178,15 +237,21 @@ async def generate_lesson_plan(
         )
 
         async with get_gemini_semaphore():
-            response = await loop.run_in_executor(
+            response, tokens_used = await loop.run_in_executor(
                 None, service.generate_lesson_plan, payload, reference_documents, teacher_prefs
             )
 
+        # Deduct actual tokens used
+        if tokens_used > 0:
+            await _deduct_tokens(db, current_user.id, tokens_used)
+            await db.commit()
+
         logger.info(
-            "lesson_builder.generate user_id=%s lesson=%s sections=%d",
+            "lesson_builder.generate user_id=%s lesson=%s sections=%d tokens=%d",
             current_user.id,
             payload.lesson_name,
-            len(response.sections)
+            len(response.sections),
+            tokens_used
         )
 
         return response
@@ -216,10 +281,21 @@ async def generate_lesson_plan_stream(
     Sinh kế hoạch bài dạy với SSE progress streaming.
     Gửi các event: progress (tiến trình) và result (kết quả cuối).
     """
+    # Check token balance before starting stream
+    if not await _check_token_balance(db, current_user.id, _LESSON_PLAN_RESERVE_TOKENS):
+        async def error_generator():
+            yield f"data: {json.dumps({'type': 'error', 'message': 'Bạn đã hết token. Vui lòng liên hệ quản trị viên để nâng hạn mức.'}, ensure_ascii=False)}\n\n"
+        return StreamingResponse(
+            error_generator(),
+            media_type="text/event-stream",
+        )
+
     service = get_lesson_plan_builder_service()
-    
+    user_id = current_user.id  # Capture user_id for use in generator
+
     async def event_generator():
         loop = asyncio.get_event_loop()
+        total_tokens_used = 0  # Track tokens across all AI calls
 
         try:
             # Detect mindmap activities to determine total steps
@@ -269,6 +345,12 @@ async def generate_lesson_plan_stream(
             async with get_gemini_semaphore():
                 response = await loop.run_in_executor(None, service.model.generate_content, prompt)
 
+            # Track token usage from main generation
+            if hasattr(response, 'usage_metadata') and response.usage_metadata:
+                tokens = getattr(response.usage_metadata, 'total_token_count', 0)
+                total_tokens_used += tokens
+                logger.info("Stream: main generation tokens=%d", tokens)
+
             raw_response = (response.text or "").strip()
 
             if not raw_response:
@@ -299,8 +381,10 @@ async def generate_lesson_plan_stream(
                 try:
                     retry_fn = lambda: service._retry_missing_sections(missing_sections, section_titles, payload, sections)
                     async with get_gemini_semaphore():
-                        retry_sections = await loop.run_in_executor(None, retry_fn)
+                        retry_sections, retry_tokens = await loop.run_in_executor(None, retry_fn)
                     sections.extend(retry_sections)
+                    total_tokens_used += retry_tokens
+                    logger.info("Stream: retry tokens=%d", retry_tokens)
                 except Exception as e:
                     logger.warning("Failed to retry missing sections: %s", e)
 
@@ -336,16 +420,21 @@ async def generate_lesson_plan_stream(
                     if target_section:
                         try:
                             async with get_gemini_semaphore():
-                                mindmap_md = await loop.run_in_executor(
+                                mindmap_md, mindmap_tokens = await loop.run_in_executor(
                                     None,
-                                    service.generate_mindmap,
-                                    payload.lesson_name,
-                                    payload.lesson_id,
-                                    target_section.content,
-                                    activity.activity_name,
+                                    lambda: service.generate_mindmap(
+                                        lesson_name=payload.lesson_name,
+                                        lesson_id=payload.lesson_id,
+                                        activity_content=target_section.content,
+                                        activity_name=activity.activity_name,
+                                        activity_type=activity.activity_type,
+                                        chi_muc=activity.chi_muc,
+                                    )
                                 )
                             target_section.mindmap_data = mindmap_md
-                            logger.info("Mindmap attached to section '%s'", target_section.section_type)
+                            target_section.mindmap_activity_name = activity.activity_name
+                            total_tokens_used += mindmap_tokens
+                            logger.info("Mindmap attached to section '%s' for activity '%s', tokens=%d", target_section.section_type, activity.activity_name, mindmap_tokens)
                         except Exception as e:
                             logger.warning("Mindmap generation failed for '%s': %s", activity.activity_name, e)
 
@@ -362,14 +451,25 @@ async def generate_lesson_plan_stream(
                 full_content=raw_response
             )
 
-            # Send final result
-            yield f"data: {json.dumps({'type': 'result', 'data': result.model_dump(mode='json')}, ensure_ascii=False)}\n\n"
+            # Send final result with token info
+            result_data = result.model_dump(mode='json')
+            result_data['tokens_used'] = total_tokens_used
+            yield f"data: {json.dumps({'type': 'result', 'data': result_data}, ensure_ascii=False)}\n\n"
+
+            # Deduct tokens after sending result
+            if total_tokens_used > 0:
+                try:
+                    await _deduct_tokens(db, user_id, total_tokens_used)
+                    await db.commit()
+                except Exception as token_err:
+                    logger.error("Failed to deduct tokens: %s", token_err)
 
             logger.info(
-                "lesson_builder.generate_stream user_id=%s lesson=%s sections=%d",
-                current_user.id,
+                "lesson_builder.generate_stream user_id=%s lesson=%s sections=%d tokens=%d",
+                user_id,
                 payload.lesson_name,
-                len(result.sections)
+                len(result.sections),
+                total_tokens_used
             )
 
         except Exception as e:
@@ -397,24 +497,42 @@ async def generate_mindmap_endpoint(
     request: Request,
     payload: GenerateMindmapRequest,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Sinh sơ đồ tư duy (markdown headings) cho một hoạt động.
     Dùng cho nút toolbar "Sơ đồ tư duy" trên frontend.
     """
+    # Check token balance
+    if not await _check_token_balance(db, current_user.id, _MINDMAP_RESERVE_TOKENS):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bạn đã hết token. Vui lòng liên hệ quản trị viên để nâng hạn mức.",
+        )
+
     service = get_lesson_plan_builder_service()
     loop = asyncio.get_event_loop()
 
     try:
         async with get_gemini_semaphore():
-            mindmap_data = await loop.run_in_executor(
+            mindmap_data, tokens_used = await loop.run_in_executor(
                 None,
-                service.generate_mindmap,
-                payload.lesson_name,
-                payload.lesson_id,
-                payload.activity_content,
-                payload.activity_name,
+                lambda: service.generate_mindmap(
+                    lesson_name=payload.lesson_name,
+                    lesson_id=payload.lesson_id,
+                    activity_content=payload.activity_content,
+                    activity_name=payload.activity_name,
+                    activity_type=payload.activity_type,
+                    chi_muc=payload.chi_muc,
+                )
             )
+
+        # Deduct tokens
+        if tokens_used > 0:
+            await _deduct_tokens(db, current_user.id, tokens_used)
+            await db.commit()
+
+        logger.info("lesson_builder.mindmap user_id=%s tokens=%d", current_user.id, tokens_used)
         return GenerateMindmapResponse(mindmap_data=mindmap_data)
     except Exception as e:
         logger.error("Mindmap generation error: %s", e)
@@ -794,14 +912,22 @@ async def improve_section_with_ai(
     request: Request,
     payload: ImproveSectionRequest,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> ImproveSectionResponse:
     """
     Cải thiện nội dung một section với AI dựa trên yêu cầu của người dùng.
     Nếu có phụ lục liên quan, sẽ cập nhật đồng bộ.
     Tự động lấy tài liệu tham khảo (năng lực, phẩm chất) từ Neo4j.
     """
+    # Check token balance
+    if not await _check_token_balance(db, current_user.id, _IMPROVE_RESERVE_TOKENS):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bạn đã hết token. Vui lòng liên hệ quản trị viên để nâng hạn mức.",
+        )
+
     service = get_lesson_plan_builder_service()
-    
+
     try:
         loop = asyncio.get_event_loop()
         reference_documents = await loop.run_in_executor(
@@ -832,13 +958,19 @@ async def improve_section_with_ai(
             )
 
         async with get_gemini_semaphore():
-            result = await loop.run_in_executor(None, _do_improve)
+            result, tokens_used = await loop.run_in_executor(None, _do_improve)
+
+        # Deduct tokens
+        if tokens_used > 0:
+            await _deduct_tokens(db, current_user.id, tokens_used)
+            await db.commit()
 
         logger.info(
-            "lesson_builder.improve_section user_id=%s section=%s appendices=%s",
+            "lesson_builder.improve_section user_id=%s section=%s appendices=%s tokens=%d",
             current_user.id,
             payload.section_type,
             len(related_appendices) if related_appendices else 0,
+            tokens_used
         )
 
         return result
@@ -847,4 +979,80 @@ async def improve_section_with_ai(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Lỗi cải thiện section"
+        )
+
+
+# ============== NLS (Năng lực số) ENDPOINTS ==============
+
+@router.get("/nls/mien-nang-luc", response_model=NLSMienNangLucResponse)
+@limiter.limit("30/minute")
+async def get_nls_mien_nang_luc(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+) -> NLSMienNangLucResponse:
+    """
+    Lấy danh sách Miền năng lực từ Neo4j
+    """
+    service = get_lesson_plan_builder_service()
+    try:
+        result = service.get_nls_mien_nang_luc()
+        logger.info("nls.get_mien_nang_luc user_id=%s total=%d", current_user.id, len(result.mien_nang_luc))
+        return result
+    except Exception as e:
+        logger.error(f"Error getting NLS mien nang luc: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Lỗi lấy danh sách miền năng lực"
+        )
+
+
+@router.get("/nls/nang-luc-thanh-phan", response_model=NLSNangLucThanhPhanResponse)
+@limiter.limit("30/minute")
+async def get_nls_nang_luc_thanh_phan(
+    request: Request,
+    mien_nang_luc: str = Query(..., description="Tên miền năng lực"),
+    current_user: User = Depends(get_current_user),
+) -> NLSNangLucThanhPhanResponse:
+    """
+    Lấy danh sách Năng lực thành phần theo Miền năng lực từ Neo4j
+    """
+    service = get_lesson_plan_builder_service()
+    try:
+        result = service.get_nls_nang_luc_thanh_phan(mien_nang_luc)
+        logger.info(
+            "nls.get_nang_luc_thanh_phan user_id=%s mien=%s total=%d",
+            current_user.id, mien_nang_luc, len(result.nang_luc_thanh_phan)
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error getting NLS nang luc thanh phan: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Lỗi lấy danh sách năng lực thành phần"
+        )
+
+
+@router.get("/nls/chi-bao", response_model=NLSChiBaoResponse)
+@limiter.limit("30/minute")
+async def get_nls_chi_bao(
+    request: Request,
+    nang_luc_thanh_phan: str = Query(..., description="Tên năng lực thành phần"),
+    current_user: User = Depends(get_current_user),
+) -> NLSChiBaoResponse:
+    """
+    Lấy danh sách Chỉ báo theo Năng lực thành phần từ Neo4j
+    """
+    service = get_lesson_plan_builder_service()
+    try:
+        result = service.get_nls_chi_bao(nang_luc_thanh_phan)
+        logger.info(
+            "nls.get_chi_bao user_id=%s nangluc=%s total=%d",
+            current_user.id, nang_luc_thanh_phan, len(result.chi_bao)
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error getting NLS chi bao: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Lỗi lấy danh sách chỉ báo"
         )

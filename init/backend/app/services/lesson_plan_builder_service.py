@@ -23,7 +23,13 @@ from app.schemas.lesson_plan_builder import (
     BookType,
     Grade,
     TeachingMethodItem,
-    TeachingTechniqueItem
+    TeachingTechniqueItem,
+    NLSMienNangLuc,
+    NLSMienNangLucResponse,
+    NLSNangLucThanhPhan,
+    NLSNangLucThanhPhanResponse,
+    NLSChiBao,
+    NLSChiBaoResponse,
 )
 from app.prompts.lesson_plan_generation import get_system_instruction, build_lesson_plan_prompt
 from app.services.response_parser import (
@@ -52,8 +58,8 @@ class LessonPlanBuilderService:
         api_key = os.getenv("GEMINI_API_KEY")
         if api_key:
             genai.configure(api_key=api_key)
-            # Model cho lesson plan - dùng model mạnh nhất (Gemini 3 Pro)
-            lesson_plan_model = os.getenv("GEMINI_MODEL_LESSON_PLAN", "gemini-3-pro-preview")
+            # Model cho lesson plan - dùng Gemini 3 Flash
+            lesson_plan_model = os.getenv("GEMINI_MODEL_LESSON_PLAN", "gemini-3-flash-preview")
             # Model cho JSON output
             self.model = genai.GenerativeModel(
                 model_name=lesson_plan_model,
@@ -80,7 +86,7 @@ class LessonPlanBuilderService:
     def _get_system_instruction(self) -> str:
         """Sử dụng system instruction từ prompts module"""
         return get_system_instruction()
-    
+
     def get_static_data(self) -> StaticDataResponse:
         """Trả về dữ liệu tĩnh cho frontend - lấy phương pháp và kỹ thuật từ Neo4j"""
         
@@ -91,8 +97,7 @@ class LessonPlanBuilderService:
             # Lấy phương pháp dạy học từ Neo4j
             methods_result = session.run("""
                 MATCH (pp:PhuongPhapDayHoc)
-                RETURN pp.ten AS ten, pp.cach_tien_hanh AS cach_tien_hanh, 
-                       pp.uu_diem AS uu_diem, pp.nhuoc_diem AS nhuoc_diem
+                RETURN pp.ten AS ten, pp.cach_tien_hanh AS cach_tien_hanh
                 ORDER BY pp.ten
             """)
             
@@ -101,15 +106,12 @@ class LessonPlanBuilderService:
                     value=record["ten"],
                     label=record["ten"],
                     cach_tien_hanh=record.get("cach_tien_hanh"),
-                    uu_diem=record.get("uu_diem"),
-                    nhuoc_diem=record.get("nhuoc_diem")
                 ))
             
             # Lấy kỹ thuật dạy học từ Neo4j
             techniques_result = session.run("""
                 MATCH (kt:KyThuatDayHoc)
-                RETURN kt.ten AS ten, kt.cach_tien_hanh AS cach_tien_hanh,
-                       kt.uu_diem AS uu_diem, kt.nhuoc_diem AS nhuoc_diem, kt.bo_sung AS bo_sung
+                RETURN kt.ten AS ten, kt.cach_tien_hanh AS cach_tien_hanh
                 ORDER BY kt.ten
             """)
             
@@ -118,9 +120,6 @@ class LessonPlanBuilderService:
                     value=record["ten"],
                     label=record["ten"],
                     cach_tien_hanh=record.get("cach_tien_hanh"),
-                    uu_diem=record.get("uu_diem"),
-                    nhuoc_diem=record.get("nhuoc_diem"),
-                    bo_sung=record.get("bo_sung")
                 ))
         
         return StaticDataResponse(
@@ -134,33 +133,62 @@ class LessonPlanBuilderService:
             techniques=techniques
         )
 
-    def get_topics_by_book_and_grade(self, book_type: str, grade: str) -> TopicsResponse:
-        """Lấy danh sách chủ đề từ Neo4j theo lớp"""
+    def get_subjects(self) -> list[str]:
+        """Lấy danh sách tất cả môn học từ Neo4j"""
         with self.driver.session(database=self.neo4j_database) as session:
             result = session.run("""
-                MATCH (bh:BaiHoc)-[:THUOC_LOP]->(l:Lop {lop: $grade})
-                MATCH (bh)-[:THUOC_CHU_DE]->(cd:ChuDe)
-                RETURN DISTINCT cd.ten AS topic
-                ORDER BY topic
-            """, grade=grade)
-            
+                MATCH (m:MonHoc)
+                RETURN m.ten AS ten
+                ORDER BY m.ten
+            """)
+            return [record["ten"] for record in result if record["ten"]]
+
+    def get_topics_by_book_and_grade(self, book_type: str, grade: str, subject: str = "") -> TopicsResponse:
+        """Lấy danh sách chủ đề từ Neo4j theo lớp (và môn nếu có)"""
+        with self.driver.session(database=self.neo4j_database) as session:
+            if subject:
+                result = session.run("""
+                    MATCH (bh:BaiHoc)-[:THUOC_LOP]->(l:Lop {lop: $grade})
+                    MATCH (bh)-[:THUOC_MON]->(m:MonHoc {ten: $subject})
+                    MATCH (bh)-[:THUOC_CHU_DE]->(cd:ChuDe)
+                    RETURN DISTINCT cd.ten AS topic
+                    ORDER BY topic
+                """, grade=grade, subject=subject)
+            else:
+                result = session.run("""
+                    MATCH (bh:BaiHoc)-[:THUOC_LOP]->(l:Lop {lop: $grade})
+                    MATCH (bh)-[:THUOC_CHU_DE]->(cd:ChuDe)
+                    RETURN DISTINCT cd.ten AS topic
+                    ORDER BY topic
+                """, grade=grade)
+
             topics = [record["topic"].strip() for record in result if record["topic"]]
             return TopicsResponse(topics=topics)
-    
+
     def search_lessons(
         self,
         book_type: str,
         grade: str,
-        topic: str
+        topic: str,
+        subject: str = "",
     ) -> LessonSearchResponse:
-        """Tìm kiếm bài học từ Neo4j dựa trên lớp và chủ đề"""
+        """Tìm kiếm bài học từ Neo4j dựa trên lớp, chủ đề (và môn nếu có)"""
         with self.driver.session(database=self.neo4j_database) as session:
-            result = session.run("""
-                MATCH (bh:BaiHoc)-[:THUOC_LOP]->(l:Lop {lop: $grade})
-                MATCH (bh)-[:THUOC_CHU_DE]->(cd:ChuDe {ten: $topic})
-                RETURN elementId(bh) AS id, bh.ten AS name, bh.loai AS lesson_type
-                ORDER BY bh.ten
-            """, grade=grade, topic=topic)
+            if subject:
+                result = session.run("""
+                    MATCH (bh:BaiHoc)-[:THUOC_LOP]->(l:Lop {lop: $grade})
+                    MATCH (bh)-[:THUOC_MON]->(m:MonHoc {ten: $subject})
+                    MATCH (bh)-[:THUOC_CHU_DE]->(cd:ChuDe {ten: $topic})
+                    RETURN elementId(bh) AS id, bh.ten AS name, bh.loai AS lesson_type
+                    ORDER BY bh.ten
+                """, grade=grade, topic=topic, subject=subject)
+            else:
+                result = session.run("""
+                    MATCH (bh:BaiHoc)-[:THUOC_LOP]->(l:Lop {lop: $grade})
+                    MATCH (bh)-[:THUOC_CHU_DE]->(cd:ChuDe {ten: $topic})
+                    RETURN elementId(bh) AS id, bh.ten AS name, bh.loai AS lesson_type
+                    ORDER BY bh.ten
+                """, grade=grade, topic=topic)
             
             lessons = []
             for record in result:
@@ -180,20 +208,16 @@ class LessonPlanBuilderService:
                 OPTIONAL MATCH (bh)-[:THUOC_LOP]->(l:Lop)
                 OPTIONAL MATCH (bh)-[:THUOC_CHU_DE]->(cd:ChuDe)
                 OPTIONAL MATCH (bh)-[:THUOC_DINH_HUONG]->(dh:DinhHuong)
-
-                // Năng lực chính và năng lực hỗ trợ
-                OPTIONAL MATCH (bh)-[:CO_NANG_LUC_CHINH]->(nlc:NangLuc)
-                OPTIONAL MATCH (bh)-[:CO_NANG_LUC_HO_TRO]->(nlht:NangLuc)
                 OPTIONAL MATCH (bh)-[:CO_MUC_TIEU]->(mt:MucTieu)
 
                 // Chi mục với số thứ tự
                 OPTIONAL MATCH (bh)-[r:CO_CHI_MUC]->(cm:ChiMuc)
 
                 WITH bh, l, cd, dh,
-                     collect(DISTINCT nlc.nang_luc_chinh) AS competencies,
-                     collect(DISTINCT nlht.nang_luc_chinh) AS supporting_competencies,
+                     bh.nang_luc_chinh AS competencies_text,
+                     bh.nang_luc_ho_tro AS supporting_competencies_text,
                      collect(DISTINCT mt.noi_dung) AS objectives,
-                     collect(DISTINCT {order: r.so_thu_tu, content: cm.noi_dung}) AS chi_muc_list
+                     collect(DISTINCT {order: cm.thu_tu, content: cm.noi_dung}) AS chi_muc_list
 
                 RETURN elementId(bh) AS id,
                        bh.ten AS name,
@@ -202,8 +226,8 @@ class LessonPlanBuilderService:
                        l.lop AS grade,
                        cd.ten AS topic,
                        dh.ten AS orientation,
-                       competencies,
-                       supporting_competencies,
+                       competencies_text,
+                       supporting_competencies_text,
                        objectives,
                        chi_muc_list
             """, lesson_id=lesson_id)
@@ -226,6 +250,12 @@ class LessonPlanBuilderService:
                 for idx, cm in enumerate(chi_muc_sorted)
             ]
             
+            # Parse năng lực from text properties (comma-separated)
+            competencies_text = record.get("competencies_text") or ""
+            supporting_text = record.get("supporting_competencies_text") or ""
+            competencies = [c.strip() for c in competencies_text.split(",") if c.strip()]
+            supporting_competencies = [c.strip() for c in supporting_text.split(",") if c.strip()]
+
             return LessonDetailResponse(
                 id=record["id"],
                 name=record["name"],
@@ -234,8 +264,8 @@ class LessonPlanBuilderService:
                 topic=record.get("topic", ""),
                 lesson_type=record.get("lesson_type"),
                 objectives=[o for o in record.get("objectives", []) if o],
-                competencies=[c for c in record.get("competencies", []) if c],
-                supporting_competencies=[c for c in record.get("supporting_competencies", []) if c],
+                competencies=competencies,
+                supporting_competencies=supporting_competencies,
                 chi_muc_list=chi_muc_list,
                 content=record.get("content"),
                 orientation=record.get("orientation")
@@ -246,7 +276,7 @@ class LessonPlanBuilderService:
         request: GenerateLessonPlanBuilderRequest,
         reference_documents: Optional[str] = None,
         teacher_preferences_section: str = "",
-    ) -> GenerateLessonPlanBuilderResponse:
+    ) -> tuple[GenerateLessonPlanBuilderResponse, int]:
         """Sinh kế hoạch bài dạy từ thông tin đã chọn"""
         
         # 1. Lấy chi tiết bài học từ Neo4j
@@ -273,22 +303,29 @@ class LessonPlanBuilderService:
         )
         # =============================================
         
+        total_tokens_used = 0
+
         try:
             # Gọi Gemini
             start_time = time.time()
             response = self.model.generate_content(prompt)
             end_time = time.time()
-            
+
+            # Track actual token usage from Gemini
+            if hasattr(response, 'usage_metadata') and response.usage_metadata:
+                total_tokens_used = getattr(response.usage_metadata, 'total_token_count', 0)
+                logger.info("Gemini token usage: %d", total_tokens_used)
+
             raw_response = (response.text or "").strip()
-            
+
             # Debug: Log số ký tự response và thời gian
             response_chars = len(raw_response)
             response_tokens = response_chars // 4
-            
+
             logger.info(
-                "Response stats: chars=%s est_tokens=~%s time=%.2fs total_tokens=~%s",
+                "Response stats: chars=%s est_tokens=~%s time=%.2fs actual_tokens=%s",
                 f"{response_chars:,}", f"{response_tokens:,}",
-                end_time - start_time, f"{estimated_tokens + response_tokens:,}",
+                end_time - start_time, total_tokens_used or f"~{estimated_tokens + response_tokens:,}",
             )
             logger.debug("Raw response start: %s...", raw_response[:300])
             logger.debug("Raw response end: ...%s", raw_response[-200:])
@@ -327,11 +364,12 @@ class LessonPlanBuilderService:
                 }
 
                 try:
-                    retry_sections = self._retry_missing_sections(
+                    retry_sections, retry_tokens = self._retry_missing_sections(
                         missing_sections, section_titles, request, sections
                     )
                     sections.extend(retry_sections)
-                    logger.info("Retry succeeded: regenerated %d missing sections", len(retry_sections))
+                    total_tokens_used += retry_tokens
+                    logger.info("Retry succeeded: regenerated %d missing sections, tokens=%d", len(retry_sections), retry_tokens)
                 except Exception as retry_err:
                     logger.error("Retry failed: %s", retry_err)
 
@@ -363,7 +401,7 @@ class LessonPlanBuilderService:
                 },
                 sections=sections,
                 full_content=raw_response
-            )
+            ), total_tokens_used
         except Exception as e:
             raise RuntimeError(f"Lỗi sinh kế hoạch bài dạy: {str(e)}")
     
@@ -394,32 +432,38 @@ class LessonPlanBuilderService:
             methods_str = ", ".join(activity.selected_methods) if activity.selected_methods else "Không chọn"
             techniques_str = ", ".join(activity.selected_techniques) if activity.selected_techniques else "Không chọn"
 
-            # Chuyển đổi location và activity_format sang text dễ hiểu
+            # Chuyển đổi location sang text dễ hiểu
             location_text = "Phòng máy" if activity.location == "phong_may" else "Lớp học"
-            format_text = ""
-            if activity.activity_format:
-                format_mapping = {
-                    "trac_nghiem": "Trắc nghiệm",
-                    "phieu_hoc_tap": "Phiếu học tập",
-                    "bai_tap_code": "Bài tập viết code"
-                }
-                format_text = format_mapping.get(activity.activity_format, activity.activity_format)
 
             logger.debug(
-                "Activity %d: %s | location=%s format=%s methods=[%s] techniques=[%s]",
+                "Activity %d: %s | location=%s methods=[%s] techniques=[%s]",
                 idx, safe_name, location_text,
-                format_text or "N/A", methods_str, techniques_str,
+                methods_str, techniques_str,
             )
+
+            # NLS (Năng lực số) đã chọn
+            nls_info = ""
+            if activity.nls_selections:
+                nls_items = []
+                for nls in activity.nls_selections:
+                    # Format: Miền NL | Mã chỉ báo | Nội dung chỉ báo
+                    nls_items.append(
+                        f"    - Miền: {nls.mien_nang_luc} | Mã: {nls.ma} | Nội dung: {nls.noi_dung}"
+                    )
+                nls_info = "\n".join(nls_items) if nls_items else "Không có"
+            else:
+                nls_info = "Không có"
 
             activities_info += f"""
 ### Hoạt động {idx}: {safe_name}
 - Loại hoạt động: {activity.activity_type}
 - Chỉ mục nội dung: {safe_chi_muc or 'N/A'}
 - Vị trí dạy học: {location_text}
-- Hình thức hoạt động: {format_text if format_text else 'Không chỉ định'}
 - Phương pháp dạy học được chọn: {methods_str}
 - Kỹ thuật dạy học được chọn: {techniques_str}
 - Yêu cầu bổ sung: {safe_custom_request if safe_custom_request else 'Không có'}
+- Chỉ báo Năng lực số (NLS) cần đạt:
+{nls_info}
 """
 
             # Tạo hướng dẫn cách tổ chức CHI TIẾT cho từng hoạt động
@@ -485,9 +529,9 @@ class LessonPlanBuilderService:
             logger.debug("Reference documents: %d chars", len(reference_documents))
             
             docs_instruction = f"""
-<tai_lieu_tham_khao>
+<nang_luc_pham_chat>
 {reference_documents}
-</tai_lieu_tham_khao>
+</nang_luc_pham_chat>
 """
 
         # Xử lý nội dung bài học (markdown)
@@ -542,7 +586,7 @@ class LessonPlanBuilderService:
         section_titles: Dict[str, str],
         request: GenerateLessonPlanBuilderRequest,
         existing_sections: List[LessonPlanSection]
-    ) -> List[LessonPlanSection]:
+    ) -> tuple[List[LessonPlanSection], int]:
         """Thử sinh lại các section bị thiếu bằng cách gọi LLM riêng cho từng section"""
 
         # Tóm tắt nội dung đã sinh để LLM có context
@@ -587,10 +631,17 @@ YÊU CẦU:
         logger.info("Retrying %d missing sections...", len(missing_sections))
 
         response = self.model.generate_content(retry_prompt)
+
+        # Track token usage from retry
+        retry_tokens = 0
+        if hasattr(response, 'usage_metadata') and response.usage_metadata:
+            retry_tokens = getattr(response.usage_metadata, 'total_token_count', 0)
+            logger.info("Retry token usage: %d", retry_tokens)
+
         retry_raw = (response.text or "").strip()
 
         if not retry_raw:
-            return []
+            return [], retry_tokens
 
         # Parse retry response
         try:
@@ -601,10 +652,10 @@ YÊU CẦU:
             if repaired:
                 data = json.loads(repaired)
             else:
-                return []
+                return [], retry_tokens
 
         if "sections" not in data:
-            return []
+            return [], retry_tokens
 
         for item in data["sections"]:
             section_type = item.get("section_type", "unknown")
@@ -620,7 +671,7 @@ YÊU CẦU:
                     editable=True
                 ))
 
-        return result_sections
+        return result_sections, retry_tokens
 
     def improve_section(
         self,
@@ -631,8 +682,9 @@ YÊU CẦU:
         lesson_info: Dict[str, str],
         related_appendices: List[Dict] = None,
         reference_documents: Optional[str] = None
-    ):
-        """Cải thiện nội dung một section với AI, kèm theo phụ lục liên quan nếu có"""
+    ) -> tuple[Any, int]:
+        """Cải thiện nội dung một section với AI, kèm theo phụ lục liên quan nếu có.
+        Returns: (ImproveSectionResponse, tokens_used)"""
         from app.schemas.lesson_plan_builder import ImproveSectionResponse, UpdatedAppendix
         from app.prompts import get_section_improvement_prompt
 
@@ -658,9 +710,9 @@ YÊU CẦU:
 ===================================================================
 Sử dụng thông tin từ tài liệu tham khảo sau để cải thiện nội dung:
 
-<tai_lieu_tham_khao>
+<nang_luc_pham_chat>
 {reference_documents}
-</tai_lieu_tham_khao>
+</nang_luc_pham_chat>
 """
         
         # Nếu có phụ lục liên quan, thêm vào prompt
@@ -697,6 +749,13 @@ Lưu ý: Nếu có nhiều phụ lục, tạo nhiều block [UPDATED_APPENDIX] t
         try:
             # Dùng text_model (không phải JSON mode) cho improve section
             response = self.text_model.generate_content(prompt)
+
+            # Track token usage
+            tokens_used = 0
+            if hasattr(response, 'usage_metadata') and response.usage_metadata:
+                tokens_used = getattr(response.usage_metadata, 'total_token_count', 0)
+                logger.info("Improve section token usage: %d", tokens_used)
+
             raw_response = (response.text or "").strip()
             
             # Loại bỏ các marker markdown nếu có
@@ -743,7 +802,7 @@ Lưu ý: Nếu có nhiều phụ lục, tạo nhiều block [UPDATED_APPENDIX] t
                 improved_content=improved_content,
                 explanation=None,
                 updated_appendices=updated_appendices if updated_appendices else None
-            )
+            ), tokens_used
         except Exception as e:
             raise RuntimeError(f"Lỗi cải thiện section: {str(e)}")
 
@@ -753,11 +812,18 @@ Lưu ý: Nếu có nhiều phụ lục, tạo nhiều block [UPDATED_APPENDIX] t
         lesson_id: str,
         activity_content: str,
         activity_name: str,
-    ) -> str:
+        activity_type: str = None,
+        chi_muc: str = None,
+    ) -> tuple[str, int]:
         """Sinh sơ đồ tư duy (markdown headings) cho một hoạt động.
+        Returns: (mindmap_markdown, tokens_used)
 
         AI 2 chuyên biệt: nhận nội dung hoạt động + chi_muc + SGK content,
         trả về chuỗi markdown headings (# ## ### ####) dùng cho Markmap.
+
+        Logic:
+        - Hình thành kiến thức: Lấy kiến thức của chi mục đó trong SGK
+        - Luyện tập/Vận dụng: Lấy kiến thức cả bài
         """
         import re
 
@@ -773,51 +839,79 @@ Lưu ý: Nếu có nhiều phụ lục, tạo nhiều block [UPDATED_APPENDIX] t
                 chi_muc_lines.append(f"  {cm.order}. {cm.content}")
         chi_muc_str = "\n".join(chi_muc_lines) if chi_muc_lines else "  Không có"
 
-        # Chuẩn bị nội dung SGK (cắt ngắn nếu quá dài)
-        sgk_content = (lesson_detail.content or "")[:8000]
+        # Chuẩn bị nội dung SGK
+        sgk_content = (lesson_detail.content or "")
 
-        # Cho phép nội dung dài hơn khi tạo cho "Toàn bộ bài học"
+        # Xác định phạm vi nội dung dựa trên loại hoạt động
         is_whole_lesson = activity_name == "Toàn bộ bài học"
-        content_limit = 8000 if is_whole_lesson else 4000
-        task_label = f"toàn bộ bài \"{lesson_name}\"" if is_whole_lesson else f"hoạt động \"{activity_name}\" của bài \"{lesson_name}\""
+        is_practice_or_apply = activity_type in ("luyen_tap", "van_dung")
+        is_knowledge_formation = activity_type == "hinh_thanh_kien_thuc"
+
+        # Luyện tập/Vận dụng hoặc Toàn bộ bài: Lấy kiến thức CẢ BÀI
+        if is_whole_lesson or is_practice_or_apply:
+            content_limit = 8000
+            task_label = f"toàn bộ bài \"{lesson_name}\""
+            focus_instruction = "Tổng hợp TOÀN BỘ kiến thức của bài học"
+            sgk_to_use = sgk_content[:content_limit]
+        # Hình thành kiến thức: Lấy kiến thức của CHI MỤC CỤ THỂ
+        elif is_knowledge_formation and chi_muc:
+            content_limit = 6000
+            task_label = f"nội dung \"{chi_muc}\" trong bài \"{lesson_name}\""
+            focus_instruction = f"CHỈ tập trung vào nội dung của mục \"{chi_muc}\", KHÔNG lấy kiến thức từ các mục khác"
+            sgk_to_use = sgk_content[:content_limit]
+        else:
+            content_limit = 6000
+            task_label = f"hoạt động \"{activity_name}\" của bài \"{lesson_name}\""
+            focus_instruction = "Lấy kiến thức liên quan đến hoạt động này"
+            sgk_to_use = sgk_content[:content_limit]
 
         prompt = f"""Bạn là chuyên gia thiết kế sơ đồ tư duy cho giáo dục.
 
-NHIỆM VỤ: Tạo sơ đồ tư duy bằng Markdown headings cho {task_label}.
+NHIỆM VỤ: Tạo sơ đồ tư duy về KIẾN THỨC BÀI HỌC cho {task_label}.
 
-NỘI DUNG HOẠT ĐỘNG:
-{activity_content[:content_limit]}
+PHẠM VI: {focus_instruction}
 
 CHI MỤC BÀI HỌC:
 {chi_muc_str}
 
-NỘI DUNG SÁCH GIÁO KHOA:
-{sgk_content}
+NỘI DUNG SÁCH GIÁO KHOA (nguồn kiến thức chính):
+{sgk_to_use}
 
 QUY TẮC BẮT BUỘC:
-1. GỐC (# ): Tên bài học "{lesson_name}"
-2. NHÁNH CHÍNH (## ): Các mục trong chi_muc ở trên (giữ đúng thứ tự)
-3. NHÁNH PHỤ (### ): Kiến thức quan trọng từ SGK tương ứng mỗi chi_muc (2-4 nhánh/mục)
-4. NHÁNH CON (#### ): Chi tiết bổ sung nếu cần (ví dụ, công thức, phân loại)
-5. Nội dung PHẢI chính xác từ SGK, KHÔNG bịa đặt
-6. Tối thiểu 2 cấp (##, ###), tối đa 4 cấp
+1. GỐC (# ): Tiêu đề phù hợp với phạm vi (tên bài hoặc tên mục)
+2. NHÁNH CHÍNH (## ): Các chủ đề/khái niệm chính (theo chi_muc hoặc nội dung SGK)
+3. NHÁNH PHỤ (### ): Kiến thức cụ thể, định nghĩa, đặc điểm, ví dụ từ SGK
+4. NHÁNH CON (#### ): Chi tiết bổ sung (công thức, phân loại, lưu ý)
+5. NỘI DUNG phải là KIẾN THỨC MÔN HỌC từ SGK (khái niệm, định nghĩa, công thức, ví dụ...)
+6. KHÔNG đưa vào cấu trúc giáo án (mục tiêu, tổ chức thực hiện, B1/B2/B3/B4, sản phẩm...)
+7. Tối thiểu 2 cấp (##, ###), tối đa 4 cấp
 
 OUTPUT: CHỈ trả về markdown headings, KHÔNG giải thích, KHÔNG wrap trong code block.
 
-VÍ DỤ OUTPUT:
-# Tên bài học
-## 1. Mục đầu tiên
-### Khái niệm
-### Đặc điểm
-#### Chi tiết 1
-#### Chi tiết 2
-## 2. Mục thứ hai
-### Nội dung A
-### Nội dung B
+VÍ DỤ (bài An toàn trên không gian mạng):
+# An toàn trên không gian mạng
+## Mạng xã hội
+### Khái niệm mạng xã hội
+### Lợi ích
+#### Kết nối bạn bè
+#### Học tập, giải trí
+### Rủi ro
+#### Lừa đảo
+#### Virus, mã độc
+## Cách sử dụng an toàn
+### Bảo vệ thông tin cá nhân
+### Nhận biết tin giả
 """
 
         try:
             response = self.text_model.generate_content(prompt)
+
+            # Track token usage
+            tokens_used = 0
+            if hasattr(response, 'usage_metadata') and response.usage_metadata:
+                tokens_used = getattr(response.usage_metadata, 'total_token_count', 0)
+                logger.info("Mindmap token usage: %d", tokens_used)
+
             raw = (response.text or "").strip()
 
             # Loại bỏ code block wrapper nếu có
@@ -832,7 +926,7 @@ VÍ DỤ OUTPUT:
                 raise RuntimeError("AI trả về không đúng format markdown headings")
 
             logger.info("Mindmap generated for '%s': %d chars", activity_name, len(raw))
-            return raw
+            return raw, tokens_used
         except Exception as e:
             raise RuntimeError(f"Lỗi sinh sơ đồ tư duy: {str(e)}")
 
@@ -932,6 +1026,62 @@ VÍ DỤ OUTPUT:
                 logger.warning("No competency/quality data found in Neo4j")
                 return None
     
+    # ============== NLS (Năng lực số) Methods ==============
+
+    def get_nls_mien_nang_luc(self) -> NLSMienNangLucResponse:
+        """Lấy danh sách miền năng lực từ Neo4j"""
+        with self.driver.session(database=self.neo4j_database) as session:
+            result = session.run("""
+                MATCH (m:MienNangLuc)
+                RETURN m.name AS name
+                ORDER BY m.name
+            """)
+
+            mien_list = []
+            for record in result:
+                if record["name"]:
+                    mien_list.append(NLSMienNangLuc(name=record["name"]))
+
+            logger.info("Found %d MienNangLuc", len(mien_list))
+            return NLSMienNangLucResponse(mien_nang_luc=mien_list)
+
+    def get_nls_nang_luc_thanh_phan(self, mien_nang_luc: str) -> NLSNangLucThanhPhanResponse:
+        """Lấy danh sách năng lực thành phần theo miền năng lực từ Neo4j"""
+        with self.driver.session(database=self.neo4j_database) as session:
+            result = session.run("""
+                MATCH (m:MienNangLuc {name: $mien_name})-[:CO_NANG_LUC]->(n:NangLucThanhPhan)
+                RETURN n.name AS name
+                ORDER BY n.name
+            """, mien_name=mien_nang_luc)
+
+            nangluc_list = []
+            for record in result:
+                if record["name"]:
+                    nangluc_list.append(NLSNangLucThanhPhan(name=record["name"]))
+
+            logger.info("Found %d NangLucThanhPhan for mien '%s'", len(nangluc_list), mien_nang_luc)
+            return NLSNangLucThanhPhanResponse(nang_luc_thanh_phan=nangluc_list)
+
+    def get_nls_chi_bao(self, nang_luc_thanh_phan: str) -> NLSChiBaoResponse:
+        """Lấy danh sách chỉ báo theo năng lực thành phần từ Neo4j"""
+        with self.driver.session(database=self.neo4j_database) as session:
+            result = session.run("""
+                MATCH (n:NangLucThanhPhan {name: $nangluc_name})-[:CO_CHI_BAO]->(c:ChiBao)
+                RETURN c.ma AS ma, c.noi_dung AS noi_dung
+                ORDER BY c.ma
+            """, nangluc_name=nang_luc_thanh_phan)
+
+            chibao_list = []
+            for record in result:
+                if record["ma"] and record["noi_dung"]:
+                    chibao_list.append(NLSChiBao(
+                        ma=record["ma"],
+                        noi_dung=record["noi_dung"]
+                    ))
+
+            logger.info("Found %d ChiBao for nangluc '%s'", len(chibao_list), nang_luc_thanh_phan)
+            return NLSChiBaoResponse(chi_bao=chibao_list)
+
     def close(self):
         """Đóng kết nối"""
         self.driver.close()

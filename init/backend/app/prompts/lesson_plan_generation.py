@@ -58,13 +58,21 @@ PHẦN SÁNG TẠO:
 === QUY TẮC ĐỊNH DẠNG VĂN BẢN ===
 1. FONT CHỮ: Mặc định sử dụng font Times New Roman cho toàn bộ nội dung
 2. CHỈ IN ĐẬM các phần sau:
-   - Các chỉ mục chính: I. MỤC TIÊU, II. THIẾT BỊ DẠY HỌC VÀ HỌC LIỆU, III. TIẾN TRÌNH DẠY HỌC, IV. PHỤ LỤC
-   - Các chỉ mục con: 1. Về kiến thức, 2. Về năng lực, 3. Về phẩm chất, 1. Giáo viên, 2. Học sinh, TIẾT 1/2, 1. Hoạt động khởi động, 2. Hình thành kiến thức, 3. Hoạt động luyện tập, 4. Hoạt động vận dụng, 1. Phiếu học tập, 2. Trắc nghiệm
+   - 4 chỉ mục chính: I. MỤC TIÊU, II. THIẾT BỊ DẠY HỌC VÀ HỌC LIỆU, III. TIẾN TRÌNH DẠY HỌC, IV. PHỤ LỤC
+   - Các chỉ mục con: 1. Về kiến thức, 2. Về năng lực, 3. Về phẩm chất, 1. Giáo viên, 2. Học sinh, TIẾT 1/2, 1. Hoạt động khởi động, 2. Hình thành kiến thức, 3. Hoạt động luyện tập, 4. Hoạt động vận dụng
    - CHỈ TÊN NĂNG LỰC và TÊN PHẨM CHẤT được in đậm + in nghiêng (VD: ***NLa (Sử dụng và quản lý...)***, ***Năng lực Tự chủ và tự học***)
    - KHÔNG in đậm/nghiêng phần "với biểu hiện cụ thể là:" hay nội dung biểu hiện
    - a) Mục tiêu, b) Nội dung, c) Sản phẩm, d) Tổ chức thực hiện
    - B1. Chuyển giao nhiệm vụ, B2. Thực hiện nhiệm vụ, B3. Báo cáo, thảo luận, B4. Kết luận, nhận định
 3. KHÔNG in đậm nội dung khác ngoài danh sách trên
+
+=== HEADING → SECTION MAPPING (CRITICAL) ===
+Mỗi section JSON CHỈ chứa heading ĐÚNG của nó. KHÔNG NHẦM!
+- "muc_tieu"  → bắt đầu bằng "## **I. MỤC TIÊU**"
+- "thiet_bi"  → bắt đầu bằng "## **II. THIẾT BỊ DẠY HỌC VÀ HỌC LIỆU**", CHỈ chứa "1. Giáo viên" + "2. Học sinh"
+- "khoi_dong" → bắt đầu bằng "## **III. TIẾN TRÌNH DẠY HỌC**"
+- "phieu_hoc_tap" / "trac_nghiem" → KHÔNG viết heading IV, hệ thống TỰ THÊM "IV. PHỤ LỤC"
+TUYỆT ĐỐI KHÔNG viết "IV. PHỤ LỤC" vào content của bất kỳ section nào!
 
 OUTPUT FORMAT: JSON {"sections": [...]}. BẮT BUỘC đủ 6 section cốt lõi: muc_tieu, thiet_bi, khoi_dong, hinh_thanh_kien_thuc, luyen_tap, van_dung."""
 
@@ -161,6 +169,38 @@ HÌNH THỨC HOẠT ĐỘNG:
 - "Bài tập viết code": CHỈ KHI Ở PHÒNG MÁY
 
 => Thiết kế NỘI DUNG và CÁCH TỔ CHỨC từng hoạt động PHÙ HỢP với vị trí đã chọn!
+
+===== CHỈ BÁO NĂNG LỰC SỐ (NLS) =====
+
+[CRITICAL] TUYỆT ĐỐI KHÔNG SAO CHÉP NGUYÊN VĂN nội dung chỉ báo! PHẢI CỤ THỂ HÓA cho bài học.
+
+Nếu hoạt động có chỉ báo NLS (khác "Không có"):
+- TÍCH HỢP vào "2. Về năng lực" → thêm mục "**c) Năng lực số**" sau "b) Năng lực chung"
+- Thiết kế hoạt động PHẢI hướng đến phát triển các chỉ báo NLS đã chọn
+
+[FORMAT BẮT BUỘC]:
+```
+**c) Năng lực số**
+Khi tự mình và hướng dẫn người khác, học sinh có thể:
+- ***[TÊN MIỀN BỎ SỐ ĐẦU] ([MÃ NL THÀNH PHẦN] [MỨC+CHỈ BÁO]):*** [BIỂU HIỆN ĐÃ CỤ THỂ HÓA]
+```
+
+[CÁCH CHUYỂN ĐỔI]:
+1. Miền "3. Sáng tạo nội dung số" → "Sáng tạo nội dung số" (BỎ số đầu)
+2. Mã "3.1.NC1a" → "3.1 NC1a" (TÁCH bằng DẤU CÁCH, không dấu chấm giữa)
+3. Nội dung gốc → VIẾT LẠI: [ĐỘNG TỪ GỐC] + [NỘI DUNG BÀI HỌC CỤ THỂ] + [CÔNG CỤ SỐ]
+
+[VÍ DỤ]:
+❌ SAI (sao chép): ***Sáng tạo nội dung số (3.1 NC1a):*** Áp dụng được các cách tạo và chỉnh sửa nội dung ở các định dạng khác nhau.
+✓ ĐÚNG: ***Sáng tạo nội dung số (3.1 NC1a):*** Áp dụng được cách tạo và chỉnh sửa nội dung đồ họa vector bằng các công cụ vẽ hình, chỉnh màu sắc trong phần mềm Inkscape để thiết kế logo trường học.
+
+❌ SAI (sao chép): ***Giải quyết vấn đề với sự hỗ trợ của công nghệ (4.1 GQ1b):*** Sử dụng được công cụ CNTT phù hợp để giải quyết bài toán.
+✓ ĐÚNG: ***Giải quyết vấn đề với sự hỗ trợ của công nghệ (4.1 GQ1b):*** Sử dụng được phần mềm Thonny để viết chương trình Python dùng vòng lặp while giải bài toán tính tổng các số từ 1 đến n.
+
+[VALIDATION]:
+□ Format: ***[Tên miền] ([mã] [mức]):*** [biểu hiện]
+□ Mã KHÔNG có dấu chấm giữa: "3.1 NC1a" (đúng), "3.1.NC1a" (sai)
+□ Biểu hiện KHÔNG giống nguyên văn, CÓ nội dung bài + công cụ cụ thể
 </cau_hinh_hoat_dong>
 
 QUY TẮC VỀ PHƯƠNG PHÁP/KỸ THUẬT DẠY HỌC:
@@ -189,8 +229,7 @@ QUY TẮC PHIẾU HỌC TẬP vs GIẤY A1/A0:
 - TUYỆT ĐỐI KHÔNG dùng cả hai trong CÙNG MỘT hoạt động
 - Kỹ thuật Khăn trải bàn / Sơ đồ tư duy → BẮT BUỘC dùng giấy A1/A0, KHÔNG dùng phiếu
 
-QUY TẮC KHÔNG TRÍCH DẪN:
-- KHÔNG viết câu nói GV trong ngoặc kép "..."
+QUY TẮC KHÔNG TRÍCH DẪN (bổ sung cho quy tắc xuyên suốt số 3):
 - KHÔNG nhấn mạnh mục đích/ý nghĩa/mục tiêu của trò chơi
 - CHỈ mô tả hành động, bước tổ chức
 
@@ -222,8 +261,8 @@ QUY TẮC KHÔNG TRÍCH DẪN:
 
    VALIDATION: Đối chiếu từng chữ với "muc_tieu" Neo4j. Khác biệt → sửa lại.
 
-   b) Năng lực Tin học: (đọc từ <tai_lieu_tham_khao>)
-        Phân tích "muc_tieu" và đối chiếu với năng lực tin học trong <tai_lieu_tham_khao>.
+   b) Năng lực Tin học: (đọc từ <nang_luc_pham_chat>)
+        Phân tích "muc_tieu" và đối chiếu với năng lực tin học trong <nang_luc_pham_chat>.
 
         YÊU CẦU:
             1. Xác định NLa / NLb / NLc làm năng lực chính (chọn 01 NL chính).
@@ -354,9 +393,9 @@ QUY TẮC KHÔNG TRÍCH DẪN:
                 VD: - ***NLc (Giải quyết vấn đề...)*** với biểu hiện cụ thể sau:
                       + Trình bày được...
 
-   c) Năng lực chung: (Đọc từ <tai_lieu_tham_khao>)
+   c) Năng lực chung: (Đọc từ <nang_luc_pham_chat>)
    - Chọn 1-3 năng lực phù hợp.
-   - Lấy một biểu hiện cụ thể từ <tai_lieu_tham_khao> → phát triển trong bài.
+   - Lấy một biểu hiện cụ thể từ <nang_luc_pham_chat> → phát triển trong bài.
    - Năng lực chung phát triển qua cách GV tổ chức hoạt động.
    - Bắt đầu bằng động từ keyword của biểu hiện.
    - KHÔNG nêu tên PP/KTDH trong biểu hiện năng lực.
@@ -373,7 +412,7 @@ QUY TẮC KHÔNG TRÍCH DẪN:
     - "...trong hoạt động tìm hiểu bằng kĩ thuật khăn trải bàn"
     - "...thông qua việc xác định những điều đã biết trong bảng KWL"
 
-   d) Phẩm chất: (Đọc từ <tai_lieu_tham_khao>)
+   d) Phẩm chất: (Đọc từ <nang_luc_pham_chat>)
    - Tương tự năng lực chung: lấy biểu hiện từ tài liệu → phát triển trong bài.
    - Phải chỉ rõ hoạt động mà phẩm chất đó được phát triển.
    - CHỈ in đậm+nghiêng TÊN phẩm chất, không in đậm/nghiêng phần còn lại
@@ -431,10 +470,13 @@ QUY TẮC KHÔNG TRÍCH DẪN:
    d) Tổ chức: 4 bước (B1 → B2 → B3 → B4)
 
    QUY TẮC VIẾT "b) Nội dung":
-    - CHỌN MỘT hình thức: cá nhân HOẶC cặp đôi HOẶC nhóm (KHÔNG viết "cá nhân/cặp đôi")
-    - KHÔNG đề cập SGK: KHÔNG viết "đọc SGK", "dựa vào SGK"
+    - CHỌN MỘT hình thức DUY NHẤT cho TOÀN BỘ hoạt động: cá nhân HOẶC cặp đôi HOẶC nhóm
+    - TUYỆT ĐỐI KHÔNG TRỘN LẪN hình thức trong cùng 1 hoạt động (VD: "cá nhân đọc, sau đó cặp đôi thảo luận" → SAI)
+    - 1 hoạt động = 1 hình thức XUYÊN SUỐT từ b) Nội dung → B1 → B2 → B3 → B4
+    - KHÔNG đề cập SGK: KHÔNG viết "đọc SGK", "dựa vào SGK", "đọc thông tin"
     - KHÔNG viết chung chung: KHÔNG "để củng cố kiến thức" → PHẢI "để trả lời các câu hỏi trong phiếu học tập số 1"
     - KHÔNG ghi nội dung chi tiết nếu đã có Phiếu học tập (chỉ nêu yêu cầu)
+    - KHÔNG chia phiếu thành "phần I", "phần II" — ghi "Phiếu học tập số X" là đủ
     - Câu hỏi ở "b) Nội dung" KHÔNG lặp nguyên văn ở B1
     - KHÔNG nêu tên PP/KTDH
     - CÔNG THỨC: "HS hoạt động [hình thức] để [hành động cụ thể] [địa điểm/phiếu]"
@@ -445,8 +487,9 @@ QUY TẮC KHÔNG TRÍCH DẪN:
           + Em hãy kể tên một số thiết bị thông minh?
           + Theo em, đặc điểm chung nào khiến một thiết bị được gọi là "thông minh"?
     Ví dụ SAI:
-      - "HS hoạt động cá nhân và cặp đôi để tìm hiểu..." (dùng "và")
-      - "HS hoạt động nhóm sử dụng kĩ thuật Khăn trải bàn để..." (nêu tên KTDH)
+      - "HS hoạt động cá nhân đọc thông tin, sau đó thảo luận cặp đôi để trả lời..." (TRỘN LẪN cá nhân + cặp đôi trong 1 hoạt động → SAI!)
+      - "HS hoạt động cá nhân và cặp đôi để tìm hiểu..." (dùng "và" → SAI!)
+      - "HS hoạt động nhóm sử dụng kĩ thuật Khăn trải bàn để..." (nêu tên KTDH → SAI!)
 
    QUY TẮC VIẾT "c) Sản phẩm":
       1. Hoạt động CÓ PHIẾU HỌC TẬP:
@@ -454,8 +497,12 @@ QUY TẮC KHÔNG TRÍCH DẪN:
       - "Dự kiến câu trả lời:"
 
       QUY TẮC ĐỊNH DẠNG:
-      - Các ý a), b), c), d), e), f) viết thẳng KHÔNG có dấu gạch đầu dòng
       - KHÔNG in đậm nội dung đáp án trong phần Sản phẩm
+      - Mỗi câu trả lời viết dạng: "- Câu X: [nội dung trả lời]"
+
+      [CRITICAL] NHẤT QUÁN PHIẾU ↔ SẢN PHẨM:
+      - Phiếu có bao nhiêu câu → Sản phẩm trả lời bấy nhiêu câu (1:1)
+      - Sản phẩm KHÔNG chia ý con a), b), c) — vì phiếu không có ý con
 
       Ví dụ ĐÚNG:
       ```
@@ -465,22 +512,9 @@ QUY TẮC KHÔNG TRÍCH DẪN:
 
       - Câu 1: Biểu thức lôgic là biểu thức cho kết quả là True (đúng) hoặc False (sai).
 
-      - Câu 2:
-      a) Phép so sánh bằng (==)
-      b) Phép so sánh khác (!=)
-      c) Phép so sánh lớn hơn (>)
-      d) Phép so sánh nhỏ hơn (<)
+      - Câu 2: Các phép so sánh gồm: bằng (==), khác (!=), lớn hơn (>), nhỏ hơn (<), lớn hơn hoặc bằng (>=), nhỏ hơn hoặc bằng (<=).
 
-      - Câu 3:
-      a) and (và): Cả hai điều kiện đều đúng thì kết quả là True.
-      b) or (hoặc): Ít nhất một điều kiện đúng thì kết quả là True.
-      c) not (phủ định): Đảo ngược giá trị lôgic của điều kiện.
-      ```
-
-      Ví dụ SAI (KHÔNG LÀM):
-      ```
-      • Câu 2:                            <-- SAI: dùng bullet chấm tròn
-        • a) Phép so sánh bằng (==)       <-- SAI: có bullet trước a)
+      - Câu 3: Kết quả in ra là 15.
       ```
      2. Hoạt động TRẮC NGHIỆM:
       - "Bài làm trắc nghiệm của HS."
@@ -598,6 +632,12 @@ QUY TẮC KHÔNG TRÍCH DẪN:
       + B3. Báo cáo, thảo luận
       + B4. Kết luận, nhận định
 
+    - [CRITICAL] NHẤT QUÁN HÌNH THỨC HOẠT ĐỘNG:
+      + Hình thức đã chọn ở "b) Nội dung" PHẢI XUYÊN SUỐT B1 → B2 → B3 → B4
+      + Nếu "b) Nội dung" ghi "nhóm" → B1 chia nhóm, B2 HS thảo luận nhóm, B3 nhóm báo cáo
+      + Nếu "b) Nội dung" ghi "cá nhân" → B1 giao việc cá nhân, B2 HS làm cá nhân, B3 cá nhân trả lời
+      + KHÔNG ĐƯỢC chuyển đổi hình thức giữa chừng (VD: "cá nhân đọc → cặp đôi thảo luận" → SAI!)
+
     - **B1. Chuyển giao nhiệm vụ:** (GV là chủ thể - MÔ TẢ CỤ THỂ GV LÀM GÌ)
        - Thể hiện CÁCH TỔ CHỨC PP/KTDH (không nêu tên)
        - CHỈ mô tả bước tổ chức, KHÔNG viết câu hỏi kiến thức (đã có ở b) Nội dung)
@@ -609,14 +649,21 @@ QUY TẮC KHÔNG TRÍCH DẪN:
        - Chia nhóm rõ ràng (nếu có): số nhóm, số HS/nhóm
        - Phát phiếu/giấy cho HS (nếu có)
        - NÊU RÕ: GV chiếu/phát/yêu cầu CÁI GÌ CỤ THỂ, thời gian bao lâu
+       - [CRITICAL] NẾU HOẠT ĐỘNG DÙNG PHIẾU HỌC TẬP:
+         + B1 CHỈ ghi: "GV phát Phiếu học tập số X cho HS/nhóm" + thời gian + hình thức
+         + TUYỆT ĐỐI KHÔNG liệt kê lại câu hỏi trong phiếu ở B1 — câu hỏi ĐÃ CÓ trong phiếu rồi!
+         + KHÔNG chia phiếu thành "phần I", "phần II" — mỗi phiếu là một đơn vị hoàn chỉnh
+         SAI: "GV yêu cầu HS trả lời câu hỏi trong Phiếu số 1: 'Phát triển phần mềm là gì?'"
+         ĐÚNG: "GV phát Phiếu học tập số 1 cho các cặp đôi. Thời gian hoàn thành: 10 phút."
 
     - **B2. Thực hiện nhiệm vụ:** (HS là chủ thể - MÔ TẢ CỤ THỂ HS LÀM GÌ)
        - Nêu rõ thời gian HS làm việc (VD: "trong 10 phút")
        - Mô tả TỪNG BƯỚC HS thực hiện, mỗi bước 1 dòng gạch đầu dòng
        - NÊU RÕ: HS làm gì? Ở đâu? Bằng cách nào? Sản phẩm là gì?
-       - GV quan sát, hướng dẫn khi cần
-       KHÔNG viết: "HS đọc thông tin..." → NÊN: "HS tìm hiểu thông tin..."
-       KHÔNG viết: "HS thực hiện nhiệm vụ" → NÊN: Mô tả CỤ THỂ nhiệm vụ đó là gì
+       - KHÔNG viết câu chung chung vô nghĩa:
+         SAI: "GV đi quanh lớp, quan sát, gợi ý và hỗ trợ khi cần thiết." (thừa — bỏ đi!)
+         SAI: "HS đọc thông tin..." → NÊN: "HS tìm hiểu thông tin..."
+         SAI: "HS thực hiện nhiệm vụ" → NÊN: Mô tả CỤ THỂ nhiệm vụ đó là gì
 
     - **B3. Báo cáo, thảo luận:** (MÔ TẢ CỤ THỂ CÁCH BÁO CÁO)
        - Hình thức báo cáo: đại diện nhóm/cá nhân trình bày
@@ -696,48 +743,49 @@ QUY TẮC KHÔNG TRÍCH DẪN:
       - Nếu CÓ → Sáng tạo câu hỏi MỚI dựa trên kiến thức đó
 
 5. PHIẾU HỌC TẬP (CHỈ CHO BÀI TẬP TỰ LUẬN):
-   - CHỈ dùng cho: tự luận, điền chỗ trống, bài tập viết code trên giấy
+   - CHỈ dùng cho: tự luận, bài tập phân tích code trên giấy
    - KHÔNG TẠO phiếu cho TRẮC NGHIỆM
    - KHÔNG để đáp án trong phiếu (đáp án ở phần "c) Sản phẩm")
    - KHÔNG đưa nội dung phần "d) Tổ chức" vào phiếu
+   - MỖI PHIẾU TỐI ĐA 5 CÂU HỎI
+
+   [CRITICAL] MỖI HOẠT ĐỘNG = MỘT PHIẾU RIÊNG:
+   - TUYỆT ĐỐI KHÔNG dùng chung 1 phiếu cho nhiều hoạt động
+   - KHÔNG chia phiếu thành "phần I", "phần II", "phần III"
+   - Nếu hoạt động 2.1 cần phiếu → tạo "Phiếu học tập số 1"
+   - Nếu hoạt động 2.2 cũng cần phiếu → tạo "Phiếu học tập số 2" RIÊNG
+   - Nếu hoạt động 3 (luyện tập) cần phiếu → tạo "Phiếu học tập số 3" RIÊNG
+   - Mỗi phiếu là một section "phieu_hoc_tap" ĐỘC LẬP trong JSON
+   VD SAI: Hoạt động 2.1 dùng "Phiếu số 1, phần I", HĐ 2.2 dùng "Phiếu số 1, phần II" → SAI!
+   VD ĐÚNG: HĐ 2.1 dùng "Phiếu học tập số 1", HĐ 2.2 dùng "Phiếu học tập số 2" → ĐÚNG!
 
    BẮT BUỘC SỬ DỤNG ĐỊNH DẠNG JSON CHO PHIẾU HỌC TẬP:
-   Phiếu học tập PHẢI có trường "worksheet_data" chứa JSON có cấu trúc ĐƠN GIẢN như sau:
+   Phiếu học tập PHẢI có trường "worksheet_data" chứa JSON.
 
-   CHỈ CÓ 3 LOẠI CÂU HỎI:
+   [CRITICAL] CHỈ CÓ ĐÚNG 2 DẠNG CÂU HỎI — KHÔNG CÓ DẠNG NÀO KHÁC:
 
-   LOẠI 1 - CÂU HỎI ĐƠN GIẢN (chỉ có text + dòng trả lời):
+   DẠNG 1 - CÂU HỎI THƯỜNG (không có code):
+   Câu hỏi → dòng kẻ trả lời. HS tự viết câu trả lời vào dòng kẻ.
    ```json
    {{
      "id": "1",
-     "text": "Nội dung câu hỏi",
+     "text": "Nội dung câu hỏi?",
      "answer_lines": 3
    }}
    ```
 
-   LOẠI 2 - CÂU HỎI CÓ CÁC Ý CON (a, b, c, d):
+   DẠNG 2 - CÂU HỎI CÓ CODE:
+   Câu hỏi → đoạn code → dòng kẻ trả lời.
    ```json
    {{
      "id": "2",
-     "text": "Câu hỏi chính",
-     "sub_items": [
-       {{"id": "a", "text": "Nội dung ý a"}},
-       {{"id": "b", "text": "Nội dung ý b"}},
-       {{"id": "c", "text": "Nội dung ý c"}}
-     ],
-     "answer_lines": 3
-   }}
-   ```
-
-   LOẠI 3 - CÂU HỎI CÓ CODE:
-   ```json
-   {{
-     "id": "3",
-     "text": "Cho đoạn chương trình sau, hãy cho biết kết quả",
+     "text": "Cho đoạn chương trình sau, hãy cho biết kết quả:",
      "code": "x = 5\\ny = 10\\nprint(x + y)",
      "answer_lines": 2
    }}
    ```
+
+   TUYỆT ĐỐI KHÔNG DÙNG: sub_items, blanks, fill_blanks, code_template, kwl_table — CHỈ dùng "text", "code", "answer_lines"!
 
    CẤU TRÚC ĐẦY ĐỦ PHIẾU HỌC TẬP:
    ```json
@@ -751,23 +799,19 @@ QUY TẮC KHÔNG TRÍCH DẪN:
        "questions": [
          {{
            "id": "1",
-           "text": "Câu hỏi đơn giản?",
+           "text": "Câu hỏi tự luận?",
            "answer_lines": 3
          }},
          {{
            "id": "2",
-           "text": "Câu hỏi có nhiều ý:",
-           "sub_items": [
-             {{"id": "a", "text": "Ý a"}},
-             {{"id": "b", "text": "Ý b"}}
-           ],
-           "answer_lines": 4
+           "text": "Cho đoạn chương trình sau, hãy cho biết kết quả:",
+           "code": "x = 5\\nprint(x * 2)",
+           "answer_lines": 2
          }},
          {{
            "id": "3",
-           "text": "Cho đoạn code sau, hãy cho biết kết quả:",
-           "code": "print('Hello')",
-           "answer_lines": 2
+           "text": "Câu hỏi tự luận khác?",
+           "answer_lines": 4
          }}
        ]
      }}
@@ -775,11 +819,14 @@ QUY TẮC KHÔNG TRÍCH DẪN:
    ```
 
    QUY TẮC:
-   - `answer_lines`: Số dòng trả lời (FULL WIDTH - chiếm hết chiều rộng giấy)
-   - `sub_items`: Các ý con a, b, c, d - dòng trả lời ĐẶT SAU TẤT CẢ các ý
-   - `code`: Đoạn code hiển thị - dòng trả lời ĐẶT SAU code
-   - KHÔNG dùng các trường phức tạp như: blanks, fill_blanks, code_template
-   - KỸ THUẬT KWL: Dùng `"kwl_table": true`
+   - `answer_lines`: Số dòng kẻ trả lời (chiếm hết chiều rộng giấy)
+   - `code`: Đoạn code hiển thị — dòng kẻ trả lời ĐẶT SAU code
+   - Tối đa 5 câu hỏi mỗi phiếu
+   - KHÔNG dùng sub_items, blanks, fill_blanks, code_template, kwl_table
+
+   [CRITICAL] NHẤT QUÁN PHIẾU ↔ SẢN PHẨM:
+   - Mỗi câu hỏi trong phiếu → Sản phẩm trả lời tương ứng 1:1
+   - Sản phẩm KHÔNG chia ý con a), b), c) khi phiếu không có ý con
 
 6. TRẮC NGHIỆM:
    - CHỈ TẠO section "trac_nghiem" KHI VÀ CHỈ KHI có hoạt động với "Hình thức hoạt động: Trắc nghiệm" trong <cau_hinh_hoat_dong>
@@ -821,18 +868,6 @@ QUY TẮC KHÔNG TRÍCH DẪN:
 ---
 ## OUTPUT FORMAT: JSON (BẮT BUỘC)
 ---
-
-QUAN TRỌNG - TÊN 4 BƯỚC TRONG "d) Tổ chức thực hiện":
-- PHẢI ĐÚNG CHÍNH XÁC VÀ IN ĐẬM: **B1. Chuyển giao nhiệm vụ:** | **B2. Thực hiện nhiệm vụ:** | **B3. Báo cáo, thảo luận:** | **B4. Kết luận, nhận định:**
-- KHÔNG thay đổi, viết tắt, thêm bớt chữ
-- SAI: "B1. Đặt vấn đề", "Bước 1:", "Giai đoạn 1", "B1: Giới thiệu"
-- ĐÚNG: "B1. Chuyển giao nhiệm vụ"
-
-QUAN TRỌNG - TRÌNH BÀY B1/B2/B3/B4:
-- TUYỆT ĐỐI KHÔNG viết gộp nhiều ý thành 1 câu dài sau dấu hai chấm
-- MỖI hành động PHẢI xuống dòng mới với gạch đầu dòng (-)
-- Nếu có ý con → dùng (+) thụt vào trong
-- Mỗi bước tối thiểu 3-5 dòng gạch đầu dòng riêng biệt
 
 Trả về JSON với cấu trúc sau (NỘI DUNG PHẢI ĐẦY ĐỦ VÀ CHI TIẾT):
 
@@ -883,20 +918,11 @@ Trả về JSON với cấu trúc sau (NỘI DUNG PHẢI ĐẦY ĐỦ VÀ CHI TI
         "questions": [
           {{
             "id": "1",
-            "text": "[Câu hỏi đơn giản]",
+            "text": "[Câu hỏi tự luận]",
             "answer_lines": 3
           }},
           {{
             "id": "2",
-            "text": "[Câu hỏi có nhiều ý]",
-            "sub_items": [
-              {{"id": "a", "text": "[Ý a]"}},
-              {{"id": "b", "text": "[Ý b]"}}
-            ],
-            "answer_lines": 3
-          }},
-          {{
-            "id": "3",
             "text": "[Câu hỏi có code]",
             "code": "print('Hello')",
             "answer_lines": 2
@@ -930,8 +956,12 @@ QUY TẮC JSON:
 6. Section "trac_nghiem": dùng array "questions" (không dùng "content")
 7. TẠO ĐỦ số phiếu học tập theo yêu cầu hoạt động
 8. HTKT: Tạo hoạt động con 2.1, 2.2... theo SỐ LƯỢNG chi_muc từ Neo4j
-9. TRẮC NGHIỆM CHỈ TẠO KHI có hoạt động chọn hình thức "Trắc nghiệm". KHÔNG TẠO nếu không có yêu cầu!
-10. PHIẾU HỌC TẬP CHỈ CẦN "worksheet_data" (JSON theo 3 loại câu hỏi ở mục 5), KHÔNG cần "content"
+9. HEADING MỖI SECTION (CRITICAL — LỖI THƯỜNG GẶP):
+   - "muc_tieu" content BẮT ĐẦU bằng "## **I. MỤC TIÊU**"
+   - "thiet_bi" content BẮT ĐẦU bằng "## **II. THIẾT BỊ DẠY HỌC VÀ HỌC LIỆU**" → CHỈ CÓ "1. Giáo viên" + "2. Học sinh", KHÔNG CÓ GÌ KHÁC
+   - "khoi_dong" content BẮT ĐẦU bằng "## **III. TIẾN TRÌNH DẠY HỌC**"
+   - KHÔNG viết "IV. PHỤ LỤC" trong BẤT KỲ section nào — hệ thống tự thêm trước phieu_hoc_tap
+   - Mỗi section CHỈ chứa heading CỦA NÓ, KHÔNG chứa heading section khác!
 
 BẮT BUỘC ĐỦ 6 SECTION CỐT LÕI: muc_tieu, thiet_bi, khoi_dong, hinh_thanh_kien_thuc, luyen_tap, van_dung. KHÔNG bỏ sót!
 

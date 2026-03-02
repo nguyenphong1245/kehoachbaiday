@@ -12,7 +12,6 @@ import {
   PlayCircle,
   ChevronDown,
   ChevronRight,
-  RefreshCw,
   Lock,
 } from "lucide-react";
 import { getStudentDashboard, type StudentAssignmentInfo } from "@/services/studentService";
@@ -75,13 +74,13 @@ const StudentDashboardPage: React.FC = () => {
         );
       case "in_progress":
         return (
-          <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-full font-medium">
+          <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 bg-sky-100 dark:bg-sky-900/30 text-brand-dark dark:text-sky-400 rounded-full font-medium">
             <PlayCircle className="w-3 h-3" /> Đang làm
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-full font-medium">
+          <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 bg-stone-100 dark:bg-stone-700 text-stone-600 dark:text-stone-400 rounded-full font-medium">
             <Clock className="w-3 h-3" /> Chưa làm
           </span>
         );
@@ -112,7 +111,7 @@ const StudentDashboardPage: React.FC = () => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+        <Loader2 className="w-6 h-6 animate-spin text-brand" />
       </div>
     );
   }
@@ -121,19 +120,10 @@ const StudentDashboardPage: React.FC = () => {
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6">
       {/* Page header */}
       {assignments.length > 0 && (
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              {submittedCount} đã nộp · {pendingCount} chưa nộp
-            </p>
-          </div>
-          <button
-            onClick={loadDashboard}
-            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
-            title="Tải lại"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
+        <div className="mb-5">
+          <p className="text-sm text-stone-500 dark:text-stone-400">
+            {submittedCount} đã nộp · {pendingCount} chưa nộp
+          </p>
         </div>
       )}
 
@@ -149,12 +139,12 @@ const StudentDashboardPage: React.FC = () => {
 
       {/* Empty state */}
       {assignments.length === 0 ? (
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-10 text-center">
-          <ClipboardList className="w-12 h-12 mx-auto mb-3 text-slate-300 dark:text-slate-600" />
-          <p className="text-slate-600 dark:text-slate-400 font-medium">
+        <div className="bg-white dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 shadow-sm p-10 text-center">
+          <ClipboardList className="w-12 h-12 mx-auto mb-3 text-stone-300 dark:text-stone-600" />
+          <p className="text-stone-600 dark:text-stone-400 font-medium">
             Chưa có bài tập nào được giao
           </p>
-          <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">
+          <p className="text-stone-400 dark:text-stone-500 text-sm mt-1">
             Khi giáo viên giao bài, bạn sẽ thấy danh sách ở đây.
           </p>
         </div>
@@ -167,33 +157,33 @@ const StudentDashboardPage: React.FC = () => {
             return (
               <div
                 key={lessonKey}
-                className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden"
+                className="bg-white dark:bg-stone-800 rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden"
               >
                 {/* Lesson module header */}
                 <button
                   onClick={() => toggleLesson(lessonKey)}
-                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors text-left"
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-stone-50 dark:hover:bg-stone-700/30 transition-colors text-left"
                 >
                   {isExpanded ? (
-                    <ChevronDown className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                    <ChevronDown className="w-4 h-4 text-brand flex-shrink-0" />
                   ) : (
-                    <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                    <ChevronRight className="w-4 h-4 text-stone-400 flex-shrink-0" />
                   )}
-                  <BookOpen className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                  <BookOpen className="w-4 h-4 text-brand flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <span className="font-semibold text-sm text-slate-800 dark:text-white block truncate">
+                    <span className="font-semibold text-sm text-stone-800 dark:text-white block truncate">
                       {lessonKey}
                     </span>
                   </div>
                   {/* Progress */}
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <div className="w-16 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div className="w-16 h-1.5 bg-stone-100 dark:bg-stone-700 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-blue-500 rounded-full transition-all"
+                        className="h-full bg-brand rounded-full transition-all"
                         style={{ width: `${items.length > 0 ? (doneCount / items.length) * 100 : 0}%` }}
                       />
                     </div>
-                    <span className="text-xs text-slate-400 dark:text-slate-500 w-8 text-right">
+                    <span className="text-xs text-stone-400 dark:text-stone-500 w-8 text-right">
                       {doneCount}/{items.length}
                     </span>
                   </div>
@@ -201,7 +191,7 @@ const StudentDashboardPage: React.FC = () => {
 
                 {/* Assignment items */}
                 {isExpanded && (
-                  <div className="border-t border-slate-100 dark:border-slate-700/50">
+                  <div className="border-t border-stone-100 dark:border-stone-700/50">
                     {items.map((a) => {
                       const notStarted = a.start_at && new Date(a.start_at) > new Date();
                       const inner = (
@@ -212,14 +202,14 @@ const StudentDashboardPage: React.FC = () => {
                               : a.status === "submitted"
                               ? "text-green-500"
                               : a.status === "in_progress"
-                              ? "text-blue-500"
-                              : "text-slate-400 dark:text-slate-500"
+                              ? "text-brand"
+                              : "text-stone-400 dark:text-stone-500"
                           }`}>
                             {notStarted ? <Lock className="w-4 h-4" /> : contentTypeIcon(a.content_type)}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className={`text-sm truncate ${notStarted ? "text-slate-400 dark:text-slate-500" : "text-slate-900 dark:text-white"}`}>
+                              <h3 className={`text-sm truncate ${notStarted ? "text-stone-400 dark:text-stone-500" : "text-stone-900 dark:text-white"}`}>
                                 {a.title}
                               </h3>
                               {notStarted ? (
@@ -229,13 +219,13 @@ const StudentDashboardPage: React.FC = () => {
                                 </span>
                               ) : statusBadge(a.status)}
                             </div>
-                            <div className="flex flex-wrap gap-x-1.5 mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                            <div className="flex flex-wrap gap-x-1.5 mt-0.5 text-xs text-stone-500 dark:text-stone-400">
                               <span>{contentTypeLabel(a.content_type)}</span>
-                              <span className="text-slate-300 dark:text-slate-600">·</span>
+                              <span className="text-stone-300 dark:text-stone-600">·</span>
                               <span>{a.work_type === "group" ? "Nhóm" : "Cá nhân"}</span>
                               {a.lesson_info?.activity_name && (
                                 <>
-                                  <span className="text-slate-300 dark:text-slate-600">·</span>
+                                  <span className="text-stone-300 dark:text-stone-600">·</span>
                                   <span className="text-amber-600 dark:text-amber-400">
                                     {a.lesson_info.activity_name}
                                   </span>
@@ -243,7 +233,7 @@ const StudentDashboardPage: React.FC = () => {
                               )}
                               {a.due_date && (
                                 <>
-                                  <span className="text-slate-300 dark:text-slate-600">·</span>
+                                  <span className="text-stone-300 dark:text-stone-600">·</span>
                                   <span className="text-red-500 dark:text-red-400">
                                     Hạn: {new Date(a.due_date).toLocaleDateString("vi-VN")}
                                   </span>
@@ -251,14 +241,14 @@ const StudentDashboardPage: React.FC = () => {
                               )}
                             </div>
                           </div>
-                          <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 flex-shrink-0" />
+                          <ChevronRight className="w-4 h-4 text-stone-300 dark:text-stone-600 flex-shrink-0" />
                         </>
                       );
 
                       return notStarted ? (
                         <div
                           key={a.id}
-                          className="flex items-center gap-3 px-4 py-3 pl-11 opacity-60 cursor-not-allowed border-b border-slate-50 dark:border-slate-700/30 last:border-b-0"
+                          className="flex items-center gap-3 px-4 py-3 pl-11 opacity-60 cursor-not-allowed border-b border-stone-50 dark:border-stone-700/30 last:border-b-0"
                           title="Chưa đến giờ làm bài"
                         >
                           {inner}
@@ -267,7 +257,7 @@ const StudentDashboardPage: React.FC = () => {
                         <Link
                           key={a.id}
                           to={`/student/assignment/${a.id}`}
-                          className="flex items-center gap-3 px-4 py-3 pl-11 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors border-b border-slate-50 dark:border-slate-700/30 last:border-b-0"
+                          className="flex items-center gap-3 px-4 py-3 pl-11 hover:bg-sky-50/50 dark:hover:bg-sky-900/10 transition-colors border-b border-stone-50 dark:border-stone-700/30 last:border-b-0"
                         >
                           {inner}
                         </Link>

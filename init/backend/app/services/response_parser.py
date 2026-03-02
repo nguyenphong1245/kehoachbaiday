@@ -59,8 +59,9 @@ def clean_section_content(content: str, section_type: str) -> str:
 
     Fixes common issues:
     1. Content contains raw JSON objects from other sections (LLM mistake)
-    2. Literal \\n not decoded to actual newlines
-    3. Bullet points (•) converted to - and +
+    2. Content contains raw JSON boundary markers (}, {)
+    3. Literal \\n not decoded to actual newlines
+    4. Bullet points (•) converted to - and +
     """
     if not content:
         return content
@@ -79,17 +80,32 @@ def clean_section_content(content: str, section_type: str) -> str:
             )
             content = clean_part
 
-    # 2. Decode literal \n when content has many literal \n but few real newlines
+    # 2. Detect raw JSON boundary markers — content likely contains
+    #    multiple sections concatenated as raw JSON text
+    if re.search(r'"\s*}\s*,\s*\{\s*"section_type"', content):
+        # Try to extract just the first meaningful part before the JSON boundary
+        first_boundary = re.search(r'"\s*}\s*,\s*\{', content)
+        if first_boundary:
+            clean_part = content[: first_boundary.start()].rstrip(' ",\n\r\t')
+            if clean_part.strip():
+                logger.warning(
+                    "Section '%s': removed raw JSON boundaries at pos %d",
+                    section_type,
+                    first_boundary.start(),
+                )
+                content = clean_part
+
+    # 3. Decode literal \n — if there are more than 5, they are almost certainly
+    # unprocessed JSON escape sequences, not intentional backslash-n in content.
     literal_count = content.count("\\n")
-    real_newline_count = content.count("\n")
-    if literal_count > 5 and real_newline_count < literal_count // 2:
+    if literal_count > 5:
         content = content.replace("\\n", "\n")
         content = content.replace("\\t", "\t")
         logger.debug(
             "Section '%s': decoded %d literal \\n", section_type, literal_count
         )
 
-    # 3. Convert bullet points (•) to - and +
+    # 4. Convert bullet points (•) to - and +
     content = convert_bullet_points(content)
 
     return content
@@ -232,10 +248,11 @@ def repair_truncated_json(raw_response: str) -> Optional[str]:
 
 
 def _clean_phieu_hoc_tap_bold(content: str) -> str:
-    """Strip bold markers from phieu_hoc_tap content except the title line.
+    """Strip bold markers from phieu_hoc_tap content except important lines.
 
-    User wants only "PHIẾU HỌC TẬP SỐ X" to be bold, not internal elements
-    like Nhiệm vụ, Tình huống, Câu hỏi, etc.
+    Preserve bold on:
+    - PHT title lines ("PHIẾU HỌC TẬP SỐ X")
+    - Question lines ("Câu 1:", "Câu 2:") — bold prevents TipTap list detection
     """
     if not content:
         return content
@@ -243,8 +260,11 @@ def _clean_phieu_hoc_tap_bold(content: str) -> str:
     lines = content.split("\n")
     result_lines = []
     for line in lines:
-        # Keep bold for lines containing the PHT title
+        # Keep bold for PHT title lines
         if re.search(r"\*\*.*PHIẾU\s*HỌC\s*TẬP", line, re.IGNORECASE):
+            result_lines.append(line)
+        # Keep bold for "Câu X:" question lines — prevents TipTap ordered list detection
+        elif re.search(r"^\*\*Câu\s+\d+", line):
             result_lines.append(line)
         else:
             # Strip bold markers from other lines
@@ -291,31 +311,80 @@ def _generate_worksheet_content_from_data(worksheet_data: dict, title: str) -> s
         lines.append(f"**Nhiệm vụ:** {task}")
         lines.append("")
 
-    for q in questions:
-        q_id = q.get("id", "")
+    for q_idx, q in enumerate(questions):
+        q_id = q_idx + 1  # Auto-renumber sequentially regardless of LLM ids
         q_text = q.get("text", "")
         lines.append(f"**Câu {q_id}:** {q_text}")
         lines.append("")
 
-        # Code block
+        # Code block (Dạng 2: câu hỏi → code → dòng kẻ)
         if q.get("code"):
             lines.append("```python")
             lines.append(q["code"])
             lines.append("```")
             lines.append("")
 
-        # Sub items
-        sub_items = q.get("sub_items", [])
-        if sub_items:
-            for item in sub_items:
-                lines.append(f"{item.get('id', '')}) {item.get('text', '')}")
-                lines.append("")
-
-        # Answer lines (dotted lines)
+        # Answer lines (dòng kẻ trả lời)
         answer_lines = q.get("answer_lines", 3)
         for _ in range(answer_lines):
             lines.append("....................................................................................................................................................")
             lines.append("")
+
+    return "\n".join(lines)
+
+
+def _strip_misplaced_phu_luc_heading(content: str, section_type: str) -> str:
+    """Remove misplaced 'IV. PHỤ LỤC' heading from sections that shouldn't have it.
+
+    LLMs sometimes place the appendix heading inside thiet_bi or other sections,
+    causing wrong section ordering in the rendered output.
+    """
+    if section_type in ("phieu_hoc_tap", "trac_nghiem"):
+        return content  # These sections ARE the appendix
+
+    # Match variations: ## **IV. PHỤ LỤC**, ## IV. PHỤ LỤC, **IV. PHỤ LỤC**, etc.
+    pattern = r'\n*#{1,3}\s*\*{0,2}\s*IV\.?\s*PHỤ\s*LỤC\s*\*{0,2}.*'
+    match = re.search(pattern, content, re.IGNORECASE | re.DOTALL)
+    if match:
+        cleaned = content[:match.start()].rstrip()
+        logger.warning(
+            "Stripped misplaced 'IV. PHỤ LỤC' from section '%s' at pos %d",
+            section_type, match.start(),
+        )
+        return cleaned
+    return content
+
+
+def _fix_raw_phieu_numbering(content: str) -> str:
+    """Fix broken numbered patterns in raw PHT content from LLM.
+
+    When the LLM provides content directly (no worksheet_data), it often writes
+    items like '1. CPU\\n...\\n1. RAM\\n...' — all starting with '1.'.
+    TipTap converts each '1.' to an ordered list that restarts at 1.
+
+    This function detects repeated same-number patterns and converts them to
+    parenthesized format '(N) text' which TipTap does NOT auto-convert.
+    """
+    if not content:
+        return content
+
+    lines = content.split("\n")
+    # Find all lines starting with a number+period pattern (e.g. "1. text")
+    num_pattern = re.compile(r"^(\d+)\.\s+(.+)")
+    num_lines = [(i, m) for i, line in enumerate(lines)
+                 if (m := num_pattern.match(line))]
+
+    if len(num_lines) < 2:
+        return content
+
+    # Check if multiple lines share the same number (e.g. all "1.")
+    numbers = [m.group(1) for _, m in num_lines]
+    if len(set(numbers)) < len(numbers):
+        # Repeated numbers detected — renumber with letter format a), b), c)
+        for counter, (line_idx, match) in enumerate(num_lines):
+            letter = chr(97 + counter)  # a, b, c, d, ...
+            text = match.group(2)
+            lines[line_idx] = f"{letter}) {text}"
 
     return "\n".join(lines)
 
@@ -347,14 +416,41 @@ def _build_section_from_item(
         )
         section_id = f"phieu_hoc_tap_{phieu_count + 1}"
 
-        # Generate content from worksheet_data if content is empty
-        if worksheet_data and not content:
+        # Normalize worksheet_data: only allow 2 question types
+        # Type 1: text + answer_lines
+        # Type 2: text + code + answer_lines
+        # Strip any sub_items, blanks, fill_blanks, etc.
+        if worksheet_data and isinstance(worksheet_data, dict):
+            ws_questions = worksheet_data.get("questions", [])
+            for ws_q_idx, ws_q in enumerate(ws_questions):
+                ws_q["id"] = str(ws_q_idx + 1)
+                # Remove unsupported fields — only keep text, code, answer_lines
+                for key in list(ws_q.keys()):
+                    if key not in ("id", "text", "code", "answer_lines"):
+                        del ws_q[key]
+
+        # ALWAYS prefer worksheet_data when available (content may contain garbage)
+        if worksheet_data:
             content = _generate_worksheet_content_from_data(worksheet_data, title)
             logger.info("Generated content from worksheet_data for %s", section_id)
+        elif content:
+            # Safety net: fix repeated "1." patterns in raw LLM content
+            # Replace "1. text" at start of lines with "(N) text" to prevent
+            # TipTap from creating broken ordered lists
+            content = _fix_raw_phieu_numbering(content)
+        else:
+            content = "Phiếu học tập chưa có nội dung."
+
+        # Auto-prepend "IV. PHỤ LỤC" heading to the FIRST phieu_hoc_tap
+        if phieu_count == 0:
+            content = "## **IV. PHỤ LỤC**\n\n" + content
     else:
         section_id = section_type
 
     content = clean_section_content(content, section_type)
+
+    # Strip misplaced "IV. PHỤ LỤC" headings from non-appendix sections
+    content = _strip_misplaced_phu_luc_heading(content, section_type)
 
     # Strip bold from PHT content except the title line
     if section_type == "phieu_hoc_tap":

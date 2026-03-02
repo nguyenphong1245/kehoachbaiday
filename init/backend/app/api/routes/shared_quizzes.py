@@ -1,35 +1,26 @@
 """
 API Routes cho Quiz chia sẻ (Trắc nghiệm)
 """
-import json
 import secrets
 import re
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.rate_limiter import limiter
 
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
 from app.models.shared_quiz import SharedQuiz, QuizResponse
-from app.models.submission_session import SubmissionSession
 from app.schemas.shared_quiz import (
     CreateSharedQuizRequest,
     CreateSharedQuizResponse,
     UpdateQuizRequest,
     SharedQuizResponse,
-    QuizPublicResponse,
     QuizQuestion,
-    SubmitQuizRequest,
-    SubmitQuizResponse,
     QuizResponseItem,
     QuizResponsesListResponse,
     QuizStatisticsResponse,
-    StartSessionRequest,
-    StartSessionResponse,
 )
 from app.core.config import get_settings
 
@@ -279,204 +270,6 @@ async def get_my_quizzes(
     return quizzes
 
 
-@router.get("/public/{share_code}", response_model=QuizPublicResponse)
-@limiter.limit("30/minute")
-async def get_public_quiz(
-    request: Request,
-    share_code: str,
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Lấy thông tin quiz công khai (cho học sinh)
-    """
-    result = await db.execute(
-        select(SharedQuiz).where(SharedQuiz.share_code == share_code)
-    )
-    quiz = result.scalar_one_or_none()
-    
-    if not quiz:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy bài trắc nghiệm"
-        )
-    
-    if not quiz.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Bài trắc nghiệm đã bị vô hiệu hóa"
-        )
-    
-    if quiz.expires_at and quiz.expires_at < datetime.utcnow():
-        raise HTTPException(
-            status_code=status.HTTP_410_GONE,
-            detail="Bài trắc nghiệm đã hết hạn"
-        )
-    
-    # Parse questions và xóa đáp án đúng
-    questions = [QuizQuestion(**q) for q in quiz.questions]
-    public_questions = []
-
-    for q in questions:
-        public_q = QuizQuestion(
-            id=q.id,
-            question=q.question,
-            type=q.type,
-            options=q.options,
-            correct_answer="",  # Ẩn đáp án đúng
-        )
-        public_questions.append(public_q)
-    
-    return QuizPublicResponse(
-        title=quiz.title,
-        description=quiz.description,
-        total_questions=quiz.total_questions,
-        time_limit=quiz.time_limit,
-        questions=public_questions,
-    )
-
-
-@router.post("/public/{share_code}/start-session", response_model=StartSessionResponse)
-@limiter.limit("10/minute")
-async def start_quiz_session(
-    request: Request,
-    share_code: str,
-    body: StartSessionRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    """Bắt đầu phiên làm bài - trả về session token"""
-    result = await db.execute(
-        select(SharedQuiz).where(SharedQuiz.share_code == share_code)
-    )
-    quiz = result.scalar_one_or_none()
-
-    if not quiz or not quiz.is_active:
-        raise HTTPException(status_code=404, detail="Không tìm thấy bài trắc nghiệm")
-
-    if quiz.expires_at and quiz.expires_at < datetime.utcnow():
-        raise HTTPException(status_code=410, detail="Bài trắc nghiệm đã hết hạn")
-
-    client_ip = request.client.host if request.client else None
-    session = SubmissionSession(
-        share_code=share_code,
-        resource_type="quiz",
-        student_name=body.student_name,
-        student_class=body.student_class,
-        ip_address=client_ip,
-    )
-    db.add(session)
-    await db.commit()
-    await db.refresh(session)
-
-    return StartSessionResponse(session_token=session.session_token)
-
-
-@router.post("/public/{share_code}/submit", response_model=SubmitQuizResponse)
-@limiter.limit("5/minute")
-async def submit_quiz(
-    request: Request,
-    share_code: str,
-    body: SubmitQuizRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Nộp bài trắc nghiệm
-    """
-    # Verify session token
-    session_result = await db.execute(
-        select(SubmissionSession).where(
-            SubmissionSession.session_token == body.session_token,
-            SubmissionSession.share_code == share_code,
-            SubmissionSession.resource_type == "quiz",
-            SubmissionSession.student_name == body.student_name,
-            SubmissionSession.student_class == body.student_class,
-        )
-    )
-    session = session_result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Phiên làm bài không hợp lệ. Vui lòng bắt đầu lại."
-        )
-    if session.expires_at and session.expires_at < datetime.utcnow():
-        raise HTTPException(
-            status_code=status.HTTP_410_GONE,
-            detail="Phiên làm bài đã hết hạn. Vui lòng bắt đầu lại."
-        )
-
-    # Lấy quiz
-    result = await db.execute(
-        select(SharedQuiz).where(SharedQuiz.share_code == share_code)
-    )
-    quiz = result.scalar_one_or_none()
-
-    if not quiz or not quiz.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy bài trắc nghiệm"
-        )
-
-    # Kiểm tra cho phép làm lại không
-    if not quiz.allow_multiple_attempts:
-        result = await db.execute(
-            select(QuizResponse)
-            .where(
-                QuizResponse.quiz_id == quiz.id,
-                QuizResponse.student_name == body.student_name,
-                QuizResponse.student_class == body.student_class,
-            )
-        )
-        existing = result.scalar_one_or_none()
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Bạn đã nộp bài này rồi"
-            )
-    
-    # Chấm điểm - CHỈ hỗ trợ multiple_choice (chọn 1 đáp án)
-    questions = [QuizQuestion(**q) for q in quiz.questions]
-    total_correct = 0
-    correct_answers = {}
-
-    for q in questions:
-        student_answer = body.answers.get(q.id, "")
-        correct_answers[q.id] = q.correct_answer
-
-        if student_answer.upper() == q.correct_answer.upper():
-            total_correct += 1
-    
-    total_questions = len(questions)
-    score = int((total_correct / total_questions) * 100) if total_questions > 0 else 0
-    
-    # Lưu kết quả
-    response = QuizResponse(
-        quiz_id=quiz.id,
-        student_name=body.student_name,
-        student_class=body.student_class,
-        student_group=body.student_group,
-        student_email=body.student_email,
-        answers=body.answers,
-        score=score,
-        total_correct=total_correct,
-        total_questions=total_questions,
-        time_spent=body.time_spent,
-    )
-    
-    db.add(response)
-    await db.commit()
-    await db.refresh(response)
-    
-    logger.info(f"[OK] Quiz response {response.id}: {total_correct}/{total_questions} correct")
-    
-    return SubmitQuizResponse(
-        response_id=response.id,
-        score=score,
-        total_correct=total_correct,
-        total_questions=total_questions,
-        percentage=round((total_correct / total_questions) * 100, 1) if total_questions > 0 else 0,
-        correct_answers=correct_answers if quiz.show_correct_answers else None,
-    )
-
-
 @router.get("/{quiz_id}/detail")
 async def get_quiz_detail(
     quiz_id: int,
@@ -581,10 +374,20 @@ async def delete_quiz(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Không tìm thấy bài trắc nghiệm"
         )
-    
+
+    # Cascade: xóa học liệu tham chiếu trong các lớp học
+    from app.models.classroom_material import ClassroomMaterial
+    from sqlalchemy import delete as sql_delete
+    await db.execute(
+        sql_delete(ClassroomMaterial).where(
+            ClassroomMaterial.content_type == "quiz",
+            ClassroomMaterial.content_id == quiz_id,
+        )
+    )
+
     await db.delete(quiz)
     await db.commit()
-    
+
     logger.info(f"[OK] Deleted quiz {quiz_id}")
 
 

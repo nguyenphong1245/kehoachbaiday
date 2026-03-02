@@ -9,8 +9,8 @@ import useAuth from "@/hooks/useAuth";
 
 const LoginPage = () => {
   const navigator = useNavigate();
-  const { login, studentLogin, isLoading, error, resetError } = useAuth();
-  const [credential, setCredential] = useState("");
+  const { login, isLoading, error, resetError } = useAuth();
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -19,46 +19,28 @@ const LoginPage = () => {
     setSuccess(null);
     resetError();
     try {
-      // Detect if input is email (contains @) or username (student)
-      const isEmail = credential.includes("@");
-
-      if (isEmail) {
-        // Teacher/Admin login
-        const response = await login({ email: credential, password });
-        setSuccess(`Đăng nhập thành công! Đang chuyển hướng...`);
-
-        const roles = response.user.roles?.map((r) => r.name) ?? [];
-        if (roles.includes("student")) {
-          navigator("/student/dashboard");
-        } else {
-          navigator("/lesson-builder");
-        }
-      } else {
-        // Student login
-        await studentLogin({ username: credential, password });
-        setSuccess(`Đăng nhập thành công! Đang chuyển hướng...`);
-        navigator("/student/dashboard");
-      }
+      // Teacher/Admin login only (email-based)
+      await login({ email, password });
+      setSuccess(`Đăng nhập thành công! Đang chuyển hướng...`);
+      navigator("/lesson-builder");
     } catch (err) {
       console.error("Login failed", err);
     }
   };
 
   return (
-    <AuthCard
-      title="ĐĂNG NHẬP"
-    >
+    <AuthCard title="ĐĂNG NHẬP">
       <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
         {error ? <FormAlert>{error}</FormAlert> : null}
         {success ? <FormAlert variant="success">{success}</FormAlert> : null}
         <TextInput
-          label="Email hoặc Tài khoản"
-          name="credential"
-          type="text"
-          autoComplete="username"
+          label="Email"
+          name="email"
+          type="email"
+          autoComplete="email"
           placeholder="email@example.com"
-          value={credential}
-          onChange={(event) => setCredential(event.target.value)}
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
           required
         />
         <TextInput
@@ -73,7 +55,7 @@ const LoginPage = () => {
         />
         <SubmitButton label="Đăng nhập" isLoading={isLoading} />
       </form>
-      <div className="mt-4 flex flex-col gap-2 text-center text-sm text-slate-500 dark:text-slate-400">
+      <div className="mt-4 flex flex-col gap-2 text-center text-sm text-stone-500 dark:text-stone-400">
         <Link className="font-medium text-brand" to="/forgot-password">
           Quên mật khẩu?
         </Link>

@@ -31,13 +31,25 @@ from app.schemas.class_assignment import (
 )
 
 
+_ALLOWED_TABLES = {"class_assignments", "classrooms", "users"}
+_ALLOWED_COLUMNS = {
+    "start_at", "auto_peer_review", "peer_review_start_time",
+    "peer_review_end_time", "peer_review_status", "lesson_plan_id",
+}
+
+
 async def _check_column_exists(db: AsyncSession, table: str, column: str) -> bool:
-    """Check if a column exists in a table"""
+    """Check if a column exists in a table (with whitelist validation)"""
+    if table not in _ALLOWED_TABLES or column not in _ALLOWED_COLUMNS:
+        return False
     try:
-        result = await db.execute(text(f"""
-            SELECT column_name FROM information_schema.columns
-            WHERE table_name = '{table}' AND column_name = '{column}'
-        """))
+        result = await db.execute(
+            text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = :table AND column_name = :column"
+            ),
+            {"table": table, "column": column},
+        )
         return result.scalar() is not None
     except Exception:
         return False
@@ -214,7 +226,14 @@ async def create_assignment(
         columns.append('peer_review_end_time')
         values.append(peer_review_end_time)
 
-    # Build SQL
+    # Build SQL - column names are from a controlled list, not user input
+    _SAFE_COLUMNS = {
+        'classroom_id', 'content_type', 'content_id', 'title', 'description',
+        'work_type', 'due_date', 'lesson_plan_id', 'lesson_info', 'start_at',
+        'auto_peer_review', 'peer_review_start_time', 'peer_review_end_time',
+    }
+    columns = [c for c in columns if c in _SAFE_COLUMNS]
+    values = values[:len(columns)]
     placeholders = ', '.join([f':p{i}' for i in range(len(values))])
     col_names = ', '.join(columns)
     sql = f"INSERT INTO class_assignments ({col_names}) VALUES ({placeholders}) RETURNING id"
@@ -230,7 +249,7 @@ async def create_assignment(
         await db.rollback()
         error_msg = str(e)
         logger.error(f"Database error creating assignment: {error_msg}")
-        raise HTTPException(status_code=500, detail=f"Lỗi tạo bài giao: {error_msg}")
+        raise HTTPException(status_code=500, detail="Lỗi tạo bài giao. Vui lòng thử lại.")
 
     # Schedule background jobs (non-blocking)
     try:
@@ -829,24 +848,43 @@ async def _get_classroom_statistics_impl(
                         correct_answer = q.get("correct_answer", q.get("correctAnswer"))
                         if student_answer is not None and str(student_answer) == str(correct_answer):
                             correct += 1
-                    student_stat["score"] = {"total_correct": correct, "total_questions": total_q}
-                    score_earned = correct
-                    score_max = total_q
-                elif a.content_type == "code_exercise":
+                    score_obj = {"total_correct": correct, "total_questions": total_q}
+                    # Include teacher override if exists
                     if sub.teacher_score is not None:
-                        # Teacher graded: use teacher_score (out of 10)
-                        student_stat["score"] = {"teacher_score": sub.teacher_score, "max_score": 10}
+                        score_obj["teacher_score"] = sub.teacher_score
+                        score_obj["max_score"] = 10
+                    student_stat["score"] = score_obj
+                    # For ranking: teacher_score takes priority over auto-score
+                    if sub.teacher_score is not None:
                         score_earned = sub.teacher_score
                         score_max = 10
-                    elif "test_result" in answers:
+                    else:
+                        score_earned = correct
+                        score_max = total_q
+                elif a.content_type == "code_exercise":
+                    score_obj = {}
+                    if "test_result" in answers:
                         tr = answers["test_result"]
                         passed = tr.get("passed_tests", 0)
                         total = tr.get("total_tests", 0)
-                        student_stat["score"] = {"passed_tests": passed, "total_tests": total}
+                        score_obj["passed_tests"] = passed
+                        score_obj["total_tests"] = total
+                    elif sub.status == "submitted":
+                        score_obj = {"passed_tests": 0, "total_tests": 0, "no_test": True}
+                    # Include teacher override if exists
+                    if sub.teacher_score is not None:
+                        score_obj["teacher_score"] = sub.teacher_score
+                        score_obj["max_score"] = 10
+                    student_stat["score"] = score_obj
+                    # For ranking: teacher_score takes priority over auto-score
+                    if sub.teacher_score is not None:
+                        score_earned = sub.teacher_score
+                        score_max = 10
+                    elif "test_result" in answers:
                         score_earned = passed
                         score_max = total
                     elif sub.status == "submitted":
-                        student_stat["score"] = {"passed_tests": 0, "total_tests": 0, "no_test": True}
+                        pass  # score_earned/max remain 0
                 elif a.content_type == "worksheet":
                     if sub.teacher_score is not None:
                         student_stat["score"] = {"teacher_score": sub.teacher_score, "max_score": 10}

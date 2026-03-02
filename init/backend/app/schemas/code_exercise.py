@@ -162,6 +162,7 @@ class UpdateCodeExerciseRequest(BaseModel):
     """Request cập nhật bài tập"""
     starter_code: Optional[str] = None
     test_cases: Optional[List[TestCaseInput]] = None
+    problem_statement: Optional[str] = None
 
 
 # ============== Code Extraction from KHBD ==============
@@ -191,25 +192,3 @@ class ExtractCodeExercisesResponse(BaseModel):
     exercises: List[ExtractedExerciseItem] = []
     reason: Optional[str] = None
     created_exercises: Optional[List[CreateCodeExerciseResponse]] = None
-
-
-# ============== Hint (Gợi ý khi sai test case) ==============
-
-class FailedTestInfo(BaseModel):
-    """Thông tin 1 test case sai"""
-    test_num: int
-    input: str
-    expected_output: str
-    actual_output: str
-    error: Optional[str] = None
-
-
-class HintRequest(BaseModel):
-    """Request phân tích lỗi tổng hợp"""
-    code: str = Field(..., min_length=1, max_length=50000)
-    failed_tests: List[FailedTestInfo] = Field(..., min_length=1, max_length=20)
-
-
-class HintResponse(BaseModel):
-    """Response phân tích lỗi"""
-    hint: str

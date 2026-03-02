@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 # Load .env file
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
 
-NEO4J_URI = os.getenv("NEO4J_URI", "neo4j+s://3d076d47.databases.neo4j.io")
+NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
 NEO4J_USER = os.getenv("NEO4J_USERNAME", "neo4j")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "")
 
@@ -62,23 +62,17 @@ def update_ppdh(driver):
                 continue
                 
             cach_tien_hanh = item.get('cach_tien_hanh', '').strip()
-            uu_diem = item.get('uu_diem', '').strip()
-            nhuoc_diem = item.get('nhuoc_diem', '').strip()
-            
+
             query = """
             CREATE (p:PhuongPhapDayHoc {
                 ten: $ten,
-                cach_tien_hanh: $cach_tien_hanh,
-                uu_diem: $uu_diem,
-                nhuoc_diem: $nhuoc_diem
+                cach_tien_hanh: $cach_tien_hanh
             })
             RETURN p.ten as ten
             """
-            result = session.run(query, 
-                                ten=ten, 
-                                cach_tien_hanh=cach_tien_hanh,
-                                uu_diem=uu_diem,
-                                nhuoc_diem=nhuoc_diem)
+            result = session.run(query,
+                                ten=ten,
+                                cach_tien_hanh=cach_tien_hanh)
             created_ten = result.single()["ten"]
             print(f"  ✓ Đã tạo: {created_ten}")
         
@@ -111,26 +105,17 @@ def update_ktdh(driver):
                 continue
                 
             cach_tien_hanh = item.get('cach_tien_hanh', '').strip()
-            uu_diem = item.get('uu_diem', '').strip()
-            nhuoc_diem = item.get('nhuoc_diem', '').strip()
-            bo_sung = item.get('bo_sung', '').strip()
-            
+
             query = """
             CREATE (k:KyThuatDayHoc {
                 ten: $ten,
-                cach_tien_hanh: $cach_tien_hanh,
-                uu_diem: $uu_diem,
-                nhuoc_diem: $nhuoc_diem,
-                bo_sung: $bo_sung
+                cach_tien_hanh: $cach_tien_hanh
             })
             RETURN k.ten as ten
             """
-            result = session.run(query, 
-                                ten=ten, 
-                                cach_tien_hanh=cach_tien_hanh,
-                                uu_diem=uu_diem,
-                                nhuoc_diem=nhuoc_diem,
-                                bo_sung=bo_sung)
+            result = session.run(query,
+                                ten=ten,
+                                cach_tien_hanh=cach_tien_hanh)
             created_ten = result.single()["ten"]
             print(f"  ✓ Đã tạo: {created_ten}")
         

@@ -26,7 +26,6 @@ class Grade(str, Enum):
 class TeachingMethod(str, Enum):
     """Phương pháp dạy học"""
     COOPERATIVE = "Dạy học hợp tác"
-    PROJECT = "Dạy học theo dự án"
     PROBLEM_SOLVING = "Giải quyết vấn đề"
     DISCOVERY = "Dạy học khám phá"
     GAME = "Dạy học qua trò chơi"
@@ -58,6 +57,8 @@ class LessonSearchRequest(BaseModel):
     book_type: str = Field(..., description="Loại sách (KNTT, CTST, CD)")
     grade: str = Field(..., description="Lớp (10, 11, 12)")
     topic: str = Field(..., description="Chủ đề")
+    subject: str = Field("", description="Môn học (VD: Tin Học)")
+
 
 
 class LessonBasicInfo(BaseModel):
@@ -95,6 +96,13 @@ class LessonDetailResponse(BaseModel):
     orientation: Optional[str] = Field(None, description="Định hướng")
 
 
+class NLSSelectionItem(BaseModel):
+    """Một item NLS đã chọn"""
+    mien_nang_luc: str = Field(..., description="Tên miền năng lực")
+    ma: str = Field(..., description="Mã chỉ báo")
+    noi_dung: str = Field(..., description="Nội dung chỉ báo")
+
+
 class ActivityConfig(BaseModel):
     """Cấu hình cho mỗi hoạt động"""
     activity_name: str = Field(..., max_length=200, description="Tên hoạt động")
@@ -105,12 +113,12 @@ class ActivityConfig(BaseModel):
     # Nội dung cách tổ chức của phương pháp/kỹ thuật đã chọn
     methods_content: Optional[Dict[str, str]] = Field(default_factory=dict, description="Nội dung cách tổ chức phương pháp {tên: nội dung}")
     techniques_content: Optional[Dict[str, str]] = Field(default_factory=dict, description="Nội dung cách tổ chức kỹ thuật {tên: nội dung}")
-    # Hình thức kiểm tra/đánh giá: trắc nghiệm, phiếu học tập, bài tập code
-    activity_format: Optional[str] = Field(None, description="Hình thức: trac_nghiem, phieu_hoc_tap, bai_tap_code")
     # Yêu cầu bổ sung từ người dùng cho hoạt động
     custom_request: Optional[str] = Field(None, max_length=2000, description="Yêu cầu bổ sung của người dùng cho hoạt động này")
     # Vị trí dạy học cho hoạt động này
     location: Optional[str] = Field("lop_hoc", description="Vị trí dạy học: lop_hoc (Lớp học), phong_may (Phòng máy)")
+    # NLS (Năng lực số) - Chỉ báo năng lực số đã chọn
+    nls_selections: Optional[List[NLSSelectionItem]] = Field(None, description="Danh sách chỉ báo năng lực số đã chọn")
 
     @field_validator("activity_type")
     @classmethod
@@ -118,16 +126,6 @@ class ActivityConfig(BaseModel):
         allowed = {"khoi_dong", "hinh_thanh_kien_thuc", "luyen_tap", "van_dung"}
         if v not in allowed:
             raise ValueError(f"activity_type phải là một trong: {allowed}")
-        return v
-
-    @field_validator("activity_format")
-    @classmethod
-    def validate_activity_format(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return v
-        allowed = {"trac_nghiem", "phieu_hoc_tap", "bai_tap_code"}
-        if v not in allowed:
-            raise ValueError(f"activity_format phải là một trong: {allowed}")
         return v
 
     @field_validator("location")
@@ -170,6 +168,7 @@ class LessonPlanSection(BaseModel):
     content: str = Field("", description="Nội dung section (Markdown)")
     questions: Optional[List[QuizQuestionItem]] = Field(None, description="Danh sách câu hỏi (chỉ cho trac_nghiem)")
     mindmap_data: Optional[str] = Field(None, description="Dữ liệu sơ đồ tư duy (Markdown headings cho Markmap)")
+    mindmap_activity_name: Optional[str] = Field(None, description="Tên hoạt động gắn với sơ đồ tư duy (để chèn đúng vị trí)")
     worksheet_data: Optional[Dict[str, Any]] = Field(None, description="Dữ liệu phiếu học tập JSON")
     editable: bool = Field(True, description="Có thể chỉnh sửa không")
 
@@ -192,8 +191,6 @@ class TeachingMethodItem(BaseModel):
     value: str = Field(..., description="Tên phương pháp")
     label: str = Field(..., description="Tên hiển thị")
     cach_tien_hanh: Optional[str] = Field(None, description="Cách tiến hành")
-    uu_diem: Optional[str] = Field(None, description="Ưu điểm")
-    nhuoc_diem: Optional[str] = Field(None, description="Nhược điểm")
 
 
 class TeachingTechniqueItem(BaseModel):
@@ -201,9 +198,6 @@ class TeachingTechniqueItem(BaseModel):
     value: str = Field(..., description="Tên kỹ thuật")
     label: str = Field(..., description="Tên hiển thị")
     cach_tien_hanh: Optional[str] = Field(None, description="Cách tiến hành")
-    uu_diem: Optional[str] = Field(None, description="Ưu điểm")
-    nhuoc_diem: Optional[str] = Field(None, description="Nhược điểm")
-    bo_sung: Optional[str] = Field(None, description="Bổ sung")
 
 
 class StaticDataResponse(BaseModel):
@@ -219,6 +213,11 @@ class TopicsResponse(BaseModel):
     topics: List[str] = Field(default_factory=list, description="Danh sách chủ đề")
 
 
+class SubjectsResponse(BaseModel):
+    """Response chứa danh sách môn học từ Neo4j"""
+    subjects: List[str] = Field(default_factory=list, description="Danh sách môn học")
+
+
 # ============== SAVED LESSON PLAN STORAGE ==============
 
 class SavedLessonPlanSection(BaseModel):
@@ -228,7 +227,9 @@ class SavedLessonPlanSection(BaseModel):
     title: str
     content: str
     mindmap_data: Optional[str] = None
+    mindmap_activity_name: Optional[str] = None
     worksheet_data: Optional[Dict[str, Any]] = None
+    questions: Optional[List[Dict[str, Any]]] = None
     editable: bool = True
 
 
@@ -256,6 +257,8 @@ class GenerateMindmapRequest(BaseModel):
     lesson_name: str = Field(..., description="Tên bài học")
     activity_content: str = Field(..., description="Nội dung hoạt động")
     activity_name: str = Field(..., description="Tên hoạt động")
+    activity_type: Optional[str] = Field(None, description="Loại hoạt động: khoi_dong, hinh_thanh_kien_thuc, luyen_tap, van_dung")
+    chi_muc: Optional[str] = Field(None, description="Chỉ mục nội dung trong bài học")
 
 
 class GenerateMindmapResponse(BaseModel):
@@ -390,4 +393,43 @@ class CodeExercise(BaseModel):
     difficulty: str = Field("medium", description="Độ khó: easy, medium, hard")
     parsons_data: Optional[ParsonsData] = Field(None, description="Dữ liệu cho bài Parsons")
     coding_data: Optional[CodingData] = Field(None, description="Dữ liệu cho bài Coding")
+
+
+# ============== NLS (Năng lực số) - Digital Competency ==============
+
+class NLSChiBao(BaseModel):
+    """Chỉ báo năng lực số"""
+    ma: str = Field(..., description="Mã chỉ báo (VD: 1.1.NC1a)")
+    noi_dung: str = Field(..., description="Nội dung chỉ báo")
+
+
+class NLSNangLucThanhPhan(BaseModel):
+    """Năng lực thành phần"""
+    name: str = Field(..., description="Tên năng lực thành phần")
+
+
+class NLSMienNangLuc(BaseModel):
+    """Miền năng lực số"""
+    name: str = Field(..., description="Tên miền năng lực")
+
+
+class NLSMienNangLucResponse(BaseModel):
+    """Response danh sách miền năng lực"""
+    mien_nang_luc: List[NLSMienNangLuc] = Field(default_factory=list)
+
+
+class NLSNangLucThanhPhanResponse(BaseModel):
+    """Response danh sách năng lực thành phần theo miền"""
+    nang_luc_thanh_phan: List[NLSNangLucThanhPhan] = Field(default_factory=list)
+
+
+class NLSChiBaoResponse(BaseModel):
+    """Response danh sách chỉ báo theo năng lực thành phần"""
+    chi_bao: List[NLSChiBao] = Field(default_factory=list)
+
+
+class NLSSelection(BaseModel):
+    """Dữ liệu NLS đã chọn cho một hoạt động"""
+    mien_nang_luc: str = Field(..., description="Tên miền năng lực")
+    chi_bao_list: List[NLSChiBao] = Field(default_factory=list, description="Danh sách chỉ báo đã chọn")
 

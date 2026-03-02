@@ -252,16 +252,13 @@ def delete_all_data(session):
     # Xóa các node theo label
     labels_to_delete = [
         'BaiHoc',
-        'ChuDe', 
-        'Sach',
+        'ChuDe',
         'Lop',
         'DinhHuong',
         'ChiMuc',
         'MucTieu',
-        'YeuCauCanDat',
         'KyThuatDayHoc',
-        'PhuongPhapDayHoc',
-        'NangLuc'
+        'PhuongPhapDayHoc'
     ]
     
     for label in labels_to_delete:
@@ -289,7 +286,6 @@ def create_khbd_data(session, data: list):
     # Tạo constraints và indexes
     print("\n📌 Tạo constraints và indexes...")
     constraints = [
-        "CREATE CONSTRAINT IF NOT EXISTS FOR (s:Sach) REQUIRE s.ten IS UNIQUE",
         "CREATE CONSTRAINT IF NOT EXISTS FOR (l:Lop) REQUIRE l.lop IS UNIQUE",
         "CREATE CONSTRAINT IF NOT EXISTS FOR (b:BaiHoc) REQUIRE b.bai_id IS UNIQUE",
         "CREATE CONSTRAINT IF NOT EXISTS FOR (c:ChuDe) REQUIRE c.ten IS UNIQUE",
@@ -304,7 +300,6 @@ def create_khbd_data(session, data: list):
     
     # Thống kê
     stats = {
-        'sach': set(),
         'lop': set(),
         'chu_de': set(),
         'dinh_huong': set(),
@@ -312,20 +307,8 @@ def create_khbd_data(session, data: list):
         'chi_muc': 0,
         'bai_hoc': 0,
         'co_noi_dung': 0,
-        'yeu_cau_can_dat': 0,
         'mapping_chu_de': 0
     }
-    
-    print("\n📚 Tạo các node Sách...")
-    for sach_ten in SACH_MAPPING.keys():
-        try:
-            session.run("""
-                MERGE (s:Sach {ten: $ten})
-                SET s.ma = $ma
-            """, {"ten": sach_ten, "ma": SACH_MAPPING[sach_ten]})
-            stats['sach'].add(sach_ten)
-        except Exception as e:
-            print(f"  ⚠️ Lỗi tạo sách {sach_ten}: {e}")
     
     print("\n🎓 Tạo các node Lớp...")
     for lop in ['10', '11', '12']:
@@ -395,13 +378,6 @@ def create_khbd_data(session, data: list):
                 "noi_dung_sgk": item['noi_dung_sgk'],
                 "co_noi_dung": has_content
             })
-            
-            # Liên kết BaiHoc -> Sach
-            session.run("""
-                MATCH (b:BaiHoc {bai_id: $bai_id})
-                MATCH (s:Sach {ten: $sach})
-                MERGE (b)-[:THUOC_SACH]->(s)
-            """, {"bai_id": item['bai_id'], "sach": item['ten_loai_sach']})
             
             # Liên kết BaiHoc -> Lop
             session.run("""
@@ -489,19 +465,17 @@ def read_map_cd_data() -> list:
             lop = row.get('lop', '').strip()
             chu_de_cd = row.get('chu_de_canh_dieu', '').strip()
             chu_de_kntt = row.get('chu_de_ket_noi_chi_thuc', '').strip()
-            yeu_cau_can_dat = row.get('yeu_cau_can_dat', '').strip()
-            
+
             # Cập nhật lớp hiện tại nếu có giá trị mới
             if lop:
                 current_lop = lop
-            
-            # Thêm dữ liệu nếu có chủ đề hoặc yêu cầu cần đạt
-            if current_lop and (chu_de_cd or chu_de_kntt or yeu_cau_can_dat):
+
+            # Thêm dữ liệu nếu có chủ đề
+            if current_lop and (chu_de_cd or chu_de_kntt):
                 data.append({
                     'lop': current_lop,
                     'chu_de_cd': chu_de_cd,
                     'chu_de_kntt': chu_de_kntt,
-                    'yeu_cau_can_dat': yeu_cau_can_dat
                 })
     
     print(f"  ✅ Đã đọc {len(data)} mục mapping chủ đề")
@@ -509,14 +483,13 @@ def read_map_cd_data() -> list:
 
 
 def create_topic_mapping_and_yccd(session, map_data: list):
-    """Tạo liên kết giữa chủ đề của 2 sách và node YeuCauCanDat"""
+    """Tạo liên kết giữa chủ đề của 2 sách"""
     print("\n" + "="*70)
-    print("🔗 TẠO LIÊN KẾT CHỦ ĐỀ VÀ YÊU CẦU CẦN ĐẠT...")
+    print("🔗 TẠO LIÊN KẾT CHỦ ĐỀ...")
     print("="*70)
-    
+
     stats = {
         'mapping_chu_de': 0,
-        'yeu_cau_can_dat': 0,
         'chu_de_moi': 0
     }
     
@@ -525,7 +498,6 @@ def create_topic_mapping_and_yccd(session, map_data: list):
             lop = item['lop']
             chu_de_cd = item['chu_de_cd']
             chu_de_kntt = item['chu_de_kntt']
-            yeu_cau_can_dat = item['yeu_cau_can_dat']
             
             # Tạo node ChuDe nếu chưa tồn tại (từ MAP_CD.csv có thể có chủ đề mới)
             if chu_de_cd:
@@ -561,46 +533,6 @@ def create_topic_mapping_and_yccd(session, map_data: list):
                 })
                 stats['mapping_chu_de'] += 1
             
-            # Tạo node YeuCauCanDat và nối với chủ đề
-            if yeu_cau_can_dat:
-                # Tạo ID unique cho YeuCauCanDat
-                # Sử dụng hash của nội dung để tránh trùng lặp
-                yccd_id = f"YCCD_L{lop}_{idx+1}"
-                
-                session.run("""
-                    MERGE (y:YeuCauCanDat {id: $id})
-                    SET y.noi_dung = $noi_dung,
-                        y.lop = $lop
-                """, {
-                    "id": yccd_id,
-                    "noi_dung": yeu_cau_can_dat,
-                    "lop": lop
-                })
-                
-                # Nối YeuCauCanDat với chủ đề Cánh diều
-                if chu_de_cd:
-                    session.run("""
-                        MATCH (y:YeuCauCanDat {id: $yccd_id})
-                        MATCH (c:ChuDe {ten: $chu_de})
-                        MERGE (c)-[:CO_YEU_CAU_CAN_DAT]->(y)
-                    """, {
-                        "yccd_id": yccd_id,
-                        "chu_de": chu_de_cd
-                    })
-                
-                # Nối YeuCauCanDat với chủ đề Kết nối tri thức
-                if chu_de_kntt:
-                    session.run("""
-                        MATCH (y:YeuCauCanDat {id: $yccd_id})
-                        MATCH (c:ChuDe {ten: $chu_de})
-                        MERGE (c)-[:CO_YEU_CAU_CAN_DAT]->(y)
-                    """, {
-                        "yccd_id": yccd_id,
-                        "chu_de": chu_de_kntt
-                    })
-                
-                stats['yeu_cau_can_dat'] += 1
-            
             if (idx + 1) % 10 == 0:
                 print(f"  ⏳ Đã xử lý {idx + 1}/{len(map_data)} mục...")
                 
@@ -608,7 +540,6 @@ def create_topic_mapping_and_yccd(session, map_data: list):
             print(f"  ❌ Lỗi xử lý mục {idx}: {e}")
     
     print(f"\n  ✅ Đã tạo {stats['mapping_chu_de']} liên kết chủ đề tương đương")
-    print(f"  ✅ Đã tạo {stats['yeu_cau_can_dat']} node YeuCauCanDat")
     
     return stats
 
@@ -628,17 +559,11 @@ def read_ky_thuat_dh_data() -> list:
         for row in reader:
             ten_ki_thuat = row.get('ten_ki_thuat', '').strip()
             cach_tien_hanh = row.get('cach_tien_hanh', '').strip()
-            uu_diem = row.get('uu_diem', '').strip()
-            nhuoc_diem = row.get('nhuoc_diem', '').strip()
-            bo_sung = row.get('bo_sung', '').strip()
-            
+
             if ten_ki_thuat:
                 data.append({
                     'ten_ki_thuat': ten_ki_thuat,
                     'cach_tien_hanh': cach_tien_hanh,
-                    'uu_diem': uu_diem,
-                    'nhuoc_diem': nhuoc_diem,
-                    'bo_sung': bo_sung
                 })
     
     print(f"  ✅ Đã đọc {len(data)} kỹ thuật dạy học")
@@ -660,17 +585,11 @@ def create_ky_thuat_dh(session, data: list):
             session.run("""
                 MERGE (kt:KyThuatDayHoc {id: $id})
                 SET kt.ten = $ten,
-                    kt.cach_tien_hanh = $cach_tien_hanh,
-                    kt.uu_diem = $uu_diem,
-                    kt.nhuoc_diem = $nhuoc_diem,
-                    kt.bo_sung = $bo_sung
+                    kt.cach_tien_hanh = $cach_tien_hanh
             """, {
                 "id": kt_id,
                 "ten": item['ten_ki_thuat'],
                 "cach_tien_hanh": item['cach_tien_hanh'],
-                "uu_diem": item['uu_diem'],
-                "nhuoc_diem": item['nhuoc_diem'],
-                "bo_sung": item['bo_sung']
             })
             count += 1
             print(f"  ✅ {item['ten_ki_thuat']}")
@@ -697,49 +616,15 @@ def read_phuong_phap_dh_data() -> list:
         for row in reader:
             ten_phuong_phap = row.get('ten_phuong_phap', '').strip()
             cach_tien_hanh = row.get('cach_tien_hanh', '').strip()
-            uu_diem = row.get('uu_diem', '').strip()
-            nhuoc_diem = row.get('nhuoc_diem', '').strip()
-            
+
             if ten_phuong_phap:
                 data.append({
                     'ten_phuong_phap': ten_phuong_phap,
                     'cach_tien_hanh': cach_tien_hanh,
-                    'uu_diem': uu_diem,
-                    'nhuoc_diem': nhuoc_diem
                 })
     
     print(f"  ✅ Đã đọc {len(data)} phương pháp dạy học")
     return data
-
-
-def create_nang_luc_nodes(session):
-    """Tạo các node Năng lực"""
-    print("\n" + "="*70)
-    print("🎯 TẠO CÁC NODE NĂNG LỰC...")
-    print("="*70)
-    
-    # Các năng lực chung theo chương trình GDPT 2018
-    nang_luc_list = [
-        {"id": "TU_CHU_TU_HOC", "ten": "Năng lực tự chủ và tự học", "loai": "chung"},
-        {"id": "GIAO_TIEP_HOP_TAC", "ten": "Năng lực giao tiếp và hợp tác", "loai": "chung"},
-        {"id": "GIAI_QUYET_VAN_DE_SANG_TAO", "ten": "Năng lực giải quyết vấn đề và sáng tạo", "loai": "chung"},
-    ]
-    
-    count = 0
-    for nl in nang_luc_list:
-        try:
-            session.run("""
-                MERGE (nl:NangLuc {id: $id})
-                SET nl.ten = $ten,
-                    nl.loai = $loai
-            """, nl)
-            count += 1
-            print(f"  ✅ {nl['ten']}")
-        except Exception as e:
-            print(f"  ❌ Lỗi tạo năng lực {nl['ten']}: {e}")
-    
-    print(f"\n  ✅ Đã tạo {count} node NangLuc")
-    return count
 
 
 def create_phuong_phap_dh(session, data: list):
@@ -757,15 +642,11 @@ def create_phuong_phap_dh(session, data: list):
             session.run("""
                 MERGE (pp:PhuongPhapDayHoc {id: $id})
                 SET pp.ten = $ten,
-                    pp.cach_tien_hanh = $cach_tien_hanh,
-                    pp.uu_diem = $uu_diem,
-                    pp.nhuoc_diem = $nhuoc_diem
+                    pp.cach_tien_hanh = $cach_tien_hanh
             """, {
                 "id": pp_id,
                 "ten": item['ten_phuong_phap'],
                 "cach_tien_hanh": item['cach_tien_hanh'],
-                "uu_diem": item['uu_diem'],
-                "nhuoc_diem": item['nhuoc_diem']
             })
             count += 1
             print(f"  ✅ {item['ten_phuong_phap']}")
@@ -783,62 +664,9 @@ def create_relationships(session):
     print("🔗 TẠO CÁC LIÊN KẾT...")
     print("="*70)
     
-    stats = {'pp_nl': 0, 'kt_nl': 0, 'pp_dh': 0, 'pp_cd': 0}
-    
-    # 1. Dạy học theo dự án, Dạy học hợp tác -> Năng lực tự chủ và tự học
-    print("\n  📌 Liên kết Phương pháp -> Năng lực tự chủ và tự học")
-    try:
-        result = session.run("""
-            MATCH (pp:PhuongPhapDayHoc)
-            WHERE LOWER(pp.ten) CONTAINS 'dạy học dựa trên dự án' OR LOWER(pp.ten) CONTAINS 'dạy học hợp tác'
-            MATCH (nl:NangLuc {id: 'TU_CHU_TU_HOC'})
-            MERGE (pp)-[:PHAT_TRIEN_NANG_LUC]->(nl)
-            RETURN count(pp) as count
-        """)
-        count = result.single()['count'] if result.single() else 0
-        stats['pp_nl'] += count
-        print(f"     ✅ Đã liên kết {count} phương pháp")
-    except Exception as e:
-        print(f"     ❌ Lỗi: {e}")
-    
-    # 2. Phương pháp/Kỹ thuật có làm việc nhóm -> Năng lực giao tiếp và hợp tác
-    print("\n  📌 Liên kết PP/KT làm việc nhóm -> Năng lực giao tiếp và hợp tác")
-    try:
-        # Phương pháp có làm việc nhóm
-        session.run("""
-            MATCH (pp:PhuongPhapDayHoc)
-            WHERE pp.ten CONTAINS 'hợp tác' OR pp.cach_tien_hanh CONTAINS 'nhóm'
-            MATCH (nl:NangLuc {id: 'GIAO_TIEP_HOP_TAC'})
-            MERGE (pp)-[:PHAT_TRIEN_NANG_LUC]->(nl)
-        """)
-        # Kỹ thuật có làm việc nhóm
-        session.run("""
-            MATCH (kt:KyThuatDayHoc)
-            WHERE kt.cach_tien_hanh CONTAINS 'nhóm' OR kt.ten CONTAINS 'nhóm' 
-               OR kt.ten CONTAINS 'Khăn trải bàn' OR kt.ten CONTAINS 'Mảnh ghép'
-               OR kt.ten CONTAINS 'Phòng tranh' OR kt.ten CONTAINS 'Công đoạn'
-               OR kt.ten CONTAINS 'Bể cá'
-            MATCH (nl:NangLuc {id: 'GIAO_TIEP_HOP_TAC'})
-            MERGE (kt)-[:PHAT_TRIEN_NANG_LUC]->(nl)
-        """)
-        print("     ✅ Đã liên kết")
-    except Exception as e:
-        print(f"     ❌ Lỗi: {e}")
-    
-    # 3. Năng lực giải quyết vấn đề và sáng tạo -> PP Phát hiện và giải quyết vấn đề
-    print("\n  📌 Liên kết PP giải quyết vấn đề -> Năng lực GQVĐ và sáng tạo")
-    try:
-        session.run("""
-            MATCH (pp:PhuongPhapDayHoc)
-            WHERE pp.ten CONTAINS 'giải quyết vấn đề' OR pp.ten CONTAINS 'khám phá'
-            MATCH (nl:NangLuc {id: 'GIAI_QUYET_VAN_DE_SANG_TAO'})
-            MERGE (pp)-[:PHAT_TRIEN_NANG_LUC]->(nl)
-        """)
-        print("     ✅ Đã liên kết")
-    except Exception as e:
-        print(f"     ❌ Lỗi: {e}")
-    
-    # 4. Định hướng Khoa học máy tính -> PP nêu và giải quyết vấn đề
+    stats = {'pp_dh': 0, 'pp_cd': 0}
+
+    # 1. Định hướng Khoa học máy tính -> PP nêu và giải quyết vấn đề
     print("\n  📌 Liên kết Định hướng KHMT -> PP giải quyết vấn đề")
     try:
         session.run("""
@@ -851,7 +679,7 @@ def create_relationships(session):
     except Exception as e:
         print(f"     ❌ Lỗi: {e}")
     
-    # 5. PP Dạy học thực hành -> Định hướng Tin học ứng dụng
+    # 2. PP Dạy học thực hành -> Định hướng Tin học ứng dụng
     print("\n  📌 Liên kết PP thực hành -> Định hướng ICT")
     try:
         session.run("""
@@ -864,7 +692,7 @@ def create_relationships(session):
     except Exception as e:
         print(f"     ❌ Lỗi: {e}")
     
-    # 6. Chủ đề B "Mạng máy tính và Internet", Chủ đề E "Ứng dụng tin học" -> PP thực hành
+    # 3. Chủ đề B "Mạng máy tính và Internet", Chủ đề E "Ứng dụng tin học" -> PP thực hành
     print("\n  📌 Liên kết Chủ đề B, E -> PP thực hành")
     try:
         session.run("""
@@ -878,7 +706,7 @@ def create_relationships(session):
     except Exception as e:
         print(f"     ❌ Lỗi: {e}")
     
-    # 7. Chủ đề D, E, C -> PP Dạy học dự án
+    # 4. Chủ đề D, E, C -> PP Dạy học dự án
     print("\n  📌 Liên kết Chủ đề D, E, C -> PP Dạy học dự án")
     try:
         session.run("""
@@ -906,7 +734,7 @@ def verify_data(session):
     print("="*70)
     
     # Đếm số node theo label
-    labels = ['Sach', 'Lop', 'ChuDe', 'DinhHuong', 'BaiHoc', 'MucTieu', 'ChiMuc', 'YeuCauCanDat', 'KyThuatDayHoc', 'PhuongPhapDayHoc', 'NangLuc']
+    labels = ['Lop', 'ChuDe', 'DinhHuong', 'BaiHoc', 'MucTieu', 'ChiMuc', 'KyThuatDayHoc', 'PhuongPhapDayHoc']
     for label in labels:
         result = session.run(f"MATCH (n:{label}) RETURN count(n) AS count")
         record = result.single()
@@ -920,16 +748,6 @@ def verify_data(session):
     """)
     record = result.single()
     print(f"  📌 Bài học có nội dung SGK: {record['count']} nodes")
-    
-    # Thống kê theo sách
-    print("\n  📚 Thống kê theo sách:")
-    result = session.run("""
-        MATCH (b:BaiHoc)-[:THUOC_SACH]->(s:Sach)
-        RETURN s.ten AS sach, count(b) AS count
-        ORDER BY s.ten
-    """)
-    for record in result:
-        print(f"     - {record['sach']}: {record['count']} bài")
     
     # Thống kê theo lớp
     print("\n  🎓 Thống kê theo lớp:")
@@ -954,14 +772,13 @@ def verify_data(session):
     # Mẫu một số bài học với đầy đủ liên kết
     print("\n  📖 Mẫu một số bài học (với liên kết):")
     result = session.run("""
-        MATCH (b:BaiHoc)-[:THUOC_SACH]->(s:Sach)
-        MATCH (b)-[:THUOC_LOP]->(l:Lop)
+        MATCH (b:BaiHoc)-[:THUOC_LOP]->(l:Lop)
         OPTIONAL MATCH (b)-[:THUOC_CHU_DE]->(c:ChuDe)
         OPTIONAL MATCH (b)-[:THUOC_DINH_HUONG]->(d:DinhHuong)
         OPTIONAL MATCH (b)-[:CO_MUC_TIEU]->(m:MucTieu)
         OPTIONAL MATCH (b)-[:CO_CHI_MUC]->(cm:ChiMuc)
-        RETURN b.bai_id AS id, b.ten AS ten, s.ma AS sach, l.lop AS lop, 
-               c.ten AS chu_de, d.ten AS dinh_huong, 
+        RETURN b.bai_id AS id, b.ten AS ten, l.lop AS lop,
+               c.ten AS chu_de, d.ten AS dinh_huong,
                m.noi_dung AS muc_tieu, count(cm) AS so_chi_muc,
                b.co_noi_dung AS co_noi_dung
         ORDER BY b.bai_id
@@ -972,7 +789,7 @@ def verify_data(session):
         ten_short = record['ten'][:40] + "..." if len(record['ten']) > 40 else record['ten']
         print(f"     {content_icon} {record['id']}")
         print(f"        Tên: {ten_short}")
-        print(f"        Sách: {record['sach']} | Lớp: {record['lop']} | ĐH: {record['dinh_huong']}")
+        print(f"        Lớp: {record['lop']} | ĐH: {record['dinh_huong']}")
         if record['chu_de']:
             print(f"        Chủ đề: {record['chu_de'][:50]}...")
         print(f"        Số chỉ mục: {record['so_chi_muc']}")
@@ -1021,10 +838,9 @@ def main():
             # Tạo dữ liệu mới từ DL_KHBD.csv
             stats = create_khbd_data(session, data)
             
-            # Tạo liên kết chủ đề và YeuCauCanDat từ MAP_CD.csv
+            # Tạo liên kết chủ đề từ MAP_CD.csv
             if map_cd_data:
                 map_stats = create_topic_mapping_and_yccd(session, map_cd_data)
-                stats['yeu_cau_can_dat'] = map_stats['yeu_cau_can_dat']
                 stats['mapping_chu_de'] = map_stats['mapping_chu_de']
             
             # Tạo các node Kỹ thuật Dạy học
@@ -1035,9 +851,6 @@ def main():
             phuong_phap_dh_data = read_phuong_phap_dh_data()
             if phuong_phap_dh_data:
                 stats['phuong_phap_dh'] = create_phuong_phap_dh(session, phuong_phap_dh_data)
-            
-            # Tạo các node Năng lực
-            stats['nang_luc'] = create_nang_luc_nodes(session)
             
             # Tạo các liên kết PP/KT/NL/ĐH/CĐ
             create_relationships(session)
@@ -1050,7 +863,6 @@ def main():
         print("\n" + "="*70)
         print("✅ HOÀN THÀNH RESET DỮ LIỆU KHBD!")
         print("="*70)
-        print(f"📚 Sách: {len(stats['sach'])}")
         print(f"🎓 Lớp: {len(stats['lop'])}")
         print(f"📂 Chủ đề: {len(stats['chu_de'])}")
         print(f"🧭 Định hướng: {len(stats['dinh_huong'])}")
@@ -1059,29 +871,23 @@ def main():
         print(f"📑 Chỉ mục: {stats['chi_muc']}")
         print(f"📝 Có nội dung SGK: {stats['co_noi_dung']}")
         print(f"🔗 Liên kết chủ đề tương đương: {stats['mapping_chu_de']}")
-        print(f"✅ Yêu cầu cần đạt: {stats['yeu_cau_can_dat']}")
         print(f"🎓 Kỹ thuật dạy học: {stats.get('ky_thuat_dh', 0)}")
         print(f"📚 Phương pháp dạy học: {stats.get('phuong_phap_dh', 0)}")
-        print(f"🎯 Năng lực: {stats.get('nang_luc', 0)}")
         
         print("\n📋 CẤU TRÚC DỮ LIỆU:")
         print("   BaiHoc (trung tâm)")
         print("   ├── Thuộc tính: ten, loai, noi_dung_sgk")
         print("   └── Liên kết:")
-        print("       ├── [:THUOC_SACH] -> Sach")
         print("       ├── [:THUOC_LOP] -> Lop")
         print("       ├── [:THUOC_CHU_DE] -> ChuDe")
         print("       │                      ├── [:TUONG_DUONG] <-> ChuDe (sách khác)")
-        print("       │                      ├── [:CO_YEU_CAU_CAN_DAT] -> YeuCauCanDat")
         print("       │                      └── [:PHU_HOP_PHUONG_PHAP] -> PhuongPhapDayHoc")
         print("       ├── [:THUOC_DINH_HUONG] -> DinhHuong")
         print("       │                          └── [:PHU_HOP_PHUONG_PHAP] -> PhuongPhapDayHoc")
         print("       ├── [:CO_MUC_TIEU] -> MucTieu")
         print("       └── [:CO_CHI_MUC] -> ChiMuc")
         print("   PhuongPhapDayHoc")
-        print("       └── [:PHAT_TRIEN_NANG_LUC] -> NangLuc")
         print("   KyThuatDayHoc")
-        print("       └── [:PHAT_TRIEN_NANG_LUC] -> NangLuc")
         
     except Exception as e:
         print(f"\n❌ Lỗi kết nối Neo4j: {e}")

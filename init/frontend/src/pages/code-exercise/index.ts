@@ -1,1 +1,1 @@
-export { PublicCodeExercisePage } from "./PublicCodeExercisePage";
+export { default as PublicCodeExercisePage } from "./PublicCodeExercisePage";

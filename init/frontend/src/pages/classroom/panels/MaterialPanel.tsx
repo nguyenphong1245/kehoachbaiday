@@ -40,7 +40,7 @@ const typeLabel: Record<string, string> = {
 };
 
 const typeColor: Record<string, string> = {
-  worksheet: "text-blue-600 dark:text-blue-400",
+  worksheet: "text-brand dark:text-sky-400",
   quiz: "text-emerald-600 dark:text-emerald-400",
   code_exercise: "text-violet-600 dark:text-violet-400",
 };
@@ -178,8 +178,9 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
       setAssigningId(null);
       onAssigned();
       await onReloadAssignments();
-    } catch {
-      onError("Lỗi khi giao bài");
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail;
+      onError(detail || "Lỗi khi giao bài");
     } finally {
       setSubmitting(false);
     }
@@ -270,14 +271,14 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
     if (assignmentsLoading) {
       return (
         <div className="flex items-center justify-center py-6">
-          <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+          <Loader2 className="w-5 h-5 animate-spin text-stone-400" />
         </div>
       );
     }
 
     if (assignments.length === 0) {
       return (
-        <p className="text-sm text-slate-400 dark:text-slate-500 py-4">
+        <p className="text-sm text-stone-400 dark:text-stone-500 py-4">
           Chưa có bài nào được giao cho lớp này.
         </p>
       );
@@ -294,35 +295,35 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
                 className="flex items-center gap-2 py-2 px-1 w-full text-left group"
               >
                 {isCollapsed ? (
-                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors" />
+                  <ChevronRight className="w-4 h-4 text-stone-400 group-hover:text-brand transition-colors" />
                 ) : (
-                  <ChevronDown className="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors" />
+                  <ChevronDown className="w-4 h-4 text-stone-400 group-hover:text-brand transition-colors" />
                 )}
-                <BookOpen className="w-4 h-4 text-blue-500" />
-                <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate">
+                <BookOpen className="w-4 h-4 text-brand" />
+                <span className="text-sm font-semibold text-stone-700 dark:text-stone-300 group-hover:text-brand dark:group-hover:text-sky-400 transition-colors truncate">
                   {group.label}
                 </span>
-                <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 flex-shrink-0">
+                <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-stone-100 dark:bg-stone-700 text-stone-500 dark:text-stone-400 flex-shrink-0">
                   {group.items.length}
                 </span>
               </button>
 
               {!isCollapsed && (
-                <div className="ml-6 border-l-2 border-slate-100 dark:border-slate-700 pl-4 divide-y divide-slate-100 dark:divide-slate-700/50">
+                <div className="ml-6 border-l-2 border-stone-100 dark:border-stone-700 pl-4 divide-y divide-stone-100 dark:divide-stone-700/50">
                   {group.items.map((a) => (
                     <div key={a.id} className="py-3 flex items-start gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-slate-900 dark:text-white text-sm truncate">
+                          <span className="font-medium text-stone-900 dark:text-white text-sm truncate">
                             {a.title}
                           </span>
                           {!a.is_active && (
-                            <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                            <span className="text-[11px] text-stone-400 dark:text-stone-500">
                               (tắt)
                             </span>
                           )}
                         </div>
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-stone-500 dark:text-stone-400">
                           <span className={typeColor[a.content_type] || ""}>
                             {typeLabel[a.content_type] || a.content_type}
                           </span>
@@ -337,7 +338,7 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
                           )}
                         </div>
                         {a.description && (
-                          <p className="text-xs text-slate-400 mt-1 line-clamp-1">
+                          <p className="text-xs text-stone-400 mt-1 line-clamp-1">
                             {a.description}
                           </p>
                         )}
@@ -359,7 +360,7 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
                         )}
                         <button
                           onClick={() => handleDeleteAssignment(a.id)}
-                          className="p-1 text-slate-300 hover:text-red-500 rounded transition-colors"
+                          className="p-1 text-stone-300 hover:text-red-500 rounded transition-colors"
                           title="Xóa bài giao"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -381,14 +382,14 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
     if (materialsLoading) {
       return (
         <div className="flex items-center justify-center py-6">
-          <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+          <Loader2 className="w-5 h-5 animate-spin text-stone-400" />
         </div>
       );
     }
 
     if (materials.length === 0) {
       return (
-        <p className="text-sm text-slate-400 dark:text-slate-500 py-4">
+        <p className="text-sm text-stone-400 dark:text-stone-500 py-4">
           Chưa có học liệu nào. Chuyển từ trang Quản lý học liệu.
         </p>
       );
@@ -406,22 +407,22 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
                 className="flex items-center gap-2 py-2 px-1 w-full text-left group"
               >
                 {isCollapsed ? (
-                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors" />
+                  <ChevronRight className="w-4 h-4 text-stone-400 group-hover:text-brand transition-colors" />
                 ) : (
-                  <ChevronDown className="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors" />
+                  <ChevronDown className="w-4 h-4 text-stone-400 group-hover:text-brand transition-colors" />
                 )}
-                <BookOpen className="w-4 h-4 text-blue-500" />
-                <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate">
+                <BookOpen className="w-4 h-4 text-brand" />
+                <span className="text-sm font-semibold text-stone-700 dark:text-stone-300 group-hover:text-brand dark:group-hover:text-sky-400 transition-colors truncate">
                   {group.label}
                 </span>
-                <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 flex-shrink-0">
+                <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-stone-100 dark:bg-stone-700 text-stone-500 dark:text-stone-400 flex-shrink-0">
                   {group.items.length}
                 </span>
               </button>
 
               {/* Group items */}
               {!isCollapsed && (
-                <div className="ml-6 border-l-2 border-slate-100 dark:border-slate-700 pl-4">
+                <div className="ml-6 border-l-2 border-stone-100 dark:border-stone-700 pl-4">
                   {group.items.map((mat) => {
                     const itemKey = `${mat.content_type}-${mat.content_id}`;
                     const isExpanded = assigningId === itemKey;
@@ -430,7 +431,7 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
                       <div key={mat.id} className="py-2">
                         <div className="flex items-center gap-3">
                           <div className="flex-1 min-w-0">
-                            <span className="text-sm text-slate-900 dark:text-white">
+                            <span className="text-sm text-stone-900 dark:text-white">
                               {mat.title}
                             </span>
                             <span className={`ml-2 text-xs ${typeColor[mat.content_type]}`}>
@@ -441,15 +442,15 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
                             onClick={() => openAssignForm(mat)}
                             className={`text-xs px-2.5 py-1 rounded transition-colors flex-shrink-0 ${
                               isExpanded
-                                ? "bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300"
-                                : "bg-blue-600 text-white hover:bg-blue-700"
+                                ? "bg-stone-200 dark:bg-stone-600 text-stone-600 dark:text-stone-300"
+                                : "bg-brand text-white hover:bg-brand-dark"
                             }`}
                           >
                             {isExpanded ? "Thu gọn" : "Giao"}
                           </button>
                           <button
                             onClick={() => handleRemoveMaterial(mat.id)}
-                            className="p-1 text-slate-300 hover:text-red-500 rounded transition-colors flex-shrink-0"
+                            className="p-1 text-stone-300 hover:text-red-500 rounded transition-colors flex-shrink-0"
                             title="Xóa khỏi lớp"
                           >
                             <X className="w-3.5 h-3.5" />
@@ -463,33 +464,33 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
                               type="text"
                               value={assignTitle}
                               onChange={(e) => setAssignTitle(e.target.value)}
-                              className="w-full px-3 py-1.5 border border-slate-200 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              className="w-full px-3 py-1.5 border border-stone-200 dark:border-stone-600 rounded-lg bg-stone-50 dark:bg-stone-700 text-stone-900 dark:text-white text-sm focus:ring-2 focus:ring-brand focus:border-brand"
                               placeholder="Tiêu đề bài giao"
                             />
                             <input
                               type="text"
                               value={assignDesc}
                               onChange={(e) => setAssignDesc(e.target.value)}
-                              className="w-full px-3 py-1.5 border border-slate-200 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              className="w-full px-3 py-1.5 border border-stone-200 dark:border-stone-600 rounded-lg bg-stone-50 dark:bg-stone-700 text-stone-900 dark:text-white text-sm focus:ring-2 focus:ring-brand focus:border-brand"
                               placeholder="Mô tả (tùy chọn)"
                             />
                             <div className="grid grid-cols-2 gap-2">
-                              <label className="text-xs text-slate-500 dark:text-slate-400">
+                              <label className="text-xs text-stone-500 dark:text-stone-400">
                                 Giờ bắt đầu
                                 <input
                                   type="datetime-local"
                                   value={assignStartAt}
                                   onChange={(e) => setAssignStartAt(e.target.value)}
-                                  className="mt-0.5 w-full px-2 py-1 border border-slate-200 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
+                                  className="mt-0.5 w-full px-2 py-1 border border-stone-200 dark:border-stone-600 rounded-lg bg-stone-50 dark:bg-stone-700 text-stone-900 dark:text-white text-sm"
                                 />
                               </label>
-                              <label className="text-xs text-slate-500 dark:text-slate-400">
+                              <label className="text-xs text-stone-500 dark:text-stone-400">
                                 Hạn nộp
                                 <input
                                   type="datetime-local"
                                   value={assignDueDate}
                                   onChange={(e) => setAssignDueDate(e.target.value)}
-                                  className="mt-0.5 w-full px-2 py-1 border border-slate-200 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
+                                  className="mt-0.5 w-full px-2 py-1 border border-stone-200 dark:border-stone-600 rounded-lg bg-stone-50 dark:bg-stone-700 text-stone-900 dark:text-white text-sm"
                                 />
                               </label>
                             </div>
@@ -500,9 +501,9 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
                                   name={`wt-${itemKey}`}
                                   checked={assignWorkType === "individual"}
                                   onChange={() => setAssignWorkType("individual")}
-                                  className="text-blue-600"
+                                  className="text-brand"
                                 />
-                                <User className="w-3.5 h-3.5 text-slate-400" />
+                                <User className="w-3.5 h-3.5 text-stone-400" />
                                 Cá nhân
                               </label>
                               <label className="flex items-center gap-1.5 text-sm cursor-pointer">
@@ -513,7 +514,7 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
                                   onChange={() => setAssignWorkType("group")}
                                   className="text-violet-600"
                                 />
-                                <Users className="w-3.5 h-3.5 text-slate-400" />
+                                <Users className="w-3.5 h-3.5 text-stone-400" />
                                 Nhóm
                               </label>
                               <label className="flex items-center gap-1.5 text-sm cursor-pointer ml-auto">
@@ -530,7 +531,7 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
                               <button
                                 onClick={() => handleAssign(mat)}
                                 disabled={submitting || !assignTitle.trim()}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm"
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-brand text-white rounded-lg hover:bg-brand-dark disabled:opacity-50 text-sm"
                               >
                                 {submitting ? (
                                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -557,13 +558,13 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Left column: Bài đã giao */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-        <div className="px-4 py-3 bg-slate-50 dark:bg-slate-700/30 border-b border-slate-200 dark:border-slate-700">
+      <div className="bg-white dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 shadow-sm overflow-hidden">
+        <div className="px-4 py-3 bg-stone-50 dark:bg-stone-700/30 border-b border-stone-200 dark:border-stone-700">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-800 dark:text-white">
+            <h2 className="text-sm font-semibold text-stone-800 dark:text-white">
               Bài đã giao
             </h2>
-            <span className="text-xs text-slate-400 dark:text-slate-500">
+            <span className="text-xs text-stone-400 dark:text-stone-500">
               {assignments.length} bài
             </span>
           </div>
@@ -574,13 +575,13 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
       </div>
 
       {/* Right column: Danh sách học liệu (transferred to this class) */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-        <div className="px-4 py-3 bg-slate-50 dark:bg-slate-700/30 border-b border-slate-200 dark:border-slate-700">
+      <div className="bg-white dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 shadow-sm overflow-hidden">
+        <div className="px-4 py-3 bg-stone-50 dark:bg-stone-700/30 border-b border-stone-200 dark:border-stone-700">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-800 dark:text-white">
+            <h2 className="text-sm font-semibold text-stone-800 dark:text-white">
               Danh sách học liệu
             </h2>
-            <span className="text-xs text-slate-400 dark:text-slate-500">
+            <span className="text-xs text-stone-400 dark:text-stone-500">
               {materials.length} học liệu
             </span>
           </div>

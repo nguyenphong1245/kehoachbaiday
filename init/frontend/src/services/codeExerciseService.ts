@@ -257,6 +257,7 @@ export interface CodeExerciseTeacherView {
 export interface UpdateCodeExerciseRequest {
   starter_code?: string;
   test_cases?: TestCaseTeacher[];
+  problem_statement?: string;
 }
 
 // ============== Teacher View & Update API ==============
@@ -333,32 +334,3 @@ export const submitCode = async (
   return data;
 };
 
-// ============== Hint (Phân tích lỗi) ==============
-
-export interface FailedTestInfo {
-  test_num: number;
-  input: string;
-  expected_output: string;
-  actual_output: string;
-  error?: string;
-}
-
-export interface HintRequest {
-  code: string;
-  failed_tests: FailedTestInfo[];
-}
-
-export interface HintResponse {
-  hint: string;
-}
-
-export const getHint = async (
-  shareCode: string,
-  request: HintRequest
-): Promise<HintResponse> => {
-  const { data } = await api.post(
-    `/code-exercises/public/${shareCode}/hint`,
-    request
-  );
-  return data;
-};

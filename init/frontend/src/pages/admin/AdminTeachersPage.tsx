@@ -121,7 +121,7 @@ const AdminTeachersPage = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+        <Loader2 className="w-6 h-6 animate-spin text-brand" />
       </div>
     );
   }
@@ -140,17 +140,17 @@ const AdminTeachersPage = () => {
   return (
     <section className="max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
       <div className="mb-6">
-        <h1 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white">
+        <h1 className="text-xl sm:text-2xl font-bold text-stone-800 dark:text-white">
           Lớp học
         </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+        <p className="text-sm text-stone-500 dark:text-stone-400 mt-1">
           Xem thông tin lớp học, học liệu và học sinh của từng giáo viên
         </p>
       </div>
 
       {/* Teachers list */}
       {teachers.length === 0 ? (
-        <div className="text-center py-16 text-slate-400">
+        <div className="text-center py-16 text-stone-400">
           Chưa có giáo viên nào
         </div>
       ) : (
@@ -158,20 +158,20 @@ const AdminTeachersPage = () => {
           {teachers.map((teacher) => (
             <div
               key={teacher.id}
-              className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden"
+              className="bg-white dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 overflow-hidden"
             >
               {/* Teacher header */}
               <button
                 onClick={() => toggleTeacher(teacher.id)}
-                className="w-full px-5 py-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                className="w-full px-5 py-4 flex items-center justify-between hover:bg-stone-50 dark:hover:bg-stone-700/50 transition-colors"
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                    <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  <div className="w-10 h-10 rounded-full bg-sky-100 dark:bg-sky-900/30 flex items-center justify-center">
+                    <Users className="w-5 h-5 text-brand dark:text-sky-400" />
                   </div>
                   <div className="text-left">
-                    <p className="font-medium text-slate-800 dark:text-white">{teacher.email}</p>
-                    <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    <p className="font-medium text-stone-800 dark:text-white">{teacher.email}</p>
+                    <div className="flex items-center gap-4 text-xs text-stone-500 dark:text-stone-400 mt-0.5">
                       <span className="flex items-center gap-1">
                         <School className="w-3 h-3" />
                         {teacher.total_classrooms} lớp
@@ -192,21 +192,21 @@ const AdminTeachersPage = () => {
                   </div>
                 </div>
                 {expandedTeachers.has(teacher.id) ? (
-                  <ChevronDown className="w-5 h-5 text-slate-400" />
+                  <ChevronDown className="w-5 h-5 text-stone-400" />
                 ) : (
-                  <ChevronRight className="w-5 h-5 text-slate-400" />
+                  <ChevronRight className="w-5 h-5 text-stone-400" />
                 )}
               </button>
 
               {/* Classrooms */}
               {expandedTeachers.has(teacher.id) && (
-                <div className="border-t border-slate-100 dark:border-slate-700">
+                <div className="border-t border-stone-100 dark:border-stone-700">
                   {teacher.classrooms.length === 0 ? (
-                    <div className="px-5 py-8 text-center text-slate-400 text-sm">
+                    <div className="px-5 py-8 text-center text-stone-400 text-sm">
                       Giáo viên chưa tạo lớp học nào
                     </div>
                   ) : (
-                    <div className="divide-y divide-slate-100 dark:divide-slate-700">
+                    <div className="divide-y divide-stone-100 dark:divide-stone-700">
                       {teacher.classrooms.map((classroom) => {
                         const classroomKey = `${teacher.id}-${classroom.id}`;
                         const isExpanded = expandedClassrooms.has(classroomKey);
@@ -216,25 +216,25 @@ const AdminTeachersPage = () => {
                             {/* Classroom header */}
                             <button
                               onClick={() => toggleClassroom(classroomKey)}
-                              className="w-full px-5 py-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors"
+                              className="w-full px-5 py-3 flex items-center justify-between hover:bg-stone-50 dark:hover:bg-stone-700/30 transition-colors"
                             >
                               <div className="flex items-center gap-3 ml-8">
                                 <School className="w-4 h-4 text-green-500" />
                                 <div className="text-left">
-                                  <p className="font-medium text-slate-700 dark:text-slate-200 text-sm">
+                                  <p className="font-medium text-stone-700 dark:text-stone-200 text-sm">
                                     {classroom.name}
                                     {classroom.grade && (
-                                      <span className="ml-2 text-xs text-slate-400">
+                                      <span className="ml-2 text-xs text-stone-400">
                                         Khối {classroom.grade}
                                       </span>
                                     )}
                                     {classroom.school_year && (
-                                      <span className="ml-2 text-xs text-slate-400">
+                                      <span className="ml-2 text-xs text-stone-400">
                                         ({classroom.school_year})
                                       </span>
                                     )}
                                   </p>
-                                  <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                  <div className="flex items-center gap-3 text-xs text-stone-500 dark:text-stone-400 mt-0.5">
                                     <span>{classroom.student_count} học sinh</span>
                                     <span className="flex items-center gap-1">
                                       <ClipboardList className="w-3 h-3" />
@@ -252,36 +252,36 @@ const AdminTeachersPage = () => {
                                 </div>
                               </div>
                               {isExpanded ? (
-                                <ChevronDown className="w-4 h-4 text-slate-400" />
+                                <ChevronDown className="w-4 h-4 text-stone-400" />
                               ) : (
-                                <ChevronRight className="w-4 h-4 text-slate-400" />
+                                <ChevronRight className="w-4 h-4 text-stone-400" />
                               )}
                             </button>
 
                             {/* Students list */}
                             {isExpanded && (
-                              <div className="px-5 py-3 bg-slate-50 dark:bg-slate-900/50 ml-8">
+                              <div className="px-5 py-3 bg-stone-50 dark:bg-stone-900/50 ml-8">
                                 {classroom.students.length === 0 ? (
-                                  <p className="text-sm text-slate-400 py-2">Chưa có học sinh</p>
+                                  <p className="text-sm text-stone-400 py-2">Chưa có học sinh</p>
                                 ) : (
                                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                                     {classroom.students.map((student) => (
                                       <div
                                         key={student.id}
-                                        className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700"
+                                        className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-stone-800 rounded-lg border border-stone-200 dark:border-stone-700"
                                       >
                                         <GraduationCap className="w-4 h-4 text-purple-500" />
                                         <div className="min-w-0">
-                                          <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
+                                          <p className="text-sm font-medium text-stone-700 dark:text-stone-200 truncate">
                                             {student.student_number && (
-                                              <span className="text-slate-400 mr-1">
+                                              <span className="text-stone-400 mr-1">
                                                 {student.student_number}.
                                               </span>
                                             )}
                                             {student.full_name}
                                           </p>
                                           {student.student_code && (
-                                            <p className="text-xs text-slate-400">{student.student_code}</p>
+                                            <p className="text-xs text-stone-400">{student.student_code}</p>
                                           )}
                                         </div>
                                       </div>

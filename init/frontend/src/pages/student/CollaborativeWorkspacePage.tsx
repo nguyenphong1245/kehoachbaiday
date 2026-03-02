@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import Editor from "@monaco-editor/react";
 import {
   ArrowLeft,
   Users,
@@ -476,6 +475,22 @@ const CollaborativeWorkspacePage: React.FC = () => {
     }
   };
 
+  // Tab key handler for code textarea
+  const handleCodeKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const target = e.target as HTMLTextAreaElement;
+      const start = target.selectionStart;
+      const end = target.selectionEnd;
+      const newCode = code.substring(0, start) + "    " + code.substring(end);
+      setCode(newCode);
+      handleAnswerChange("code", newCode);
+      requestAnimationFrame(() => {
+        target.selectionStart = target.selectionEnd = start + 4;
+      });
+    }
+  }, [code, handleAnswerChange]);
+
   const handleRunCode = async () => {
     if (!code.trim()) return;
     setIsRunning(true);
@@ -498,10 +513,10 @@ const CollaborativeWorkspacePage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-stone-50 dark:bg-stone-900 flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-2" />
-          <p className="text-slate-500">Đang tải bài tập...</p>
+          <Loader2 className="w-8 h-8 animate-spin text-brand mx-auto mb-2" />
+          <p className="text-stone-500">Đang tải bài tập...</p>
         </div>
       </div>
     );
@@ -509,7 +524,7 @@ const CollaborativeWorkspacePage: React.FC = () => {
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-8 text-center text-slate-500">
+      <div className="min-h-screen bg-stone-50 dark:bg-stone-900 p-8 text-center text-stone-500">
         {error || "Không tìm thấy bài tập"}
       </div>
     );
@@ -518,19 +533,19 @@ const CollaborativeWorkspacePage: React.FC = () => {
   // Show notification when leader submits - only if not showing evaluation form
   if (otherSubmitted && !showEvalForm) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-8 text-center max-w-md mx-4">
+      <div className="min-h-screen bg-stone-50 dark:bg-stone-900 flex items-center justify-center">
+        <div className="bg-white dark:bg-stone-800 rounded-xl shadow-lg p-8 text-center max-w-md mx-4">
           <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-2">
+          <h2 className="text-xl font-bold text-stone-800 dark:text-white mb-2">
             Bài đã được nộp!
           </h2>
-          <p className="text-slate-600 dark:text-slate-300 mb-4">
+          <p className="text-stone-600 dark:text-stone-300 mb-4">
             <strong>{otherSubmitterName}</strong> đã nộp bài cho nhóm của bạn.
           </p>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
+          <p className="text-sm text-stone-500 dark:text-stone-400">
             Đang chuyển đến phòng chờ đánh giá chéo...
           </p>
-          <Loader2 className="w-6 h-6 animate-spin text-blue-500 mx-auto mt-4" />
+          <Loader2 className="w-6 h-6 animate-spin text-brand mx-auto mt-4" />
         </div>
       </div>
     );
@@ -540,42 +555,42 @@ const CollaborativeWorkspacePage: React.FC = () => {
   const mdComponents = {
     table: ({ children }: any) => (
       <div className="overflow-x-auto my-4">
-        <table className="w-full border-collapse border-2 border-slate-300 dark:border-slate-600">{children}</table>
+        <table className="w-full border-collapse border-2 border-stone-300 dark:border-stone-600">{children}</table>
       </div>
     ),
-    thead: ({ children }: any) => <thead className="bg-slate-100 dark:bg-slate-700">{children}</thead>,
-    th: ({ children }: any) => <th className="border-2 border-slate-300 dark:border-slate-600 px-4 py-3 text-left font-bold text-slate-800 dark:text-white">{children}</th>,
+    thead: ({ children }: any) => <thead className="bg-stone-100 dark:bg-stone-700">{children}</thead>,
+    th: ({ children }: any) => <th className="border-2 border-stone-300 dark:border-stone-600 px-4 py-3 text-left font-bold text-stone-800 dark:text-white">{children}</th>,
     tbody: ({ children }: any) => <tbody>{children}</tbody>,
-    tr: ({ children }: any) => <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">{children}</tr>,
+    tr: ({ children }: any) => <tr className="hover:bg-stone-50 dark:hover:bg-stone-800/50">{children}</tr>,
     td: ({ children }: any) => (
-      <td className="border-2 border-slate-300 dark:border-slate-600 px-4 py-3 align-top">
-        <div className="text-slate-800 dark:text-slate-200">{children}</div>
+      <td className="border-2 border-stone-300 dark:border-stone-600 px-4 py-3 align-top">
+        <div className="text-stone-800 dark:text-stone-200">{children}</div>
       </td>
     ),
     p: ({ node, children }: any) => {
       const firstChild = node?.children?.[0] as { value?: string } | undefined;
       const text = firstChild?.value || '';
       if (text.includes('[SECTION:') || text.includes('[/SECTION')) return null;
-      return <p className="text-slate-800 dark:text-slate-200 leading-relaxed">{children}</p>;
+      return <p className="text-stone-800 dark:text-stone-200 leading-relaxed">{children}</p>;
     },
-    h1: ({ children }: any) => <h1 className="text-slate-900 dark:text-white font-bold text-2xl mb-3">{children}</h1>,
-    h2: ({ children }: any) => <h2 className="text-slate-900 dark:text-white font-bold text-xl mb-2">{children}</h2>,
-    h3: ({ children }: any) => <h3 className="text-slate-900 dark:text-white font-bold text-lg mb-2">{children}</h3>,
-    h4: ({ children }: any) => <h4 className="text-slate-900 dark:text-white font-bold mb-1">{children}</h4>,
-    li: ({ children }: any) => <li className="text-slate-800 dark:text-slate-200">{children}</li>,
-    strong: ({ children }: any) => <strong className="text-slate-900 dark:text-white font-bold">{children}</strong>,
+    h1: ({ children }: any) => <h1 className="text-stone-900 dark:text-white font-bold text-2xl mb-3">{children}</h1>,
+    h2: ({ children }: any) => <h2 className="text-stone-900 dark:text-white font-bold text-xl mb-2">{children}</h2>,
+    h3: ({ children }: any) => <h3 className="text-stone-900 dark:text-white font-bold text-lg mb-2">{children}</h3>,
+    h4: ({ children }: any) => <h4 className="text-stone-900 dark:text-white font-bold mb-1">{children}</h4>,
+    li: ({ children }: any) => <li className="text-stone-800 dark:text-stone-200">{children}</li>,
+    strong: ({ children }: any) => <strong className="text-stone-900 dark:text-white font-bold">{children}</strong>,
     code({ className, children, ...props }: any) {
       const isInline = !className;
       if (isInline) {
         return (
-          <code className="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-1.5 py-0.5 rounded text-sm font-mono border border-slate-200 dark:border-slate-600" {...props}>
+          <code className="bg-stone-100 dark:bg-stone-800 text-stone-800 dark:text-stone-200 px-1.5 py-0.5 rounded text-sm font-mono border border-stone-200 dark:border-stone-600" {...props}>
             {children}
           </code>
         );
       }
       const codeStr = String(children).replace(/\n$/, '');
       return (
-        <pre className="bg-slate-900 dark:bg-slate-950 text-slate-100 rounded-lg p-4 my-3 overflow-x-auto text-sm leading-relaxed">
+        <pre className="bg-stone-900 dark:bg-stone-950 text-stone-100 rounded-lg p-4 my-3 overflow-x-auto text-sm leading-relaxed">
           <code className="font-mono">
             {codeStr.split('\n').map((line: string, i: number) => {
               if (line.trimStart().startsWith('#')) {
@@ -616,21 +631,21 @@ const CollaborativeWorkspacePage: React.FC = () => {
   const isLeader = leaderId != null && leaderId === myStudentId;
 
   return (
-    <div className="h-screen bg-slate-50 dark:bg-slate-900 flex flex-col overflow-hidden">
+    <div className="h-screen bg-stone-50 dark:bg-stone-900 flex flex-col overflow-hidden">
       {/* Top bar */}
-      <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 py-2 flex items-center gap-3 flex-shrink-0">
+      <div className="bg-white dark:bg-stone-800 border-b border-stone-200 dark:border-stone-700 px-4 py-2 flex items-center gap-3 flex-shrink-0">
         <button
           onClick={() => navigate(`/student/assignment/${assignmentId}`)}
-          className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-700"
+          className="p-1.5 rounded hover:bg-stone-100 dark:hover:bg-stone-700"
           title="Quay lại"
         >
-          <ArrowLeft className="w-4 h-4 text-slate-600 dark:text-slate-300" />
+          <ArrowLeft className="w-4 h-4 text-stone-600 dark:text-stone-300" />
         </button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+          <h1 className="text-sm font-semibold text-stone-900 dark:text-white truncate">
             {data.assignment.title}
           </h1>
-          <div className="flex items-center gap-2 text-xs text-slate-500">
+          <div className="flex items-center gap-2 text-xs text-stone-500">
             {data.assignment.lesson_info?.lesson_name && (
               <span>{data.assignment.lesson_info.lesson_name}</span>
             )}
@@ -649,7 +664,7 @@ const CollaborativeWorkspacePage: React.FC = () => {
               <button
                 onClick={handleRunCode}
                 disabled={isRunning || !code.trim()}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-xs font-medium rounded transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-stone-300 disabled:cursor-not-allowed text-white text-xs font-medium rounded transition-colors"
               >
                 {isRunning ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -661,7 +676,7 @@ const CollaborativeWorkspacePage: React.FC = () => {
               <button
                 onClick={handleSubmit}
                 disabled={submitting || submitted || !code.trim()}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-xs font-medium rounded transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-brand hover:bg-brand-dark disabled:bg-stone-300 disabled:cursor-not-allowed text-white text-xs font-medium rounded transition-colors"
               >
                 {submitting ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -701,10 +716,10 @@ const CollaborativeWorkspacePage: React.FC = () => {
 
       {/* Countdown Timer - Fixed position */}
       {timeRemaining && !submitted && (
-        <div className="fixed top-4 right-4 bg-white dark:bg-slate-800 shadow-lg rounded-lg p-4 border-2 border-orange-500 z-50">
+        <div className="fixed top-4 right-4 bg-white dark:bg-stone-800 shadow-lg rounded-lg p-4 border-2 border-orange-500 z-50">
           <div className="flex items-center gap-2 mb-2">
             <Clock className="w-5 h-5 text-orange-500" />
-            <span className="font-semibold text-slate-900 dark:text-white">
+            <span className="font-semibold text-stone-900 dark:text-white">
               {peerReviewInfo.start_time ? "Đến giờ đánh giá chéo" : "Thời gian còn lại"}
             </span>
           </div>
@@ -722,12 +737,12 @@ const CollaborativeWorkspacePage: React.FC = () => {
 
       {/* Peer Review Info Banner */}
       {peerReviewInfo.start_time && (
-        <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 px-4 py-3 mx-4 mt-2 rounded">
-          <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2 flex items-center gap-2">
+        <div className="bg-sky-50 dark:bg-sky-900/20 border-l-4 border-brand px-4 py-3 mx-4 mt-2 rounded">
+          <h3 className="font-semibold text-sky-900 dark:text-sky-100 mb-2 flex items-center gap-2">
             <FileText className="w-4 h-4" />
             Thông tin đánh giá chéo
           </h3>
-          <p className="text-sm text-blue-800 dark:text-blue-200">
+          <p className="text-sm text-sky-800 dark:text-sky-200">
             <strong>Bắt đầu:</strong>{" "}
             {new Date(peerReviewInfo.start_time).toLocaleString("vi-VN", {
               year: "numeric",
@@ -738,7 +753,7 @@ const CollaborativeWorkspacePage: React.FC = () => {
             })}
           </p>
           {peerReviewInfo.end_time && (
-            <p className="text-sm text-blue-800 dark:text-blue-200">
+            <p className="text-sm text-sky-800 dark:text-sky-200">
               <strong>Kết thúc:</strong>{" "}
               {new Date(peerReviewInfo.end_time).toLocaleString("vi-VN", {
                 year: "numeric",
@@ -754,8 +769,8 @@ const CollaborativeWorkspacePage: React.FC = () => {
 
       {/* Leader Info - Optional, not required */}
       {!submitted && data?.assignment?.work_type === "group" && !leaderId && (
-        <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 px-4 py-3 mx-4 mt-2 rounded">
-          <div className="flex items-center gap-2 text-blue-800 dark:text-blue-200">
+        <div className="bg-sky-50 dark:bg-sky-900/20 border-l-4 border-brand px-4 py-3 mx-4 mt-2 rounded">
+          <div className="flex items-center gap-2 text-sky-800 dark:text-sky-200">
             <Users className="w-5 h-5" />
             <span className="text-sm font-medium">
               Có thể bầu nhóm trưởng (không bắt buộc). Bất kỳ thành viên nào cũng có thể nộp bài.
@@ -768,9 +783,9 @@ const CollaborativeWorkspacePage: React.FC = () => {
       <div className="flex-1 flex overflow-hidden">
         {/* Left sidebar - Members (group only) */}
         {isGroupWork && (
-          <div className="w-52 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col flex-shrink-0">
-            <div className="p-3 border-b border-slate-100 dark:border-slate-700">
-              <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+          <div className="w-52 bg-white dark:bg-stone-800 border-r border-stone-200 dark:border-stone-700 flex flex-col flex-shrink-0">
+            <div className="p-3 border-b border-stone-100 dark:border-stone-700">
+              <h2 className="text-xs font-semibold text-stone-500 uppercase tracking-wider flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5" />
                 {data.my_group?.group_name || "Nhóm"}
               </h2>
@@ -786,15 +801,15 @@ const CollaborativeWorkspacePage: React.FC = () => {
                     className="flex items-center gap-2 px-2 py-1.5 rounded text-sm"
                   >
                     <div className="relative">
-                      <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-xs font-medium text-blue-600 dark:text-blue-400">
+                      <div className="w-7 h-7 rounded-full bg-sky-100 dark:bg-sky-900/30 flex items-center justify-center text-xs font-medium text-brand dark:text-sky-400">
                         {m.full_name.charAt(m.full_name.lastIndexOf(" ") + 1)}
                       </div>
                       {isOnline && (
-                        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white dark:border-slate-800" />
+                        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white dark:border-stone-800" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <span className="text-slate-900 dark:text-white text-xs truncate block">
+                      <span className="text-stone-900 dark:text-white text-xs truncate block">
                         {m.full_name}
                       </span>
                     </div>
@@ -807,7 +822,7 @@ const CollaborativeWorkspacePage: React.FC = () => {
             </div>
 
             {/* Actions */}
-            <div className="p-2 border-t border-slate-100 dark:border-slate-700 space-y-1.5">
+            <div className="p-2 border-t border-stone-100 dark:border-stone-700 space-y-1.5">
               {!leaderId && !submitted && (
                 <button
                   onClick={() => setShowVotePanel(!showVotePanel)}
@@ -838,8 +853,8 @@ const CollaborativeWorkspacePage: React.FC = () => {
 
             {/* Vote panel */}
             {showVotePanel && !leaderId && (
-              <div className="p-2 border-t border-slate-100 dark:border-slate-700 bg-amber-50/50 dark:bg-amber-900/10">
-                <p className="text-xs text-slate-600 dark:text-slate-400 mb-2">Bầu cho:</p>
+              <div className="p-2 border-t border-stone-100 dark:border-stone-700 bg-amber-50/50 dark:bg-amber-900/10">
+                <p className="text-xs text-stone-600 dark:text-stone-400 mb-2">Bầu cho:</p>
                 {data.my_group?.members.map((m) => {
                   const voteCount = Object.values(leaderVotes).filter((v) => v === m.student_id).length;
                   return (
@@ -848,7 +863,7 @@ const CollaborativeWorkspacePage: React.FC = () => {
                       onClick={() => voteLeader(m.student_id)}
                       className="w-full flex items-center justify-between px-2 py-1 rounded text-xs hover:bg-amber-100 dark:hover:bg-amber-900/20 mb-1"
                     >
-                      <span className="text-slate-700 dark:text-slate-300">{m.full_name}</span>
+                      <span className="text-stone-700 dark:text-stone-300">{m.full_name}</span>
                       <span className="text-amber-600 font-medium">{voteCount} phiếu</span>
                     </button>
                   );
@@ -865,13 +880,13 @@ const CollaborativeWorkspacePage: React.FC = () => {
               {showEvalForm && isGroupWork && data.my_group ? (
                 /* Member Evaluation Form */
                 <div className="w-full max-w-lg mx-auto px-4">
-                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
+                  <div className="bg-white dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 shadow-sm p-6">
                     <div className="text-center mb-6">
                       <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-2" />
-                      <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                      <h2 className="text-lg font-bold text-stone-900 dark:text-white">
                         {otherSubmitted ? `${otherSubmitterName} đã nộp bài!` : "Đã nộp bài!"}
                       </h2>
-                      <p className="text-sm text-slate-500 mt-1">
+                      <p className="text-sm text-stone-500 mt-1">
                         <span className="text-red-500">*</span> Đánh giá tất cả thành viên (kể cả bản thân) để tiếp tục
                       </p>
                     </div>
@@ -881,12 +896,12 @@ const CollaborativeWorkspacePage: React.FC = () => {
                         const hasRating = evalRatings[m.student_id] && evalRatings[m.student_id] > 0;
                         const isMe = m.student_id === myStudentId;
                         return (
-                          <div key={m.student_id} className={`p-3 rounded-lg ${hasRating ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' : 'bg-slate-50 dark:bg-slate-700/50 border border-red-200 dark:border-red-800'}`}>
+                          <div key={m.student_id} className={`p-3 rounded-lg ${hasRating ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' : 'bg-stone-50 dark:bg-stone-700/50 border border-red-200 dark:border-red-800'}`}>
                             <div className="flex items-center gap-2 mb-2">
-                              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium ${isMe ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'}`}>
+                              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium ${isMe ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' : 'bg-sky-100 dark:bg-sky-900/30 text-brand dark:text-sky-400'}`}>
                                 {m.full_name.charAt(m.full_name.lastIndexOf(" ") + 1)}
                               </div>
-                              <span className="text-sm font-medium text-slate-900 dark:text-white">{m.full_name}</span>
+                              <span className="text-sm font-medium text-stone-900 dark:text-white">{m.full_name}</span>
                               {isMe && <span className="text-xs px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded">Bạn</span>}
                               {!hasRating && <span className="text-xs text-red-500">* Bắt buộc</span>}
                               {hasRating && <CheckCircle2 className="w-4 h-4 text-green-500" />}
@@ -904,7 +919,7 @@ const CollaborativeWorkspacePage: React.FC = () => {
                                     className={`w-5 h-5 transition-colors ${
                                       star <= (evalRatings[m.student_id] || 0)
                                         ? "text-amber-400 fill-amber-400"
-                                        : "text-slate-300 dark:text-slate-600"
+                                        : "text-stone-300 dark:text-stone-600"
                                     }`}
                                   />
                                 </button>
@@ -915,7 +930,7 @@ const CollaborativeWorkspacePage: React.FC = () => {
                               value={evalComments[m.student_id] || ""}
                               onChange={(e) => setEvalComments((prev) => ({ ...prev, [m.student_id]: e.target.value }))}
                               placeholder={isMe ? "Tự đánh giá bản thân (tùy chọn)" : "Nhận xét (tùy chọn)"}
-                              className="w-full px-2.5 py-1.5 text-xs border border-slate-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                              className="w-full px-2.5 py-1.5 text-xs border border-stone-200 dark:border-stone-600 rounded bg-white dark:bg-stone-700 text-stone-900 dark:text-white"
                             />
                           </div>
                         );
@@ -938,8 +953,8 @@ const CollaborativeWorkspacePage: React.FC = () => {
                             disabled={evalSubmitting || !allRated}
                             className={`w-full px-4 py-2.5 text-sm rounded-lg flex items-center justify-center gap-1.5 transition-colors ${
                               allRated
-                                ? 'bg-blue-600 text-white hover:bg-blue-700'
-                                : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
+                                ? 'bg-brand text-white hover:bg-brand-dark'
+                                : 'bg-stone-200 dark:bg-stone-700 text-stone-400 cursor-not-allowed'
                             } disabled:opacity-50`}
                           >
                             {evalSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -953,8 +968,8 @@ const CollaborativeWorkspacePage: React.FC = () => {
               ) : (
                 <div className="text-center px-4">
                   <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto mb-3" />
-                  <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-1">Đã nộp bài!</h2>
-                  <p className="text-slate-500">Bài làm đã được ghi nhận.</p>
+                  <h2 className="text-xl font-bold text-stone-900 dark:text-white mb-1">Đã nộp bài!</h2>
+                  <p className="text-stone-500">Bài làm đã được ghi nhận.</p>
                   {peerReviewActivated && (
                     <div className="mt-4 p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg inline-flex items-center gap-2 text-sm text-orange-700 dark:text-orange-400">
                       <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -964,7 +979,7 @@ const CollaborativeWorkspacePage: React.FC = () => {
                   <div className="mt-4">
                     <button
                       onClick={() => navigate("/student/dashboard")}
-                      className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                      className="px-4 py-2 text-sm bg-brand text-white rounded-lg hover:bg-brand-dark"
                     >
                       Về trang chủ
                     </button>
@@ -976,15 +991,11 @@ const CollaborativeWorkspacePage: React.FC = () => {
             /* Code Exercise - Full Screen Layout */
             <div className="flex-1 flex overflow-hidden">
               <div className="flex h-full w-full">
-                {/* Left panel - Problem description */}
-                <div className="w-[40%] border-r border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden bg-white dark:bg-slate-800">
-                  {/* Tab: Đề bài */}
-                  <div className="flex border-b border-slate-200 dark:border-slate-700 shrink-0">
-                    <button className="px-4 py-2 text-xs font-medium text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400">
-                      Đề bài
-                    </button>
+                {/* Left panel - Problem description + test cases */}
+                <div className="w-[38%] flex flex-col border-r border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800">
+                  <div className="px-4 py-2 border-b border-stone-200 dark:border-stone-700 shrink-0">
+                    <span className="text-xs font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wide">Đề bài</span>
                   </div>
-                  {/* Problem content */}
                   <div className="flex-1 overflow-y-auto p-4">
                     {(data.content?.description || data.content?.content || data.content?.problem_statement) ? (
                       <div className="prose prose-sm dark:prose-invert max-w-none">
@@ -993,44 +1004,72 @@ const CollaborativeWorkspacePage: React.FC = () => {
                         </ReactMarkdown>
                       </div>
                     ) : (
-                      <div className="text-sm text-slate-500 dark:text-slate-400">
-                        <p>Đề bài chưa được tải. Vui lòng thử lại.</p>
+                      <div className="text-sm text-stone-500 dark:text-stone-400">
+                        <p>Đề bài chưa được tải.</p>
+                      </div>
+                    )}
+
+                    {/* Sample test cases */}
+                    {data.content?.test_cases && Array.isArray(data.content.test_cases) && data.content.test_cases.filter((tc: any) => !tc.is_hidden).length > 0 && (
+                      <div className="mt-5 pt-4 border-t border-stone-200 dark:border-stone-700">
+                        <h3 className="text-sm font-semibold text-stone-700 dark:text-stone-300 mb-3">Ví dụ</h3>
+                        <div className="space-y-3">
+                          {data.content.test_cases.filter((tc: any) => !tc.is_hidden).map((tc: any, i: number) => (
+                            <div key={i} className="rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden">
+                              <div className="px-3 py-1.5 bg-stone-50 dark:bg-stone-900/50 border-b border-stone-200 dark:border-stone-700">
+                                <span className="text-xs font-semibold text-stone-500 dark:text-stone-400">Test {i + 1}</span>
+                              </div>
+                              <div className="p-3 space-y-2 text-sm">
+                                <div>
+                                  <span className="text-xs font-medium text-stone-500 dark:text-stone-400 uppercase tracking-wide">Input</span>
+                                  <pre className="mt-1 font-mono text-sm text-stone-800 dark:text-stone-200 whitespace-pre-wrap bg-stone-50 dark:bg-stone-900/50 rounded px-3 py-2">{tc.input || "(trống)"}</pre>
+                                </div>
+                                <div>
+                                  <span className="text-xs font-medium text-stone-500 dark:text-stone-400 uppercase tracking-wide">Output</span>
+                                  <pre className="mt-1 font-mono text-sm text-stone-800 dark:text-stone-200 whitespace-pre-wrap bg-stone-50 dark:bg-stone-900/50 rounded px-3 py-2">{tc.expected_output}</pre>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* Right panel - Editor + Output */}
-                <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-slate-800">
-                  {/* Code Editor */}
-                  <div className="h-[65%] border-b border-slate-200 dark:border-slate-700">
-                    <Editor
-                      height="100%"
-                      language="python"
+                {/* Right panel - Code Editor + Output */}
+                <div className="flex-1 flex flex-col min-w-0">
+                  {/* Code Editor (textarea) */}
+                  <div className="flex-1 min-h-0 flex flex-col">
+                    <div className="px-3 py-1.5 bg-stone-50 dark:bg-stone-800 border-b border-stone-200 dark:border-stone-700 flex items-center justify-between shrink-0">
+                      <span className="text-xs font-medium text-stone-500 dark:text-stone-400">
+                        {(data.content?.language || "python").toUpperCase()}
+                      </span>
+                      {data.content?.time_limit_seconds && (
+                        <div className="flex items-center gap-2 text-xs text-stone-400">
+                          <Clock className="w-3 h-3" />
+                          Thời gian chạy tối đa: {data.content.time_limit_seconds}s
+                        </div>
+                      )}
+                    </div>
+                    <textarea
                       value={code}
-                      onChange={(value) => {
-                        const newCode = value || "";
+                      onChange={(e) => {
+                        const newCode = e.target.value;
                         setCode(newCode);
                         handleAnswerChange("code", newCode);
                       }}
-                      theme="vs-light"
-                      options={{
-                        fontSize: 14,
-                        minimap: { enabled: false },
-                        scrollBeyondLastLine: false,
-                        wordWrap: "on",
-                        automaticLayout: true,
-                        tabSize: 4,
-                        insertSpaces: true,
-                        padding: { top: 8 },
-                      }}
+                      onKeyDown={handleCodeKeyDown}
+                      spellCheck={false}
+                      className="flex-1 w-full px-4 py-3 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 font-mono text-sm leading-relaxed resize-none focus:outline-none border-none"
+                      style={{ tabSize: 4 }}
+                      placeholder="Viết code của bạn ở đây..."
                     />
                   </div>
 
                   {/* Output panel */}
-                  <div className="h-[35%] flex flex-col shrink-0 bg-slate-50 dark:bg-slate-900">
-                    {/* Output tab */}
-                    <div className="flex items-center border-b border-slate-200 dark:border-slate-700 shrink-0">
+                  <div className="h-[35%] border-t border-stone-200 dark:border-stone-700 flex flex-col shrink-0 bg-white dark:bg-stone-800">
+                    <div className="flex items-center border-b border-stone-200 dark:border-stone-700 shrink-0">
                       <div className="px-4 py-2 text-xs font-medium text-green-600 dark:text-green-400 border-b-2 border-green-600 dark:border-green-400 flex items-center gap-1">
                         <Terminal className="w-3 h-3" />
                         Kết quả
@@ -1046,7 +1085,7 @@ const CollaborativeWorkspacePage: React.FC = () => {
                     {/* Output content */}
                     <div className="flex-1 overflow-y-auto p-3 space-y-2">
                       {isRunning ? (
-                        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                        <div className="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
                           <Loader2 className="w-4 h-4 animate-spin" />
                           Đang chạy code với test cases...
                         </div>
@@ -1091,10 +1130,10 @@ const CollaborativeWorkspacePage: React.FC = () => {
                                 {tc.is_hidden && <span className="text-[10px] opacity-60">(ẩn)</span>}
                               </div>
                               {!tc.is_hidden && (
-                                <div className="px-2.5 py-2 space-y-1 font-mono text-slate-700 dark:text-slate-300">
-                                  <div><span className="text-slate-400">Input: </span>{tc.input || "(trống)"}</div>
-                                  <div><span className="text-slate-400">Kỳ vọng: </span>{tc.expected_output}</div>
-                                  <div><span className="text-slate-400">Kết quả: </span>
+                                <div className="px-2.5 py-2 space-y-1 font-mono text-stone-700 dark:text-stone-300">
+                                  <div><span className="text-stone-400">Input: </span>{tc.input || "(trống)"}</div>
+                                  <div><span className="text-stone-400">Kỳ vọng: </span>{tc.expected_output}</div>
+                                  <div><span className="text-stone-400">Kết quả: </span>
                                     <span className={tc.passed ? "text-green-600" : "text-red-600"}>{tc.actual_output || "(trống)"}</span>
                                   </div>
                                   {tc.error && <div className="text-red-500">Lỗi: {tc.error}</div>}
@@ -1104,12 +1143,12 @@ const CollaborativeWorkspacePage: React.FC = () => {
                           ))}
                         </>
                       ) : testResult ? (
-                        <div className="text-xs text-slate-600 dark:text-slate-300">
+                        <div className="text-xs text-stone-600 dark:text-stone-300">
                           <p className="font-medium mb-1">Kết quả (raw):</p>
-                          <pre className="bg-slate-100 dark:bg-slate-800 p-2 rounded text-[11px] whitespace-pre-wrap">{JSON.stringify(testResult, null, 2)}</pre>
+                          <pre className="bg-stone-100 dark:bg-stone-800 p-2 rounded text-[11px] whitespace-pre-wrap">{JSON.stringify(testResult, null, 2)}</pre>
                         </div>
                       ) : (
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                        <p className="text-xs text-stone-500 dark:text-stone-400">
                           Nhấn "Chạy thử" để kiểm tra code với các test cases.
                         </p>
                       )}
@@ -1124,10 +1163,10 @@ const CollaborativeWorkspacePage: React.FC = () => {
                 {/* Worksheet with blue header format */}
                 {data.assignment.content_type === "worksheet" && worksheetBlocks.length > 0 ? (
                   <div className="mb-8">
-                    <div className="bg-blue-600 px-6 py-4 rounded-t-lg">
+                    <div className="bg-brand px-6 py-4 rounded-t-lg">
                       <h3 className="text-white font-bold text-xl">{worksheetTitle}</h3>
                     </div>
-                    <div className="p-6 bg-white dark:bg-slate-800 border-2 border-blue-600 border-t-0 rounded-b-lg shadow-sm">
+                    <div className="p-6 bg-white dark:bg-stone-800 border-2 border-brand border-t-0 rounded-b-lg shadow-sm">
                       {worksheetBlocks.map((block, blockIdx) => {
                         if (block.type === "markdown") {
                           return (
@@ -1152,7 +1191,7 @@ const CollaborativeWorkspacePage: React.FC = () => {
                             <div className="mt-1 mb-6 ml-2 relative">
                               <div className="space-y-0">
                                 {[...Array(lineCount)].map((_, lineIndex) => (
-                                  <div key={`${answerKey}-line-${lineIndex}`} className="w-full border-b border-gray-400">
+                                  <div key={`${answerKey}-line-${lineIndex}`} className="w-full border-b border-stone-400">
                                     <input
                                       type="text"
                                       value={answerLines[lineIndex] || ""}
@@ -1171,11 +1210,11 @@ const CollaborativeWorkspacePage: React.FC = () => {
                               </div>
                               {/* Typing indicator for this question */}
                               {isGroupWork && typingUsers.filter((t) => t.question_id === answerKey).length > 0 && (
-                                <div className="absolute -bottom-4 left-0 flex items-center gap-1 text-xs text-blue-500 animate-pulse">
+                                <div className="absolute -bottom-4 left-0 flex items-center gap-1 text-xs text-brand animate-pulse">
                                   <span className="inline-flex">
-                                    <span className="w-1 h-1 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                                    <span className="w-1 h-1 bg-blue-500 rounded-full animate-bounce ml-0.5" style={{ animationDelay: "150ms" }} />
-                                    <span className="w-1 h-1 bg-blue-500 rounded-full animate-bounce ml-0.5" style={{ animationDelay: "300ms" }} />
+                                    <span className="w-1 h-1 bg-brand rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                                    <span className="w-1 h-1 bg-brand rounded-full animate-bounce ml-0.5" style={{ animationDelay: "150ms" }} />
+                                    <span className="w-1 h-1 bg-brand rounded-full animate-bounce ml-0.5" style={{ animationDelay: "300ms" }} />
                                   </span>
                                   <span>{typingUsers.filter((t) => t.question_id === answerKey).map((t) => t.user_name).join(", ")} đang gõ...</span>
                                 </div>
@@ -1183,7 +1222,7 @@ const CollaborativeWorkspacePage: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => setLineCounts(prev => ({ ...prev, [answerKey]: (prev[answerKey] || 3) + 1 }))}
-                                className="mt-2 flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 transition-colors"
+                                className="mt-2 flex items-center gap-1 text-xs text-brand hover:text-brand-dark transition-colors"
                               >
                                 <Plus className="w-3.5 h-3.5" />
                                 Thêm dòng
@@ -1198,7 +1237,7 @@ const CollaborativeWorkspacePage: React.FC = () => {
                   <>
                     {/* Fallback: quiz or content without blocks */}
                     {data.content?.content && (
-                      <div className="prose prose-sm dark:prose-invert max-w-none bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+                      <div className="prose prose-sm dark:prose-invert max-w-none bg-white dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 p-5">
                         <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
                           {typeof data.content.content === 'string' ? data.content.content : ''}
                         </ReactMarkdown>
@@ -1211,10 +1250,10 @@ const CollaborativeWorkspacePage: React.FC = () => {
                       return (
                         <div
                           key={q.id}
-                          className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5"
+                          className="bg-white dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 p-5"
                         >
                           <div className="flex items-center justify-between mb-3">
-                            <h3 className="font-semibold text-slate-900 dark:text-white">
+                            <h3 className="font-semibold text-stone-900 dark:text-white">
                               {q.label}
                             </h3>
                             {assignedTo && (
@@ -1229,7 +1268,7 @@ const CollaborativeWorkspacePage: React.FC = () => {
                             )}
                           </div>
                           {q.text && (
-                            <div className="text-sm text-slate-600 dark:text-slate-300 mb-3 prose prose-sm dark:prose-invert max-w-none">
+                            <div className="text-sm text-stone-600 dark:text-stone-300 mb-3 prose prose-sm dark:prose-invert max-w-none">
                               <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
                                 {q.text}
                               </ReactMarkdown>
@@ -1248,15 +1287,15 @@ const CollaborativeWorkspacePage: React.FC = () => {
                                     onClick={() => handleAnswerChange(q.id, key)}
                                     className={`w-full p-3 text-left rounded-lg border-2 transition-all ${
                                       isSelected
-                                        ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/30'
-                                        : 'border-slate-200 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-700'
+                                        ? 'border-brand bg-sky-50 dark:bg-sky-900/30'
+                                        : 'border-stone-200 dark:border-stone-600 hover:border-brand-light dark:hover:border-sky-700'
                                     }`}
                                   >
                                     <div className="flex items-start gap-3">
                                       <span className={`w-7 h-7 flex items-center justify-center rounded-lg font-semibold flex-shrink-0 text-sm ${
-                                        isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                                        isSelected ? 'bg-brand text-white' : 'bg-stone-100 dark:bg-stone-700 text-stone-700 dark:text-stone-300'
                                       }`}>{key}</span>
-                                      <div className="text-slate-900 dark:text-white pt-0.5 text-sm prose prose-sm dark:prose-invert max-w-none [&_code]:bg-slate-200 [&_code]:dark:bg-slate-600 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_p]:m-0 [&_p]:inline">
+                                      <div className="text-stone-900 dark:text-white pt-0.5 text-sm prose prose-sm dark:prose-invert max-w-none [&_code]:bg-stone-200 [&_code]:dark:bg-stone-600 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_p]:m-0 [&_p]:inline">
                                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{value}</ReactMarkdown>
                                       </div>
                                     </div>
@@ -1272,15 +1311,15 @@ const CollaborativeWorkspacePage: React.FC = () => {
                                 onChange={(e) => handleAnswerChange(q.id, e.target.value)}
                                 placeholder="Nhập câu trả lời..."
                                 rows={4}
-                                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm resize-y focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-700 text-stone-900 dark:text-white text-sm resize-y focus:ring-2 focus:ring-brand focus:border-transparent"
                               />
                               {/* Typing indicator */}
                               {isGroupWork && typingUsers.filter((t) => t.question_id === q.id).length > 0 && (
-                                <div className="absolute -bottom-5 left-0 flex items-center gap-1 text-xs text-blue-500 animate-pulse">
+                                <div className="absolute -bottom-5 left-0 flex items-center gap-1 text-xs text-brand animate-pulse">
                                   <span className="inline-flex">
-                                    <span className="w-1 h-1 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                                    <span className="w-1 h-1 bg-blue-500 rounded-full animate-bounce ml-0.5" style={{ animationDelay: "150ms" }} />
-                                    <span className="w-1 h-1 bg-blue-500 rounded-full animate-bounce ml-0.5" style={{ animationDelay: "300ms" }} />
+                                    <span className="w-1 h-1 bg-brand rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                                    <span className="w-1 h-1 bg-brand rounded-full animate-bounce ml-0.5" style={{ animationDelay: "150ms" }} />
+                                    <span className="w-1 h-1 bg-brand rounded-full animate-bounce ml-0.5" style={{ animationDelay: "300ms" }} />
                                   </span>
                                   <span>{typingUsers.filter((t) => t.question_id === q.id).map((t) => t.user_name).join(", ")} đang gõ...</span>
                                 </div>
@@ -1313,25 +1352,25 @@ const CollaborativeWorkspacePage: React.FC = () => {
 
         {/* Right sidebar - Chat (group only) */}
         {isGroupWork && (
-          <div className={`${chatOpen ? 'w-72' : 'w-12'} bg-white dark:bg-slate-800 border-l border-slate-200 dark:border-slate-700 flex flex-col flex-shrink-0 transition-all duration-300`}>
-            <div className="p-3 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+          <div className={`${chatOpen ? 'w-72' : 'w-12'} bg-white dark:bg-stone-800 border-l border-stone-200 dark:border-stone-700 flex flex-col flex-shrink-0 transition-all duration-300`}>
+            <div className="p-3 border-b border-stone-100 dark:border-stone-700 flex items-center justify-between">
               {chatOpen ? (
-                <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                <h2 className="text-xs font-semibold text-stone-500 uppercase tracking-wider flex items-center gap-1.5">
                   <MessageSquare className="w-3.5 h-3.5" />
                   Chat nhóm
                 </h2>
               ) : (
-                <MessageSquare className="w-4 h-4 text-slate-500 mx-auto" />
+                <MessageSquare className="w-4 h-4 text-stone-500 mx-auto" />
               )}
               <button
                 onClick={() => setChatOpen(!chatOpen)}
-                className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors"
+                className="p-1 hover:bg-stone-100 dark:hover:bg-stone-700 rounded transition-colors"
                 title={chatOpen ? "Đóng chat" : "Mở chat"}
               >
                 {chatOpen ? (
-                  <ChevronRight className="w-4 h-4 text-slate-500" />
+                  <ChevronRight className="w-4 h-4 text-stone-500" />
                 ) : (
-                  <ChevronLeft className="w-4 h-4 text-slate-500" />
+                  <ChevronLeft className="w-4 h-4 text-stone-500" />
                 )}
               </button>
             </div>
@@ -1340,23 +1379,23 @@ const CollaborativeWorkspacePage: React.FC = () => {
               <>
                 <div className="flex-1 overflow-y-auto p-3 space-y-3">
                   {chatMessages.length === 0 && (
-                    <p className="text-xs text-slate-400 text-center py-4">Chưa có tin nhắn</p>
+                    <p className="text-xs text-stone-400 text-center py-4">Chưa có tin nhắn</p>
                   )}
                   {chatMessages.map((msg) => {
                 const isMe = msg.user_id === currentUser?.id;
                 return (
                   <div key={msg.id} className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}>
-                    <span className="text-xs text-slate-400 mb-0.5">{msg.user_name}</span>
+                    <span className="text-xs text-stone-400 mb-0.5">{msg.user_name}</span>
                     <div
                       className={`px-3 py-1.5 rounded-xl text-sm max-w-[85%] ${
                         isMe
-                          ? "bg-blue-600 text-white rounded-br-none"
-                          : "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white rounded-bl-none"
+                          ? "bg-brand text-white rounded-br-none"
+                          : "bg-stone-100 dark:bg-stone-700 text-stone-900 dark:text-white rounded-bl-none"
                       }`}
                     >
                       {msg.message}
                     </div>
-                    <span className="text-[10px] text-slate-400 mt-0.5">
+                    <span className="text-[10px] text-stone-400 mt-0.5">
                       {msg.created_at ? new Date(msg.created_at).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : ""}
                     </span>
                   </div>
@@ -1366,7 +1405,7 @@ const CollaborativeWorkspacePage: React.FC = () => {
             </div>
 
             {!submitted && (
-              <div className="p-2 border-t border-slate-100 dark:border-slate-700">
+              <div className="p-2 border-t border-stone-100 dark:border-stone-700">
                 <div className="flex gap-1.5">
                   <input
                     type="text"
@@ -1374,12 +1413,12 @@ const CollaborativeWorkspacePage: React.FC = () => {
                     onChange={(e) => setChatInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Nhập tin nhắn..."
-                    className="flex-1 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                    className="flex-1 px-3 py-1.5 text-sm border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-700 text-stone-900 dark:text-white"
                   />
                   <button
                     onClick={handleSendChat}
                     disabled={!chatInput.trim()}
-                    className="p-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                    className="p-1.5 bg-brand text-white rounded-lg hover:bg-brand-dark disabled:opacity-50"
                   >
                     <Send className="w-4 h-4" />
                   </button>

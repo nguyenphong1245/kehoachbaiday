@@ -79,32 +79,32 @@ const parseWorksheetTitle = (content: string): string => {
 const mdComponents = {
   table: ({ children }: any) => (
     <div className="overflow-x-auto my-3">
-      <table className="w-full border-collapse border border-gray-300 dark:border-gray-600">{children}</table>
+      <table className="w-full border-collapse border border-stone-300 dark:border-stone-600">{children}</table>
     </div>
   ),
-  thead: ({ children }: any) => <thead className="bg-gray-100 dark:bg-gray-700">{children}</thead>,
-  th: ({ children }: any) => <th className="border border-gray-300 dark:border-gray-600 px-3 py-2 text-left text-sm font-semibold text-gray-800 dark:text-gray-100">{children}</th>,
+  thead: ({ children }: any) => <thead className="bg-stone-100 dark:bg-stone-700">{children}</thead>,
+  th: ({ children }: any) => <th className="border border-stone-300 dark:border-stone-600 px-3 py-2 text-left text-sm font-semibold text-stone-800 dark:text-stone-100">{children}</th>,
   tbody: ({ children }: any) => <tbody>{children}</tbody>,
   tr: ({ children }: any) => <tr>{children}</tr>,
-  td: ({ children }: any) => <td className="border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-700 dark:text-gray-200">{children}</td>,
+  td: ({ children }: any) => <td className="border border-stone-300 dark:border-stone-600 px-3 py-2 text-sm text-stone-700 dark:text-stone-200">{children}</td>,
   p: ({ node, children }: any) => {
     const firstChild = node?.children?.[0] as { value?: string } | undefined;
     const text = firstChild?.value || '';
     if (text.includes('[SECTION:') || text.includes('[/SECTION')) return null;
-    return <p className="text-gray-700 dark:text-gray-200 leading-relaxed mb-2">{children}</p>;
+    return <p className="text-stone-700 dark:text-stone-200 leading-relaxed mb-2">{children}</p>;
   },
-  h1: ({ children }: any) => <h1 className="text-gray-900 dark:text-white font-bold text-xl mb-3">{children}</h1>,
-  h2: ({ children }: any) => <h2 className="text-gray-900 dark:text-white font-bold text-lg mb-2">{children}</h2>,
-  h3: ({ children }: any) => <h3 className="text-gray-900 dark:text-white font-semibold mb-2">{children}</h3>,
-  li: ({ children }: any) => <li className="text-gray-700 dark:text-gray-200">{children}</li>,
-  strong: ({ children }: any) => <strong className="text-gray-900 dark:text-white font-semibold">{children}</strong>,
+  h1: ({ children }: any) => <h1 className="text-stone-900 dark:text-white font-bold text-xl mb-3">{children}</h1>,
+  h2: ({ children }: any) => <h2 className="text-stone-900 dark:text-white font-bold text-lg mb-2">{children}</h2>,
+  h3: ({ children }: any) => <h3 className="text-stone-900 dark:text-white font-semibold mb-2">{children}</h3>,
+  li: ({ children }: any) => <li className="text-stone-700 dark:text-stone-200">{children}</li>,
+  strong: ({ children }: any) => <strong className="text-stone-900 dark:text-white font-semibold">{children}</strong>,
   code({ className, children, ...props }: any) {
     const isInline = !className;
     if (isInline) {
-      return <code className="bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded text-sm font-mono" {...props}>{children}</code>;
+      return <code className="bg-stone-100 dark:bg-stone-800 text-stone-800 dark:text-stone-200 px-1.5 py-0.5 rounded text-sm font-mono" {...props}>{children}</code>;
     }
     const codeStr = String(children).replace(/\n$/, '');
-    return <pre className="bg-gray-900 text-gray-100 rounded-lg p-4 my-3 overflow-x-auto text-sm"><code className="font-mono">{codeStr}</code></pre>;
+    return <pre className="bg-stone-900 text-stone-100 rounded-lg p-4 my-3 overflow-x-auto text-sm"><code className="font-mono">{codeStr}</code></pre>;
   },
 };
 
@@ -199,16 +199,16 @@ const StudentAssignmentPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      <div className="min-h-screen bg-stone-50 dark:bg-stone-900 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-brand" />
       </div>
     );
   }
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <p className="text-gray-500">{error || "Không tìm thấy bài tập"}</p>
+      <div className="min-h-screen bg-stone-50 dark:bg-stone-900 flex items-center justify-center">
+        <p className="text-stone-500">{error || "Không tìm thấy bài tập"}</p>
       </div>
     );
   }
@@ -216,26 +216,26 @@ const StudentAssignmentPage: React.FC = () => {
   const a = data.assignment;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-stone-50 dark:bg-stone-900">
       {/* Header */}
-      <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+      <div className="border-b border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-4">
-          <button onClick={() => navigate("/student/dashboard")} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700" title="Quay lại">
-            <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+          <button onClick={() => navigate("/student/dashboard")} className="p-2 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-700" title="Quay lại">
+            <ArrowLeft className="w-5 h-5 text-stone-600 dark:text-stone-300" />
           </button>
-          <div className="p-2.5 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+          <div className="p-2.5 rounded-xl bg-sky-100 dark:bg-sky-900/30 text-brand dark:text-sky-400">
             {contentTypeIcon(a.content_type)}
           </div>
           <div className="flex-1">
-            <h1 className="text-lg font-semibold text-gray-900 dark:text-white">{a.title}</h1>
-            <div className="flex items-center gap-2 text-sm text-gray-500 mt-0.5">
+            <h1 className="text-lg font-semibold text-stone-900 dark:text-white">{a.title}</h1>
+            <div className="flex items-center gap-2 text-sm text-stone-500 mt-0.5">
               <span>{contentTypeLabel(a.content_type)}</span>
               <span>•</span>
               <span>{a.classroom_name}</span>
               {a.lesson_info?.lesson_name && (
                 <>
                   <span>•</span>
-                  <span className="text-blue-600 dark:text-blue-400">{a.lesson_info.lesson_name}</span>
+                  <span className="text-brand dark:text-sky-400">{a.lesson_info.lesson_name}</span>
                 </>
               )}
             </div>
@@ -251,16 +251,16 @@ const StudentAssignmentPage: React.FC = () => {
 
       {/* Content */}
       <div className="max-w-3xl mx-auto px-4 py-6">
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+        <div className="bg-white dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 shadow-sm overflow-hidden">
           {/* Info bar */}
-          <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+          <div className="px-6 py-4 border-b border-stone-100 dark:border-stone-700 flex items-center justify-between">
             <div className="flex items-center gap-6">
-              <span className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                {a.work_type === "group" ? <Users className="w-5 h-5 text-purple-500" /> : <User className="w-5 h-5 text-blue-500" />}
+              <span className="flex items-center gap-2 text-stone-700 dark:text-stone-300">
+                {a.work_type === "group" ? <Users className="w-5 h-5 text-purple-500" /> : <User className="w-5 h-5 text-brand" />}
                 <span className="font-medium">{a.work_type === "group" ? "Làm nhóm" : "Cá nhân"}</span>
               </span>
               {a.due_date && (
-                <span className="flex items-center gap-2 text-gray-500">
+                <span className="flex items-center gap-2 text-stone-500">
                   <Clock className="w-5 h-5 text-red-500" />
                   <span>{new Date(a.due_date).toLocaleString("vi-VN", { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                 </span>
@@ -268,8 +268,8 @@ const StudentAssignmentPage: React.FC = () => {
             </div>
             <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${
               a.status === "submitted" ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" :
-              a.status === "in_progress" ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400" :
-              "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+              a.status === "in_progress" ? "bg-sky-100 dark:bg-sky-900/30 text-brand-dark dark:text-sky-400" :
+              "bg-stone-100 dark:bg-stone-700 text-stone-600 dark:text-stone-400"
             }`}>
               {a.status === "submitted" ? "Đã nộp" : a.status === "in_progress" ? "Đang làm" : "Chưa làm"}
             </span>
@@ -282,13 +282,13 @@ const StudentAssignmentPage: React.FC = () => {
                 <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
                   <CheckCircle2 className="w-8 h-8 text-green-600 dark:text-green-400" />
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Bạn đã nộp bài này</h2>
-                <p className="text-gray-500 mb-6">Xem lại bài làm hoặc xem đánh giá từ các nhóm khác</p>
+                <h2 className="text-xl font-semibold text-stone-900 dark:text-white mb-2">Bạn đã nộp bài này</h2>
+                <p className="text-stone-500 mb-6">Xem lại bài làm hoặc xem đánh giá từ các nhóm khác</p>
                 <div className="flex items-center justify-center gap-3">
                   {a.content_type === "worksheet" && worksheetBlocks.length > 0 && (
                     <button
                       onClick={() => setShowWorksheetModal(true)}
-                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 font-medium"
+                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-stone-100 dark:bg-stone-700 text-stone-700 dark:text-stone-200 rounded-lg hover:bg-stone-200 dark:hover:bg-stone-600 font-medium"
                     >
                       <BookOpen className="w-5 h-5" />
                       Xem bài làm
@@ -296,7 +296,7 @@ const StudentAssignmentPage: React.FC = () => {
                   )}
                   <button
                     onClick={handleViewFeedback}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand text-white rounded-lg hover:bg-brand-dark font-medium"
                   >
                     <Eye className="w-5 h-5" />
                     Xem đánh giá
@@ -314,19 +314,19 @@ const StudentAssignmentPage: React.FC = () => {
 
                 {/* Group info */}
                 {a.work_type === "group" && data.my_group && (
-                  <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                  <div className="mb-6 p-4 bg-stone-50 dark:bg-stone-700/50 rounded-xl">
                     <div className="flex items-center gap-2 mb-3">
                       <Users className="w-5 h-5 text-purple-500" />
-                      <span className="font-semibold text-gray-900 dark:text-white">{data.my_group.group_name}</span>
-                      <span className="text-sm text-gray-500">({data.my_group.members.length} thành viên)</span>
+                      <span className="font-semibold text-stone-900 dark:text-white">{data.my_group.group_name}</span>
+                      <span className="text-sm text-stone-500">({data.my_group.members.length} thành viên)</span>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {data.my_group.members.map((m) => (
-                        <div key={m.student_id} className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-                          <span className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-medium">
+                        <div key={m.student_id} className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-stone-700 rounded-lg border border-stone-200 dark:border-stone-600">
+                          <span className="w-8 h-8 rounded-full bg-brand text-white flex items-center justify-center text-sm font-medium">
                             {m.full_name.charAt(m.full_name.lastIndexOf(" ") + 1)}
                           </span>
-                          <span className="text-gray-800 dark:text-gray-200">{m.full_name}</span>
+                          <span className="text-stone-800 dark:text-stone-200">{m.full_name}</span>
                           {m.is_leader && <Crown className="w-4 h-4 text-amber-500" />}
                         </div>
                       ))}
@@ -338,7 +338,7 @@ const StudentAssignmentPage: React.FC = () => {
                 <button
                   onClick={handleStartSession}
                   disabled={starting || (a.work_type === "group" && !data.my_group)}
-                  className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-lg transition-colors"
+                  className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-brand text-white rounded-xl hover:bg-brand-dark disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-lg transition-colors"
                 >
                   {starting && <Loader2 className="w-5 h-5 animate-spin" />}
                   {a.status === "in_progress" ? "Tiếp tục làm bài" : "Bắt đầu làm bài"}
@@ -352,41 +352,41 @@ const StudentAssignmentPage: React.FC = () => {
       {/* Feedback Modal */}
       {showFeedbackModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Đánh giá từ nhóm khác</h3>
-              <button onClick={() => setShowFeedbackModal(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
-                <X className="w-5 h-5 text-gray-500" />
+          <div className="bg-white dark:bg-stone-800 rounded-xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-hidden">
+            <div className="px-6 py-4 border-b border-stone-200 dark:border-stone-700 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-stone-900 dark:text-white">Đánh giá từ nhóm khác</h3>
+              <button onClick={() => setShowFeedbackModal(false)} className="p-2 hover:bg-stone-100 dark:hover:bg-stone-700 rounded-lg">
+                <X className="w-5 h-5 text-stone-500" />
               </button>
             </div>
             <div className="p-6 overflow-y-auto max-h-[60vh]">
               {loadingFeedback ? (
                 <div className="flex items-center justify-center py-12">
-                  <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                  <Loader2 className="w-8 h-8 animate-spin text-brand" />
                 </div>
               ) : feedback.length === 0 ? (
                 <div className="text-center py-12">
-                  <p className="text-gray-500">Chưa có đánh giá nào</p>
+                  <p className="text-stone-500">Chưa có đánh giá nào</p>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {feedback.map((fb) => (
-                    <div key={fb.id} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                    <div key={fb.id} className="p-4 bg-stone-50 dark:bg-stone-700/50 rounded-xl">
                       <div className="flex items-center justify-between mb-3">
-                        <span className="font-medium text-gray-700 dark:text-gray-300">{fb.reviewer_name}</span>
+                        <span className="font-medium text-stone-700 dark:text-stone-300">{fb.reviewer_name}</span>
                         {fb.score && (
-                          <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-full font-semibold">
+                          <span className="px-3 py-1 bg-sky-100 dark:bg-sky-900/30 text-brand-dark dark:text-sky-400 rounded-full font-semibold">
                             {fb.score}/10
                           </span>
                         )}
                       </div>
                       {fb.comments.general && (
-                        <p className="text-gray-700 dark:text-gray-300 mb-2">{fb.comments.general}</p>
+                        <p className="text-stone-700 dark:text-stone-300 mb-2">{fb.comments.general}</p>
                       )}
                       {Object.entries(fb.comments)
                         .filter(([key]) => key !== "general")
                         .map(([key, comment]) => (
-                          <p key={key} className="text-sm text-gray-500 dark:text-gray-400">
+                          <p key={key} className="text-sm text-stone-500 dark:text-stone-400">
                             <span className="font-medium">Câu {key}:</span> {comment}
                           </p>
                         ))}
@@ -402,14 +402,14 @@ const StudentAssignmentPage: React.FC = () => {
       {/* Worksheet Modal - Xem lại bài làm */}
       {showWorksheetModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-blue-50 dark:bg-blue-900/20">
+          <div className="bg-white dark:bg-stone-800 rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
+            <div className="px-6 py-4 border-b border-stone-200 dark:border-stone-700 flex items-center justify-between bg-sky-50 dark:bg-sky-900/20">
               <div className="flex items-center gap-3">
-                <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{worksheetTitle}</h3>
+                <FileText className="w-5 h-5 text-brand dark:text-sky-400" />
+                <h3 className="text-lg font-semibold text-stone-900 dark:text-white">{worksheetTitle}</h3>
               </div>
-              <button onClick={() => setShowWorksheetModal(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
-                <X className="w-5 h-5 text-gray-500" />
+              <button onClick={() => setShowWorksheetModal(false)} className="p-2 hover:bg-stone-100 dark:hover:bg-stone-700 rounded-lg">
+                <X className="w-5 h-5 text-stone-500" />
               </button>
             </div>
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
@@ -425,13 +425,13 @@ const StudentAssignmentPage: React.FC = () => {
                   const answerKey = `q_${block.questionNum}`;
                   const answer = answers[answerKey] || "";
                   return (
-                    <div key={`q-${idx}`} className="border-l-4 border-blue-500 pl-4">
+                    <div key={`q-${idx}`} className="border-l-4 border-brand pl-4">
                       <div className="mb-3">
                         <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{block.questionLine}</ReactMarkdown>
                       </div>
                       <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
                         <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-2">Câu trả lời của nhóm:</p>
-                        <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{answer || "(Chưa trả lời)"}</p>
+                        <p className="text-stone-800 dark:text-stone-200 whitespace-pre-wrap">{answer || "(Chưa trả lời)"}</p>
                       </div>
                     </div>
                   );

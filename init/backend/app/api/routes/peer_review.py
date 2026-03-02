@@ -300,7 +300,7 @@ async def get_all_reviews(
         sessions = sessions_result.scalars().all()
         for s in sessions:
             if s.group:
-                session_to_group_name[s.id] = s.group.group_name
+                session_to_group_name[s.id] = s.group.name
 
     return {
         "reviews": [
@@ -709,8 +709,9 @@ async def auto_activate_peer_review(
     from app.core.config import get_settings
     settings = get_settings()
 
-    # Verify internal API key
-    if api_key != settings.internal_api_key:
+    # Verify internal API key (constant-time comparison)
+    import hmac as _hmac
+    if not _hmac.compare_digest(api_key, settings.internal_api_key):
         raise HTTPException(status_code=403, detail="Invalid API key")
 
     # Get assignment

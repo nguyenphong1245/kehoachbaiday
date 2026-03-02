@@ -12,7 +12,7 @@ const variants = {
 
 const FormAlert = ({ variant = "error", children }: FormAlertProps) => {
   return (
-    <div className={`w-full rounded-lg border px-3 py-2 text-sm ${variants[variant]}`}>
+    <div className={`w-full rounded-xl border px-3 py-2.5 text-sm ${variants[variant]}`}>
       {children}
     </div>
   );

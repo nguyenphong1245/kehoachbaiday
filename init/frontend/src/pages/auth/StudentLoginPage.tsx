@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import FormAlert from "@/components/forms/FormAlert";
 import SubmitButton from "@/components/forms/SubmitButton";
@@ -28,14 +28,7 @@ const StudentLoginPage = () => {
   };
 
   return (
-    <AuthCard
-      title="Học sinh đăng nhập"
-      description={
-        <span>
-          Sử dụng tài khoản được giáo viên cấp
-        </span>
-      }
-    >
+    <AuthCard title="ĐĂNG NHẬP" description="Trang đăng nhập dành cho học sinh">
       <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
         {error ? <FormAlert>{error}</FormAlert> : null}
         {success ? <FormAlert variant="success">{success}</FormAlert> : null}
@@ -44,7 +37,7 @@ const StudentLoginPage = () => {
           name="username"
           type="text"
           autoComplete="username"
-          placeholder="hs_mahs_lop"
+          placeholder="VD: HS07012015123"
           value={username}
           onChange={(event) => setUsername(event.target.value)}
           required
@@ -54,21 +47,13 @@ const StudentLoginPage = () => {
           name="password"
           type="password"
           autoComplete="current-password"
-          placeholder="••••••••"
+          placeholder="VD: 07012015"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           required
         />
         <SubmitButton label="Đăng nhập" isLoading={isLoading} />
       </form>
-      <div className="mt-4 text-center text-sm text-slate-500 dark:text-slate-400">
-        <span>
-          Bạn là giáo viên?{" "}
-          <Link className="font-medium text-brand" to="/login">
-            Đăng nhập tại đây
-          </Link>
-        </span>
-      </div>
     </AuthCard>
   );
 };

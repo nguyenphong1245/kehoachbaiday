@@ -9,6 +9,7 @@
 
 // API calls, SSE streaming, AI improve, saved lesson plans CRUD
 export {
+  getSubjects,
   getTopics,
   searchLessons,
   getLessonDetail,

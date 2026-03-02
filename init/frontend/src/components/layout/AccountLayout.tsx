@@ -2,7 +2,7 @@ import { Outlet } from "react-router-dom";
 
 const AccountLayout = () => {
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100">
+    <div className="min-h-screen bg-stone-100 dark:bg-stone-900 text-stone-800 dark:text-stone-100">
       <main>
         <Outlet />
       </main>

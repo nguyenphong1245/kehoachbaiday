@@ -25,7 +25,7 @@ class ClassAssignment(Base):
     title = Column(String(500), nullable=False)
     description = Column(Text, nullable=True)
     work_type = Column(String(20), nullable=False, server_default="individual")  # 'individual' | 'group'
-    is_active = Column(Boolean, default=True, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False, server_default="true")
     start_at = Column(DateTime(timezone=True), nullable=True)
     due_date = Column(DateTime(timezone=True), nullable=True)
     auto_peer_review = Column(Boolean, default=False, nullable=False, server_default="false")

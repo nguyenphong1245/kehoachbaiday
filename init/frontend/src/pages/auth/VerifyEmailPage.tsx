@@ -62,7 +62,7 @@ const VerifyEmailPage = () => {
     >
       <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
         {email && (
-          <p className="text-sm text-slate-600 dark:text-slate-400">
+          <p className="text-sm text-stone-600 dark:text-stone-400">
             Chúng tôi đã gửi mã 8 chữ số đến <strong>{email}</strong>. Kiểm tra hộp thư của bạn.
           </p>
         )}
@@ -77,7 +77,7 @@ const VerifyEmailPage = () => {
         />
         <SubmitButton label="Xác minh email" isLoading={isSubmitting} />
       </form>
-      <p className="mt-4 text-center text-sm text-slate-500 dark:text-slate-400">
+      <p className="mt-4 text-center text-sm text-stone-500 dark:text-stone-400">
         Sẵn sàng đăng nhập? <Link to="/login">Đi đến đăng nhập</Link>
       </p>
     </AuthCard>

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
-import Editor from "@monaco-editor/react";
 import {
   Play,
   Send,
@@ -21,7 +20,6 @@ import {
   Trash2,
   Eye,
   EyeOff,
-  Lightbulb,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -32,7 +30,6 @@ import {
   startCodeSession,
   runCode,
   submitCode,
-  getHint,
   type CodeExercisePublic,
   type RunCodeResponse,
   type SubmitCodeResponse,
@@ -79,26 +76,21 @@ export const PublicCodeExercisePage: React.FC = () => {
   // Code editor
   const [code, setCode] = useState("");
 
-  // Run (chạy thử với test cases)
+  // Run
   const [isRunning, setIsRunning] = useState(false);
   const [runResults, setRunResults] = useState<RunTestResult[] | null>(null);
 
-  // Submit (nộp bài chấm điểm)
+  // Submit
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitResult, setSubmitResult] = useState<SubmitCodeResponse | null>(
-    null
-  );
+  const [submitResult, setSubmitResult] = useState<SubmitCodeResponse | null>(null);
 
-  // Guards against double-submit (ref is synchronous, unlike state)
+  // Guards
   const isRunningRef = useRef(false);
   const isSubmittingRef = useRef(false);
 
   // UI
-  const [activeTab, setActiveTab] = useState<"problem" | "testcases">(
-    "problem"
-  );
+  const [activeTab, setActiveTab] = useState<"problem" | "testcases">("problem");
   const [outputTab, setOutputTab] = useState<"run" | "submit">("run");
-  const [showProblem, setShowProblem] = useState(true);
 
   // Teacher mode
   const [isTeacher, setIsTeacher] = useState(false);
@@ -106,6 +98,7 @@ export const PublicCodeExercisePage: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editTestCases, setEditTestCases] = useState<TestCaseTeacher[]>([]);
+  const [editProblemStatement, setEditProblemStatement] = useState("");
 
   // Load exercise
   useEffect(() => {
@@ -114,12 +107,10 @@ export const PublicCodeExercisePage: React.FC = () => {
       setIsLoading(true);
       setError(null);
       try {
-        // Load public data
         const data = await getPublicExercise(shareCode);
         setExercise(data);
         setCode(data.starter_code || getDefaultCode(data.language));
 
-        // Try teacher endpoint if user is logged in
         const currentUser = getStoredAuthUser();
         if (currentUser) {
           try {
@@ -127,14 +118,12 @@ export const PublicCodeExercisePage: React.FC = () => {
             setAllTestCases(teacherData.test_cases);
             setIsTeacher(true);
           } catch {
-            // Not the creator or expired token - stay in student mode
+            // Not the creator
           }
         }
       } catch (err: unknown) {
         if (err && typeof err === "object" && "response" in err) {
-          const response = (
-            err as { response?: { data?: { detail?: string } } }
-          ).response;
+          const response = (err as { response?: { data?: { detail?: string } } }).response;
           setError(response?.data?.detail || "Không thể tải bài tập");
         } else {
           setError("Lỗi kết nối. Vui lòng thử lại.");
@@ -163,18 +152,7 @@ export const PublicCodeExercisePage: React.FC = () => {
     }
   };
 
-  const getMonacoLanguage = (lang: string) => {
-    const map: Record<string, string> = {
-      python: "python",
-      javascript: "javascript",
-      java: "java",
-      cpp: "cpp",
-      c: "c",
-    };
-    return map[lang] || "python";
-  };
-
-  // Handle student registration + start session
+  // Handle student registration
   const handleStudentRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!shareCode || !studentForm.name.trim() || !studentForm.className.trim()) return;
@@ -277,14 +255,15 @@ export const PublicCodeExercisePage: React.FC = () => {
   // Teacher: start editing
   const handleStartEditing = () => {
     setEditTestCases(allTestCases.map((tc) => ({ ...tc })));
+    setEditProblemStatement(exercise?.problem_statement || "");
     setIsEditing(true);
-    setActiveTab("testcases");
   };
 
   // Teacher: cancel editing
   const handleCancelEdit = () => {
     setIsEditing(false);
     setEditTestCases([]);
+    setEditProblemStatement("");
   };
 
   // Teacher: save changes
@@ -295,13 +274,14 @@ export const PublicCodeExercisePage: React.FC = () => {
       await updateExerciseByShareCode(shareCode, {
         starter_code: code,
         test_cases: editTestCases,
+        problem_statement: editProblemStatement || undefined,
       });
       setAllTestCases(editTestCases.map((tc) => ({ ...tc })));
-      // Update public test cases in exercise state
       if (exercise) {
         setExercise({
           ...exercise,
           starter_code: code,
+          problem_statement: editProblemStatement || exercise.problem_statement,
           test_cases: editTestCases
             .filter((tc) => !tc.is_hidden)
             .map((tc) => ({ input: tc.input, expected_output: tc.expected_output })),
@@ -309,12 +289,13 @@ export const PublicCodeExercisePage: React.FC = () => {
       }
       setIsEditing(false);
       setEditTestCases([]);
+      setEditProblemStatement("");
     } catch {
       toast.push({ type: "error", title: "Lỗi khi lưu thay đổi" });
     } finally {
       setIsSaving(false);
     }
-  }, [shareCode, code, editTestCases, exercise]);
+  }, [shareCode, code, editTestCases, editProblemStatement, exercise]);
 
   // Teacher: update a test case field
   const updateEditTestCase = (index: number, field: keyof TestCaseTeacher, value: string | boolean) => {
@@ -333,15 +314,28 @@ export const PublicCodeExercisePage: React.FC = () => {
     setEditTestCases(editTestCases.filter((_, i) => i !== index));
   };
 
+  // Tab key handler for textarea
+  const handleCodeKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const target = e.target as HTMLTextAreaElement;
+      const start = target.selectionStart;
+      const end = target.selectionEnd;
+      const newCode = code.substring(0, start) + "    " + code.substring(end);
+      setCode(newCode);
+      requestAnimationFrame(() => {
+        target.selectionStart = target.selectionEnd = start + 4;
+      });
+    }
+  }, [code]);
+
   // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen bg-stone-50 dark:bg-stone-900 flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-10 h-10 text-blue-500 animate-spin mx-auto mb-3" />
-          <p className="text-gray-500">
-            Đang tải bài tập...
-          </p>
+          <Loader2 className="w-8 h-8 animate-spin text-brand mx-auto mb-2" />
+          <p className="text-stone-500">Đang tải bài tập...</p>
         </div>
       </div>
     );
@@ -350,13 +344,13 @@ export const PublicCodeExercisePage: React.FC = () => {
   // Error state
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full mx-4 text-center border border-gray-200">
+      <div className="min-h-screen bg-stone-50 dark:bg-stone-900 flex items-center justify-center">
+        <div className="bg-white dark:bg-stone-800 rounded-xl shadow-lg p-8 max-w-md w-full mx-4 text-center border border-stone-200 dark:border-stone-700">
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-800 mb-2">
+          <h2 className="text-xl font-semibold text-stone-800 dark:text-white mb-2">
             Không thể tải bài tập
           </h2>
-          <p className="text-gray-500">{error}</p>
+          <p className="text-stone-500 dark:text-stone-400">{error}</p>
         </div>
       </div>
     );
@@ -367,20 +361,20 @@ export const PublicCodeExercisePage: React.FC = () => {
   // Student registration form (skip for teachers)
   if (!studentInfo && !isTeacher) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full border border-gray-100">
+      <div className="min-h-screen bg-stone-50 dark:bg-stone-900 flex items-center justify-center p-4">
+        <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-xl p-8 max-w-md w-full border border-stone-200 dark:border-stone-700">
           <div className="text-center mb-6">
-            <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <Code2 className="w-8 h-8 text-blue-600" />
+            <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Code2 className="w-8 h-8 text-blue-600 dark:text-blue-400" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl font-bold text-stone-900 dark:text-white">
               {exercise.title}
             </h1>
           </div>
 
           <form onSubmit={handleStudentRegister} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">
                 <User className="w-4 h-4 inline mr-1" />
                 Họ và tên *
               </label>
@@ -388,15 +382,13 @@ export const PublicCodeExercisePage: React.FC = () => {
                 type="text"
                 required
                 value={studentForm.name}
-                onChange={(e) =>
-                  setStudentForm({ ...studentForm, name: e.target.value })
-                }
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+                onChange={(e) => setStudentForm({ ...studentForm, name: e.target.value })}
+                className="w-full px-4 py-2.5 border border-stone-300 dark:border-stone-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-stone-900 text-stone-900 dark:text-white"
                 placeholder="Nguyễn Văn A"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">
                 <Users className="w-4 h-4 inline mr-1" />
                 Lớp *
               </label>
@@ -404,24 +396,20 @@ export const PublicCodeExercisePage: React.FC = () => {
                 type="text"
                 required
                 value={studentForm.className}
-                onChange={(e) =>
-                  setStudentForm({ ...studentForm, className: e.target.value })
-                }
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+                onChange={(e) => setStudentForm({ ...studentForm, className: e.target.value })}
+                className="w-full px-4 py-2.5 border border-stone-300 dark:border-stone-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-stone-900 text-stone-900 dark:text-white"
                 placeholder="10A1"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">
                 Nhóm (nếu có)
               </label>
               <input
                 type="text"
                 value={studentForm.group}
-                onChange={(e) =>
-                  setStudentForm({ ...studentForm, group: e.target.value })
-                }
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+                onChange={(e) => setStudentForm({ ...studentForm, group: e.target.value })}
+                className="w-full px-4 py-2.5 border border-stone-300 dark:border-stone-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-stone-900 text-stone-900 dark:text-white"
                 placeholder="Nhóm 1"
               />
             </div>
@@ -439,14 +427,14 @@ export const PublicCodeExercisePage: React.FC = () => {
 
   const runPassedCount = runResults ? runResults.filter((r) => r.passed).length : 0;
 
-  // Main exercise page (IDE layout) - Light theme
+  // Main exercise page - matching student layout
   return (
-    <div className="h-screen flex flex-col bg-white text-gray-900">
-      {/* Header */}
-      <div className="h-12 bg-white border-b border-gray-200 flex items-center justify-between px-4 shrink-0 shadow-sm">
-        <div className="flex items-center gap-3">
+    <div className="h-screen bg-stone-50 dark:bg-stone-900 flex flex-col overflow-hidden">
+      {/* Top bar */}
+      <div className="bg-white dark:bg-stone-800 border-b border-stone-200 dark:border-stone-700 px-4 py-2 flex items-center gap-3 flex-shrink-0">
+        <div className="flex-1 min-w-0 flex items-center gap-3">
           <Code2 className="w-5 h-5 text-blue-600" />
-          <h1 className="text-sm font-semibold truncate max-w-[300px] text-gray-800">
+          <h1 className="text-sm font-semibold text-stone-900 dark:text-white truncate">
             {exercise.title}
           </h1>
           <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded font-medium">
@@ -460,7 +448,7 @@ export const PublicCodeExercisePage: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           {!isTeacher && studentInfo && (
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-stone-500 dark:text-stone-400">
               {studentInfo.name} - {studentInfo.className}
             </span>
           )}
@@ -470,14 +458,14 @@ export const PublicCodeExercisePage: React.FC = () => {
                 <>
                   <button
                     onClick={handleCancelEdit}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-medium rounded transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-200 hover:bg-stone-300 dark:bg-stone-700 dark:hover:bg-stone-600 text-stone-700 dark:text-stone-300 text-xs font-medium rounded transition-colors"
                   >
                     Hủy
                   </button>
                   <button
                     onClick={handleSave}
                     disabled={isSaving}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-xs font-medium rounded transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-stone-300 disabled:cursor-not-allowed text-white text-xs font-medium rounded transition-colors"
                   >
                     {isSaving ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -500,7 +488,7 @@ export const PublicCodeExercisePage: React.FC = () => {
             <button
               onClick={handleRunCode}
               disabled={isRunning || !code.trim()}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-xs font-medium rounded transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-stone-300 disabled:cursor-not-allowed text-white text-xs font-medium rounded transition-colors"
             >
               {isRunning ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -513,7 +501,7 @@ export const PublicCodeExercisePage: React.FC = () => {
               <button
                 onClick={handleSubmitCode}
                 disabled={isSubmitting || !code.trim()}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-xs font-medium rounded transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-brand hover:bg-brand-dark disabled:bg-stone-300 disabled:cursor-not-allowed text-white text-xs font-medium rounded transition-colors"
               >
                 {isSubmitting ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -528,312 +516,278 @@ export const PublicCodeExercisePage: React.FC = () => {
       </div>
 
       {/* Main content */}
-      <div className="flex-1 flex min-h-0">
-        {/* Left panel - Problem description */}
-        <div
-          className={`${showProblem ? "w-[40%]" : "w-0"} border-r border-gray-200 flex flex-col transition-all overflow-hidden bg-white`}
-        >
-          {/* Tabs */}
-          <div className="flex border-b border-gray-200 shrink-0">
-            <button
-              onClick={() => setActiveTab("problem")}
-              className={`px-4 py-2 text-xs font-medium transition-colors ${
-                activeTab === "problem"
-                  ? "text-blue-600 border-b-2 border-blue-600"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              Đề bài
-            </button>
-            {isTeacher && (
-              <button
-                onClick={() => setActiveTab("testcases")}
-                className={`px-4 py-2 text-xs font-medium transition-colors ${
-                  activeTab === "testcases"
-                    ? "text-blue-600 border-b-2 border-blue-600"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                Test cases ({allTestCases.length})
-              </button>
-            )}
-          </div>
-
-          {/* Tab content */}
-          <div className="flex-1 overflow-y-auto p-4">
-            {activeTab === "problem" ? (
-              <div
-                className={`text-gray-700 text-sm leading-relaxed ${!isTeacher ? "select-none" : ""}`}
-                onCopy={!isTeacher ? (e) => e.preventDefault() : undefined}
-                onCut={!isTeacher ? (e) => e.preventDefault() : undefined}
-                onContextMenu={!isTeacher ? (e) => e.preventDefault() : undefined}
-              >
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    h1: ({ children }) => <h1 className="text-xl font-bold text-gray-900 mt-4 mb-2">{children}</h1>,
-                    h2: ({ children }) => <h2 className="text-lg font-bold text-gray-900 mt-4 mb-2">{children}</h2>,
-                    h3: ({ children }) => <h3 className="text-base font-semibold text-gray-800 mt-3 mb-1.5">{children}</h3>,
-                    p: ({ children }) => <p className="my-1.5 leading-relaxed">{children}</p>,
-                    strong: ({ children }) => <strong className="text-gray-900 font-semibold">{children}</strong>,
-                    em: ({ children }) => <em className="text-gray-500 italic">{children}</em>,
-                    ul: ({ children }) => <ul className="my-2 ml-4 space-y-0.5 list-disc">{children}</ul>,
-                    ol: ({ children }) => <ol className="my-2 ml-4 space-y-0.5 list-decimal">{children}</ol>,
-                    li: ({ children }) => <li className="text-gray-700">{children}</li>,
-                    code: ({ className, children, ...props }) => {
-                      const isBlock = className?.includes("language-");
-                      if (isBlock) {
-                        return (
-                          <code className={`${className} block`} {...props}>
-                            {children}
-                          </code>
-                        );
-                      }
-                      return (
-                        <code className="text-gray-800 bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono" {...props}>
-                          {children}
-                        </code>
-                      );
-                    },
-                    pre: ({ children }) => (
-                      <pre className="bg-gray-100 border border-gray-300 rounded-lg my-3 p-3 overflow-x-auto text-xs text-gray-800 font-mono">
-                        {children}
-                      </pre>
-                    ),
-                    table: ({ children }) => (
-                      <div className="my-3 overflow-x-auto">
-                        <table className="min-w-full border-collapse border border-gray-300 text-xs">
-                          {children}
-                        </table>
-                      </div>
-                    ),
-                    thead: ({ children }) => <thead className="bg-gray-100">{children}</thead>,
-                    th: ({ children }) => <th className="border border-gray-300 px-3 py-1.5 text-left text-gray-700 font-medium">{children}</th>,
-                    td: ({ children }) => <td className="border border-gray-300 px-3 py-1.5 text-gray-600">{children}</td>,
-                    hr: () => <hr className="border-gray-200 my-3" />,
-                    blockquote: ({ children }) => (
-                      <blockquote className="border-l-3 border-blue-500 pl-3 my-2 text-gray-500 italic bg-blue-50 py-2 rounded-r">
-                        {children}
-                      </blockquote>
-                    ),
-                  }}
-                >
-                  {exercise.problem_statement}
-                </ReactMarkdown>
-                {exercise.description && exercise.description !== exercise.problem_statement && (
-                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {exercise.description}
-                    </ReactMarkdown>
-                  </div>
-                )}
-              </div>
-            ) : isTeacher ? (
-              <div className="space-y-3">
-                {isEditing ? (
-                  <>
-                    {editTestCases.map((tc, i) => (
-                      <div
-                        key={i}
-                        className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm"
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs text-gray-500 font-medium">
-                            Test case {i + 1}
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <label className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={tc.is_hidden}
-                                onChange={(e) => updateEditTestCase(i, "is_hidden", e.target.checked)}
-                                className="rounded border-gray-300"
-                              />
-                              {tc.is_hidden ? (
-                                <EyeOff className="w-3 h-3" />
-                              ) : (
-                                <Eye className="w-3 h-3" />
-                              )}
-                              Ẩn
-                            </label>
-                            <button
-                              onClick={() => removeEditTestCase(i)}
-                              className="text-red-500 hover:text-red-700 p-0.5"
-                              title="Xóa test case"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                        <div className="mb-2">
-                          <span className="text-xs text-gray-400">Input:</span>
-                          <textarea
-                            value={tc.input}
-                            onChange={(e) => updateEditTestCase(i, "input", e.target.value)}
-                            className="w-full mt-1 p-2 bg-white border border-gray-200 rounded text-xs font-mono resize-y min-h-[40px] focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                            rows={2}
-                          />
-                        </div>
-                        <div>
-                          <span className="text-xs text-gray-400">Expected Output:</span>
-                          <textarea
-                            value={tc.expected_output}
-                            onChange={(e) => updateEditTestCase(i, "expected_output", e.target.value)}
-                            className="w-full mt-1 p-2 bg-white border border-gray-200 rounded text-xs font-mono resize-y min-h-[40px] focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                            rows={2}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                    <button
-                      onClick={addEditTestCase}
-                      className="w-full flex items-center justify-center gap-1.5 py-2 border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-lg text-xs text-gray-500 hover:text-blue-600 transition-colors"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Thêm test case
-                    </button>
-                  </>
-                ) : (
-                  allTestCases.map((tc, i) => (
-                    <div
-                      key={i}
-                      className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm"
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs text-gray-500 font-medium">
-                          Test case {i + 1}
-                        </span>
-                        {tc.is_hidden && (
-                          <span className="text-xs px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded flex items-center gap-1">
-                            <EyeOff className="w-3 h-3" />
-                            Ẩn
-                          </span>
-                        )}
-                      </div>
-                      <div className="mb-2">
-                        <span className="text-xs text-gray-400">Input:</span>
-                        <pre className="mt-1 p-2 bg-white border border-gray-200 rounded text-gray-800 text-xs whitespace-pre-wrap font-mono">
-                          {tc.input || "(không có input)"}
-                        </pre>
-                      </div>
-                      <div>
-                        <span className="text-xs text-gray-400">Expected Output:</span>
-                        <pre className="mt-1 p-2 bg-white border border-gray-200 rounded text-blue-700 text-xs whitespace-pre-wrap font-mono">
-                          {tc.expected_output}
-                        </pre>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        {/* Toggle problem panel */}
-        <button
-          onClick={() => setShowProblem(!showProblem)}
-          className="w-5 bg-gray-50 hover:bg-gray-100 flex items-center justify-center border-r border-gray-200 transition-colors shrink-0"
-          title={showProblem ? "Ẩn đề bài" : "Hiện đề bài"}
-        >
-          {showProblem ? (
-            <ChevronDown className="w-3 h-3 text-gray-400 rotate-90" />
-          ) : (
-            <ChevronUp className="w-3 h-3 text-gray-400 rotate-90" />
-          )}
-        </button>
-
-        {/* Right panel - Editor + Output */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Code Editor */}
-          <div className="flex-1 min-h-0 border-b border-gray-200">
-            <Editor
-              height="100%"
-              language={getMonacoLanguage(exercise.language)}
-              value={code}
-              onChange={(value) => setCode(value || "")}
-              theme="vs"
-              options={{
-                fontSize: 14,
-                minimap: { enabled: false },
-                scrollBeyondLastLine: false,
-                wordWrap: "on",
-                automaticLayout: true,
-                tabSize: 4,
-                insertSpaces: true,
-                padding: { top: 8 },
-                contextmenu: isTeacher,
-              }}
-            />
-          </div>
-
-          {/* Output panel */}
-          <div className="h-[35%] border-t border-gray-200 flex flex-col shrink-0 bg-white">
-            {/* Output tabs */}
-            <div className="flex items-center border-b border-gray-200 shrink-0">
-              <button
-                onClick={() => setOutputTab("run")}
-                className={`px-4 py-2 text-xs font-medium transition-colors ${
-                  outputTab === "run"
-                    ? "text-green-600 border-b-2 border-green-600"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                <Terminal className="w-3 h-3 inline mr-1" />
-                Chạy thử
-                {runResults && (
-                  <span
-                    className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                      runPassedCount === runResults.length
-                        ? "bg-green-100 text-green-700"
-                        : "bg-orange-100 text-orange-700"
-                    }`}
-                  >
-                    {runPassedCount}/{runResults.length}
-                  </span>
-                )}
-              </button>
-              {!isTeacher && (
+      <div className="flex-1 flex overflow-hidden">
+        <div className="flex h-full w-full">
+          {/* Left panel - Problem description + test cases */}
+          <div className="w-[38%] flex flex-col border-r border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800">
+            {isTeacher ? (
+              <div className="flex border-b border-stone-200 dark:border-stone-700 shrink-0">
                 <button
-                  onClick={() => setOutputTab("submit")}
+                  onClick={() => setActiveTab("problem")}
                   className={`px-4 py-2 text-xs font-medium transition-colors ${
-                    outputTab === "submit"
+                    activeTab === "problem"
                       ? "text-blue-600 border-b-2 border-blue-600"
-                      : "text-gray-500 hover:text-gray-700"
+                      : "text-stone-500 hover:text-stone-700 dark:text-stone-400"
                   }`}
                 >
-                  <CheckCircle className="w-3 h-3 inline mr-1" />
-                  Kết quả chấm
-                  {submitResult && (
-                    <span
-                      className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                        submitResult.status === "passed"
-                          ? "bg-green-100 text-green-700"
-                          : "bg-red-100 text-red-700"
-                      }`}
-                    >
-                      {submitResult.passed_tests}/{submitResult.total_tests}
+                  Đề bài
+                </button>
+                <button
+                  onClick={() => setActiveTab("testcases")}
+                  className={`px-4 py-2 text-xs font-medium transition-colors ${
+                    activeTab === "testcases"
+                      ? "text-blue-600 border-b-2 border-blue-600"
+                      : "text-stone-500 hover:text-stone-700 dark:text-stone-400"
+                  }`}
+                >
+                  Test cases ({allTestCases.length})
+                </button>
+              </div>
+            ) : (
+              <div className="px-4 py-2 border-b border-stone-200 dark:border-stone-700 shrink-0">
+                <span className="text-xs font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wide">Đề bài</span>
+              </div>
+            )}
+
+            <div className="flex-1 overflow-y-auto p-4">
+              {(!isTeacher || activeTab === "problem") ? (
+                <>
+                  {isTeacher && isEditing ? (
+                    /* Teacher editing mode: textarea for problem_statement */
+                    <div>
+                      <label className="block text-xs font-medium text-stone-500 dark:text-stone-400 mb-1.5">
+                        Đề bài (Markdown)
+                      </label>
+                      <textarea
+                        value={editProblemStatement}
+                        onChange={(e) => setEditProblemStatement(e.target.value)}
+                        className="w-full px-3 py-2 bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-600 rounded-lg text-sm font-mono text-stone-900 dark:text-stone-100 resize-y focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                        rows={20}
+                        placeholder="Nhập đề bài (hỗ trợ Markdown)..."
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <div
+                        className={`prose prose-sm dark:prose-invert max-w-none ${!isTeacher ? "select-none" : ""}`}
+                        onCopy={!isTeacher ? (e) => e.preventDefault() : undefined}
+                        onCut={!isTeacher ? (e) => e.preventDefault() : undefined}
+                        onContextMenu={!isTeacher ? (e) => e.preventDefault() : undefined}
+                      >
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {exercise.problem_statement}
+                        </ReactMarkdown>
+                      </div>
+
+                      {/* Sample test cases - chỉ hiện cho học sinh */}
+                      {!isTeacher && exercise.test_cases.length > 0 && (
+                        <div className="mt-5 pt-4 border-t border-stone-200 dark:border-stone-700">
+                          <h3 className="text-sm font-semibold text-stone-700 dark:text-stone-300 mb-3">Ví dụ</h3>
+                          <div className="space-y-3">
+                            {exercise.test_cases.map((tc, i) => (
+                              <div key={i} className="rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden">
+                                <div className="px-3 py-1.5 bg-stone-50 dark:bg-stone-900/50 border-b border-stone-200 dark:border-stone-700">
+                                  <span className="text-xs font-semibold text-stone-500 dark:text-stone-400">Test {i + 1}</span>
+                                </div>
+                                <div className="p-3 space-y-2 text-sm">
+                                  <div>
+                                    <span className="text-xs font-medium text-stone-500 dark:text-stone-400 uppercase tracking-wide">Input</span>
+                                    <pre className="mt-1 font-mono text-sm text-stone-800 dark:text-stone-200 whitespace-pre-wrap bg-stone-50 dark:bg-stone-900/50 rounded px-3 py-2">{tc.input || "(trống)"}</pre>
+                                  </div>
+                                  <div>
+                                    <span className="text-xs font-medium text-stone-500 dark:text-stone-400 uppercase tracking-wide">Output</span>
+                                    <pre className="mt-1 font-mono text-sm text-stone-800 dark:text-stone-200 whitespace-pre-wrap bg-stone-50 dark:bg-stone-900/50 rounded px-3 py-2">{tc.expected_output}</pre>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </>
+              ) : isTeacher && activeTab === "testcases" ? (
+                <div className="space-y-3">
+                  {isEditing ? (
+                    <>
+                      {editTestCases.map((tc, i) => (
+                        <div
+                          key={i}
+                          className="bg-stone-50 dark:bg-stone-900/50 border border-stone-200 dark:border-stone-700 rounded-lg p-3 text-sm"
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs text-stone-500 dark:text-stone-400 font-medium">
+                              Test case {i + 1}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <label className="flex items-center gap-1 text-xs text-stone-500 dark:text-stone-400 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={tc.is_hidden}
+                                  onChange={(e) => updateEditTestCase(i, "is_hidden", e.target.checked)}
+                                  className="rounded border-stone-300 dark:border-stone-600"
+                                />
+                                {tc.is_hidden ? (
+                                  <EyeOff className="w-3 h-3" />
+                                ) : (
+                                  <Eye className="w-3 h-3" />
+                                )}
+                                Ẩn
+                              </label>
+                              <button
+                                onClick={() => removeEditTestCase(i)}
+                                className="text-red-500 hover:text-red-700 p-0.5"
+                                title="Xóa test case"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="mb-2">
+                            <span className="text-xs text-stone-400">Input:</span>
+                            <textarea
+                              value={tc.input}
+                              onChange={(e) => updateEditTestCase(i, "input", e.target.value)}
+                              className="w-full mt-1 p-2 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded text-xs font-mono resize-y min-h-[40px] focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-stone-900 dark:text-stone-100"
+                              rows={2}
+                            />
+                          </div>
+                          <div>
+                            <span className="text-xs text-stone-400">Expected Output:</span>
+                            <textarea
+                              value={tc.expected_output}
+                              onChange={(e) => updateEditTestCase(i, "expected_output", e.target.value)}
+                              className="w-full mt-1 p-2 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded text-xs font-mono resize-y min-h-[40px] focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-stone-900 dark:text-stone-100"
+                              rows={2}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                      <button
+                        onClick={addEditTestCase}
+                        className="w-full flex items-center justify-center gap-1.5 py-2 border-2 border-dashed border-stone-300 dark:border-stone-600 hover:border-blue-400 rounded-lg text-xs text-stone-500 hover:text-blue-600 transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Thêm test case
+                      </button>
+                    </>
+                  ) : (
+                    allTestCases.map((tc, i) => (
+                      <div
+                        key={i}
+                        className="bg-stone-50 dark:bg-stone-900/50 border border-stone-200 dark:border-stone-700 rounded-lg p-3 text-sm"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs text-stone-500 dark:text-stone-400 font-medium">
+                            Test case {i + 1}
+                          </span>
+                          {tc.is_hidden && (
+                            <span className="text-xs px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded flex items-center gap-1">
+                              <EyeOff className="w-3 h-3" />
+                              Ẩn
+                            </span>
+                          )}
+                        </div>
+                        <div className="mb-2">
+                          <span className="text-xs text-stone-400">Input:</span>
+                          <pre className="mt-1 p-2 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded text-stone-800 dark:text-stone-200 text-xs whitespace-pre-wrap font-mono">
+                            {tc.input || "(không có input)"}
+                          </pre>
+                        </div>
+                        <div>
+                          <span className="text-xs text-stone-400">Expected Output:</span>
+                          <pre className="mt-1 p-2 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded text-blue-700 dark:text-blue-400 text-xs whitespace-pre-wrap font-mono">
+                            {tc.expected_output}
+                          </pre>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Right panel - Code Editor + Output */}
+          <div className="flex-1 flex flex-col min-w-0">
+            {/* Code Editor (textarea) */}
+            <div className="flex-1 min-h-0 flex flex-col">
+              <div className="px-3 py-1.5 bg-stone-50 dark:bg-stone-800 border-b border-stone-200 dark:border-stone-700 flex items-center justify-between shrink-0">
+                <span className="text-xs font-medium text-stone-500 dark:text-stone-400">
+                  {exercise.language.toUpperCase()}
+                </span>
+              </div>
+              <textarea
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                onKeyDown={handleCodeKeyDown}
+                spellCheck={false}
+                className="flex-1 w-full px-4 py-3 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 font-mono text-sm leading-relaxed resize-none focus:outline-none border-none"
+                style={{ tabSize: 4 }}
+                placeholder="Viết code của bạn ở đây..."
+              />
+            </div>
+
+            {/* Output panel */}
+            <div className="h-[35%] border-t border-stone-200 dark:border-stone-700 flex flex-col shrink-0 bg-white dark:bg-stone-800">
+              <div className="flex items-center border-b border-stone-200 dark:border-stone-700 shrink-0">
+                <button
+                  onClick={() => setOutputTab("run")}
+                  className={`px-4 py-2 text-xs font-medium transition-colors flex items-center gap-1 ${
+                    outputTab === "run"
+                      ? "text-green-600 dark:text-green-400 border-b-2 border-green-600 dark:border-green-400"
+                      : "text-stone-500 hover:text-stone-700 dark:text-stone-400"
+                  }`}
+                >
+                  <Terminal className="w-3 h-3" />
+                  Kết quả
+                  {runResults && (
+                    <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                      runPassedCount === runResults.length
+                        ? "bg-green-100 text-green-700"
+                        : "bg-red-100 text-red-700"
+                    }`}>
+                      {runPassedCount}/{runResults.length}
                     </span>
                   )}
                 </button>
-              )}
-            </div>
-
-            {/* Output content */}
-            <div className="flex-1 overflow-y-auto p-3">
-              {outputTab === "run" ? (
-                <RunResultsPanel
-                  isRunning={isRunning}
-                  results={runResults}
-                  shareCode={shareCode || ""}
-                  code={code}
-                />
-              ) : (
-                <ResultsPanel
-                  isSubmitting={isSubmitting}
-                  result={submitResult}
-                />
-              )}
+                {!isTeacher && (
+                  <button
+                    onClick={() => setOutputTab("submit")}
+                    className={`px-4 py-2 text-xs font-medium transition-colors flex items-center gap-1 ${
+                      outputTab === "submit"
+                        ? "text-blue-600 border-b-2 border-blue-600"
+                        : "text-stone-500 hover:text-stone-700 dark:text-stone-400"
+                    }`}
+                  >
+                    <CheckCircle className="w-3 h-3" />
+                    Kết quả chấm
+                    {submitResult && (
+                      <span className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                        submitResult.status === "passed"
+                          ? "bg-green-100 text-green-700"
+                          : "bg-red-100 text-red-700"
+                      }`}>
+                        {submitResult.passed_tests}/{submitResult.total_tests}
+                      </span>
+                    )}
+                  </button>
+                )}
+              </div>
+              <div className="flex-1 overflow-y-auto p-3">
+                {outputTab === "run" ? (
+                  <RunResultsPanel
+                    isRunning={isRunning}
+                    results={runResults}
+                  />
+                ) : (
+                  <ResultsPanel
+                    isSubmitting={isSubmitting}
+                    result={submitResult}
+                  />
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -842,48 +796,14 @@ export const PublicCodeExercisePage: React.FC = () => {
   );
 };
 
-// Run results panel - shows results of running code against public test cases
+// Run results panel
 const RunResultsPanel: React.FC<{
   isRunning: boolean;
   results: RunTestResult[] | null;
-  shareCode: string;
-  code: string;
-}> = ({ isRunning, results, shareCode, code }) => {
-  const [hint, setHint] = useState<string | null>(null);
-  const [hintLoading, setHintLoading] = useState(false);
-
-  // Reset hint when results change
-  useEffect(() => {
-    setHint(null);
-  }, [results]);
-
-  const handleGetHint = async () => {
-    if (!results || !shareCode) return;
-    const failedTests = results
-      .filter((r) => !r.passed)
-      .map((r) => ({
-        test_num: r.test_num,
-        input: r.input,
-        expected_output: r.expected_output,
-        actual_output: r.actual_output,
-        error: r.error,
-      }));
-    if (failedTests.length === 0) return;
-
-    setHintLoading(true);
-    try {
-      const res = await getHint(shareCode, { code, failed_tests: failedTests });
-      setHint(res.hint);
-    } catch {
-      setHint("Không thể tạo gợi ý lúc này. Vui lòng thử lại sau.");
-    } finally {
-      setHintLoading(false);
-    }
-  };
-
+}> = ({ isRunning, results }) => {
   if (isRunning) {
     return (
-      <div className="flex items-center gap-2 text-gray-500 text-sm">
+      <div className="flex items-center gap-2 text-stone-500 dark:text-stone-400 text-sm">
         <Loader2 className="w-4 h-4 animate-spin" />
         Đang chạy code với các test cases...
       </div>
@@ -892,71 +812,38 @@ const RunResultsPanel: React.FC<{
 
   if (!results) {
     return (
-      <div className="text-gray-400 text-sm">
+      <div className="text-stone-400 dark:text-stone-500 text-sm">
         Nhấn "Chạy thử" để kiểm tra code với các test cases.
       </div>
     );
   }
 
   const passed = results.filter((r) => r.passed).length;
-  const hasFailed = passed < results.length;
 
   return (
     <div className="space-y-3">
       {/* Summary */}
       <div className={`flex items-center justify-between rounded-lg p-2.5 ${
         passed === results.length
-          ? "bg-green-50 border border-green-200"
-          : "bg-orange-50 border border-orange-200"
+          ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800"
+          : "bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800"
       }`}>
         <div className="flex items-center gap-2">
           {passed === results.length ? (
-            <CheckCircle className="w-4 h-4 text-green-600" />
+            <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
           ) : (
-            <AlertCircle className="w-4 h-4 text-orange-600" />
+            <AlertCircle className="w-4 h-4 text-orange-600 dark:text-orange-400" />
           )}
           <span className={`text-sm font-medium ${
-            passed === results.length ? "text-green-700" : "text-orange-700"
+            passed === results.length ? "text-green-700 dark:text-green-400" : "text-orange-700 dark:text-orange-400"
           }`}>
             {passed === results.length ? "Đúng hết" : "Chưa đúng hết"}
           </span>
         </div>
-        <span className="text-sm text-gray-600">
+        <span className="text-sm text-stone-600 dark:text-stone-400">
           <span className="font-bold">{passed}</span>/{results.length} test cases
         </span>
       </div>
-
-      {/* Hint button */}
-      {hasFailed && (
-        <div>
-          {!hint && !hintLoading && (
-            <button
-              onClick={handleGetHint}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors"
-            >
-              <Lightbulb className="w-3.5 h-3.5" />
-              Phân tích lỗi
-            </button>
-          )}
-          {hintLoading && (
-            <div className="flex items-center gap-2 text-amber-600 text-xs">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              AI đang phân tích code...
-            </div>
-          )}
-          {hint && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-              <div className="flex items-center gap-1.5 mb-2">
-                <Lightbulb className="w-3.5 h-3.5 text-amber-600" />
-                <span className="text-xs font-semibold text-amber-700">Gợi ý</span>
-              </div>
-              <div className="text-xs text-amber-900 leading-relaxed prose prose-xs prose-amber max-w-none [&_code]:bg-amber-100 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-amber-800 [&_pre]:bg-amber-100 [&_pre]:p-2 [&_pre]:rounded [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{hint}</ReactMarkdown>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Individual results */}
       {results.map((r) => (
@@ -971,53 +858,53 @@ const RunTestResultCard: React.FC<{ result: RunTestResult }> = ({ result }) => {
   const [expanded, setExpanded] = useState(!result.passed);
 
   return (
-    <div className="bg-gray-50 border border-gray-200 rounded overflow-hidden">
+    <div className="bg-stone-50 dark:bg-stone-900/50 border border-stone-200 dark:border-stone-700 rounded overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between p-2 text-left hover:bg-gray-100"
+        className="w-full flex items-center justify-between p-2 text-left hover:bg-stone-100 dark:hover:bg-stone-800"
       >
         <div className="flex items-center gap-2">
           {result.passed ? (
-            <CheckCircle className="w-3.5 h-3.5 text-green-600" />
+            <CheckCircle className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
           ) : (
-            <XCircle className="w-3.5 h-3.5 text-red-500" />
+            <XCircle className="w-3.5 h-3.5 text-red-500 dark:text-red-400" />
           )}
-          <span className="text-xs font-medium text-gray-700">
+          <span className="text-xs font-medium text-stone-700 dark:text-stone-300">
             Test {result.test_num}
           </span>
           {result.timed_out && (
-            <span className="text-xs text-yellow-600 flex items-center gap-0.5">
+            <span className="text-xs text-yellow-600 dark:text-yellow-400 flex items-center gap-0.5">
               <Clock className="w-3 h-3" /> Quá thời gian
             </span>
           )}
           {result.error && !result.timed_out && (
-            <span className="text-xs text-red-500 truncate max-w-[200px]">{result.error.split("\n").pop()}</span>
+            <span className="text-xs text-red-500 dark:text-red-400 truncate max-w-[200px]">{result.error.split("\n").pop()}</span>
           )}
         </div>
         {expanded ? (
-          <ChevronUp className="w-3.5 h-3.5 text-gray-400" />
+          <ChevronUp className="w-3.5 h-3.5 text-stone-400" />
         ) : (
-          <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+          <ChevronDown className="w-3.5 h-3.5 text-stone-400" />
         )}
       </button>
       {expanded && (
-        <div className="px-3 pb-3 space-y-2 border-t border-gray-200 pt-2">
+        <div className="px-3 pb-3 space-y-2 border-t border-stone-200 dark:border-stone-700 pt-2">
           <div>
-            <span className="text-[10px] text-gray-400 uppercase">Input</span>
-            <pre className="mt-0.5 p-1.5 bg-white border border-gray-200 rounded text-xs text-gray-700 whitespace-pre-wrap font-mono">
+            <span className="text-[10px] text-stone-400 uppercase">Input</span>
+            <pre className="mt-0.5 p-1.5 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded text-xs text-stone-700 dark:text-stone-300 whitespace-pre-wrap font-mono">
               {result.input || "(không có)"}
             </pre>
           </div>
           <div>
-            <span className="text-[10px] text-gray-400 uppercase">Expected Output</span>
-            <pre className="mt-0.5 p-1.5 bg-white border border-gray-200 rounded text-xs text-blue-700 whitespace-pre-wrap font-mono">
+            <span className="text-[10px] text-stone-400 uppercase">Expected Output</span>
+            <pre className="mt-0.5 p-1.5 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded text-xs text-blue-700 dark:text-blue-400 whitespace-pre-wrap font-mono">
               {result.expected_output}
             </pre>
           </div>
           <div>
-            <span className="text-[10px] text-gray-400 uppercase">Actual Output</span>
-            <pre className={`mt-0.5 p-1.5 bg-white border border-gray-200 rounded text-xs whitespace-pre-wrap font-mono ${
-              result.passed ? "text-green-600" : "text-red-600"
+            <span className="text-[10px] text-stone-400 uppercase">Actual Output</span>
+            <pre className={`mt-0.5 p-1.5 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded text-xs whitespace-pre-wrap font-mono ${
+              result.passed ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
             }`}>
               {result.actual_output || "(không có output)"}
             </pre>
@@ -1025,7 +912,7 @@ const RunTestResultCard: React.FC<{ result: RunTestResult }> = ({ result }) => {
           {result.error && (
             <div>
               <span className="text-[10px] text-red-400 uppercase">Error</span>
-              <pre className="mt-0.5 p-1.5 bg-red-50 border border-red-200 rounded text-xs text-red-600 whitespace-pre-wrap font-mono">
+              <pre className="mt-0.5 p-1.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-xs text-red-600 dark:text-red-400 whitespace-pre-wrap font-mono">
                 {result.error}
               </pre>
             </div>
@@ -1043,7 +930,7 @@ const ResultsPanel: React.FC<{
 }> = ({ isSubmitting, result }) => {
   if (isSubmitting) {
     return (
-      <div className="flex items-center gap-2 text-gray-500 text-sm">
+      <div className="flex items-center gap-2 text-stone-500 dark:text-stone-400 text-sm">
         <Loader2 className="w-4 h-4 animate-spin" />
         Đang chấm bài...
       </div>
@@ -1052,17 +939,17 @@ const ResultsPanel: React.FC<{
 
   if (!result) {
     return (
-      <div className="text-gray-400 text-sm">
+      <div className="text-stone-400 dark:text-stone-500 text-sm">
         Nhấn "Nộp bài" để chấm điểm.
       </div>
     );
   }
 
   const statusConfig: Record<string, { color: string; label: string }> = {
-    passed: { color: "text-green-600", label: "Đúng hết" },
-    failed: { color: "text-red-600", label: "Chưa đúng hết" },
-    error: { color: "text-red-600", label: "Lỗi" },
-    timeout: { color: "text-yellow-600", label: "Quá thời gian" },
+    passed: { color: "text-green-600 dark:text-green-400", label: "Đúng hết" },
+    failed: { color: "text-red-600 dark:text-red-400", label: "Chưa đúng hết" },
+    error: { color: "text-red-600 dark:text-red-400", label: "Lỗi" },
+    timeout: { color: "text-yellow-600 dark:text-yellow-400", label: "Quá thời gian" },
   };
 
   const cfg = statusConfig[result.status] || statusConfig.error;
@@ -1071,20 +958,22 @@ const ResultsPanel: React.FC<{
     <div className="space-y-3">
       {/* Summary */}
       <div className={`flex items-center justify-between rounded-lg p-3 ${
-        result.status === "passed" ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200"
+        result.status === "passed"
+          ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800"
+          : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800"
       }`}>
         <div className="flex items-center gap-2">
           {result.status === "passed" ? (
-            <CheckCircle className="w-5 h-5 text-green-600" />
+            <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
           ) : (
-            <XCircle className="w-5 h-5 text-red-600" />
+            <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
           )}
           <span className={`font-medium ${cfg.color}`}>{cfg.label}</span>
         </div>
         <div className="text-sm">
-          <span className="text-gray-900 font-bold">{result.passed_tests}</span>
-          <span className="text-gray-500">/{result.total_tests} test cases</span>
-          <span className="ml-2 text-gray-400">({result.percentage}%)</span>
+          <span className="text-stone-900 dark:text-white font-bold">{result.passed_tests}</span>
+          <span className="text-stone-500 dark:text-stone-400">/{result.total_tests} test cases</span>
+          <span className="ml-2 text-stone-400">({result.percentage}%)</span>
         </div>
       </div>
 
@@ -1096,7 +985,7 @@ const ResultsPanel: React.FC<{
       </div>
 
       {result.execution_time_ms != null && (
-        <div className="text-xs text-gray-400">
+        <div className="text-xs text-stone-400">
           Tổng thời gian: {result.execution_time_ms}ms
         </div>
       )}
@@ -1110,68 +999,68 @@ const TestResultCard: React.FC<{ result: TestResultItem }> = ({ result }) => {
 
   if (result.is_hidden) {
     return (
-      <div className="bg-gray-50 border border-gray-200 rounded p-2 flex items-center justify-between">
+      <div className="bg-stone-50 dark:bg-stone-900/50 border border-stone-200 dark:border-stone-700 rounded p-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {result.passed ? (
-            <CheckCircle className="w-3.5 h-3.5 text-green-600" />
+            <CheckCircle className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
           ) : (
-            <XCircle className="w-3.5 h-3.5 text-red-500" />
+            <XCircle className="w-3.5 h-3.5 text-red-500 dark:text-red-400" />
           )}
-          <span className="text-xs text-gray-500">Test cases ẩn</span>
+          <span className="text-xs text-stone-500 dark:text-stone-400">Test cases ẩn</span>
         </div>
-        <span className="text-xs text-gray-400">{result.passed ? "Đúng" : "Sai"}</span>
+        <span className="text-xs text-stone-400">{result.passed ? "Đúng" : "Sai"}</span>
       </div>
     );
   }
 
   return (
-    <div className="bg-gray-50 border border-gray-200 rounded overflow-hidden">
+    <div className="bg-stone-50 dark:bg-stone-900/50 border border-stone-200 dark:border-stone-700 rounded overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between p-2 text-left hover:bg-gray-100"
+        className="w-full flex items-center justify-between p-2 text-left hover:bg-stone-100 dark:hover:bg-stone-800"
       >
         <div className="flex items-center gap-2">
           {result.passed ? (
-            <CheckCircle className="w-3.5 h-3.5 text-green-600" />
+            <CheckCircle className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
           ) : (
-            <XCircle className="w-3.5 h-3.5 text-red-500" />
+            <XCircle className="w-3.5 h-3.5 text-red-500 dark:text-red-400" />
           )}
-          <span className="text-xs font-medium text-gray-700">
+          <span className="text-xs font-medium text-stone-700 dark:text-stone-300">
             Test {result.test_num}
           </span>
           {result.error && (
-            <span className="text-xs text-red-500">{result.error}</span>
+            <span className="text-xs text-red-500 dark:text-red-400">{result.error}</span>
           )}
         </div>
         {expanded ? (
-          <ChevronUp className="w-3.5 h-3.5 text-gray-400" />
+          <ChevronUp className="w-3.5 h-3.5 text-stone-400" />
         ) : (
-          <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+          <ChevronDown className="w-3.5 h-3.5 text-stone-400" />
         )}
       </button>
       {expanded && (
-        <div className="px-3 pb-3 space-y-2 border-t border-gray-200 pt-2">
+        <div className="px-3 pb-3 space-y-2 border-t border-stone-200 dark:border-stone-700 pt-2">
           <div>
-            <span className="text-[10px] text-gray-400 uppercase">Input</span>
-            <pre className="mt-0.5 p-1.5 bg-white border border-gray-200 rounded text-xs text-gray-700 whitespace-pre-wrap font-mono">
+            <span className="text-[10px] text-stone-400 uppercase">Input</span>
+            <pre className="mt-0.5 p-1.5 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded text-xs text-stone-700 dark:text-stone-300 whitespace-pre-wrap font-mono">
               {result.input || "(không có)"}
             </pre>
           </div>
           <div>
-            <span className="text-[10px] text-gray-400 uppercase">
+            <span className="text-[10px] text-stone-400 uppercase">
               Expected Output
             </span>
-            <pre className="mt-0.5 p-1.5 bg-white border border-gray-200 rounded text-xs text-blue-700 whitespace-pre-wrap font-mono">
+            <pre className="mt-0.5 p-1.5 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded text-xs text-blue-700 dark:text-blue-400 whitespace-pre-wrap font-mono">
               {result.expected_output}
             </pre>
           </div>
           <div>
-            <span className="text-[10px] text-gray-400 uppercase">
+            <span className="text-[10px] text-stone-400 uppercase">
               Actual Output
             </span>
             <pre
-              className={`mt-0.5 p-1.5 bg-white border border-gray-200 rounded text-xs whitespace-pre-wrap font-mono ${
-                result.passed ? "text-green-600" : "text-red-600"
+              className={`mt-0.5 p-1.5 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded text-xs whitespace-pre-wrap font-mono ${
+                result.passed ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
               }`}
             >
               {result.actual_output || "(không có output)"}

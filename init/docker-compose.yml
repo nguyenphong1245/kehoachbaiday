@@ -9,6 +9,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-khbd}
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
     networks:
       - khbd-network
     healthcheck:
@@ -16,6 +18,30 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  neo4j:
+    image: neo4j:community
+    container_name: khbd-neo4j
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: ${NEO4J_USERNAME:-neo4j}/${NEO4J_LOCAL_PASSWORD:-Khbd2025Neo4j}
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_server_memory_heap_initial__size: 256m
+      NEO4J_server_memory_heap_max__size: 512m
+    volumes:
+      - neo4j-data:/data
+      - neo4j-logs:/logs
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    networks:
+      - khbd-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   backend:
     build: ./backend
@@ -27,11 +53,19 @@ services:
       # Override database URL to point to Docker service name
       SQL_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-khbd}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-khbd}
       PISTON_API_URL: http://piston:2000/api/v2
+      # Neo4j local (override cloud URI from .env)
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USERNAME: ${NEO4J_USERNAME:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_LOCAL_PASSWORD:-Khbd2025Neo4j}
       # Production settings - override from root .env
       FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,http://localhost:5173}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       COOKIE_SAMESITE: ${COOKIE_SAMESITE:-lax}
+      # Skip migrations if DB is already migrated (set to true to skip)
+      SKIP_MIGRATIONS: ${SKIP_MIGRATIONS:-false}
+    ports:
+      - "8000:8000"
     networks:
       - khbd-network
     healthcheck:
@@ -42,6 +76,8 @@ services:
       start_period: 30s
     depends_on:
       postgres:
+        condition: service_healthy
+      neo4j:
         condition: service_healthy
 
   frontend:
@@ -89,4 +125,6 @@ networks:
 
 volumes:
   postgres-data:
+  neo4j-data:
+  neo4j-logs:
   piston-packages:

@@ -16,13 +16,11 @@ import {
   Loader2,
   RotateCcw,
   MapPin,
-  Layers,
   MessageSquare,
 } from "lucide-react";
 import {
   TEACHING_METHODS,
   TEACHING_TECHNIQUES,
-  ACTIVITY_FORMATS,
   LESSON_LOCATIONS,
   type LessonDetail,
   type ActivityConfig,
@@ -46,15 +44,15 @@ const ACTIVITY_ICONS = {
 
 // Simplified colors - hành chính style
 const ACTIVITY_COLORS = {
-  khoi_dong: "bg-slate-600",
-  hinh_thanh_kien_thuc: "bg-slate-600",
-  luyen_tap: "bg-slate-600",
-  van_dung: "bg-slate-600",
+  khoi_dong: "bg-stone-600",
+  hinh_thanh_kien_thuc: "bg-stone-600",
+  luyen_tap: "bg-stone-600",
+  van_dung: "bg-stone-600",
 };
 
 const ACTIVITY_BORDER = {
   khoi_dong: "border-l-amber-500",
-  hinh_thanh_kien_thuc: "border-l-blue-500",
+  hinh_thanh_kien_thuc: "border-l-brand",
   luyen_tap: "border-l-emerald-500",
   van_dung: "border-l-purple-500",
 };
@@ -77,7 +75,7 @@ const DraggableItem: React.FC<DraggableItemProps> = ({
   isSelected,
   onDragStart,
   onClick,
-  colorClass = "bg-slate-50 dark:bg-slate-700",
+  colorClass = "bg-stone-50 dark:bg-stone-700",
   itemType,
 }) => {
   return (
@@ -89,19 +87,19 @@ const DraggableItem: React.FC<DraggableItemProps> = ({
         flex items-center gap-2 px-3 py-2 text-sm cursor-pointer
         transition-all select-none border
         ${isSelected 
-          ? "opacity-40 cursor-not-allowed bg-slate-100 dark:bg-slate-600 border-slate-200 dark:border-slate-500" 
-          : `${colorClass} hover:bg-slate-100 dark:hover:bg-slate-600 border-slate-200 dark:border-slate-600`
+          ? "opacity-40 cursor-not-allowed bg-stone-100 dark:bg-stone-600 border-stone-200 dark:border-stone-500" 
+          : `${colorClass} hover:bg-stone-100 dark:hover:bg-stone-600 border-stone-200 dark:border-stone-600`
         }
       `}
     >
       {!isSelected && (
-        <GripVertical className="w-3 h-3 text-slate-400 flex-shrink-0" />
+        <GripVertical className="w-3 h-3 text-stone-400 flex-shrink-0" />
       )}
-      <span className={`flex-1 ${isSelected ? "text-slate-400" : "text-slate-700 dark:text-slate-200"}`}>
+      <span className={`flex-1 ${isSelected ? "text-stone-400" : "text-stone-700 dark:text-stone-200"}`}>
         {label}
       </span>
       {!isSelected && (
-        <Plus className="w-3 h-3 text-slate-400" />
+        <Plus className="w-3 h-3 text-stone-400" />
       )}
     </div>
   );
@@ -154,7 +152,7 @@ const DropZone: React.FC<DropZoneProps> = ({
 
   return (
     <div className="space-y-2">
-      <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+      <label className="text-xs font-medium text-stone-600 dark:text-stone-400">
         {title}
       </label>
       <div
@@ -165,14 +163,14 @@ const DropZone: React.FC<DropZoneProps> = ({
           min-h-[60px] p-2 border-2 border-dashed transition-all
           ${isDragOver 
             ? isMethod 
-              ? "border-blue-400 bg-blue-50 dark:bg-blue-900/20" 
+              ? "border-sky-400 bg-sky-50 dark:bg-sky-900/20" 
               : "border-purple-400 bg-purple-50 dark:bg-purple-900/20"
-            : "border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50"
+            : "border-stone-300 dark:border-stone-600 bg-stone-50 dark:bg-stone-800/50"
           }
         `}
       >
         {items.length === 0 ? (
-          <p className="text-center text-slate-400 text-xs py-3">
+          <p className="text-center text-stone-400 text-xs py-3">
             {placeholder}
           </p>
         ) : (
@@ -183,7 +181,7 @@ const DropZone: React.FC<DropZoneProps> = ({
                 className={`
                   inline-flex items-center gap-1 px-2 py-1 text-xs font-medium
                   ${isMethod 
-                    ? "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700"
+                    ? "bg-sky-100 dark:bg-sky-900/40 text-brand-dark dark:text-sky-300 border border-sky-200 dark:border-sky-700"
                     : "bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700"
                   }
                 `}
@@ -285,7 +283,7 @@ const DragDropSelector: React.FC<DragDropSelectorProps> = ({
     return (
       <div className="flex items-center justify-center py-8">
         <Loader2 className="w-6 h-6 animate-spin text-sky-500" />
-        <span className="ml-2 text-gray-500">Đang tải dữ liệu...</span>
+        <span className="ml-2 text-stone-500">Đang tải dữ liệu...</span>
       </div>
     );
   }
@@ -296,12 +294,12 @@ const DragDropSelector: React.FC<DragDropSelectorProps> = ({
       <div className="space-y-4">
         {/* Methods */}
         <div>
-          <label className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2 block">
+          <label className="text-xs font-medium text-stone-600 dark:text-stone-400 mb-2 block">
             Phương pháp dạy học
           </label>
-          <div className="space-y-1 max-h-[180px] overflow-y-auto pr-1 border border-slate-200 dark:border-slate-600">
+          <div className="space-y-1 max-h-[180px] overflow-y-auto pr-1 border border-stone-200 dark:border-stone-600">
             {methodsToShow.length === 0 ? (
-              <p className="text-xs text-slate-400 p-2">Chưa có phương pháp nào</p>
+              <p className="text-xs text-stone-400 p-2">Chưa có phương pháp nào</p>
             ) : (
               methodsToShow.map((method) => (
                 <DraggableItem
@@ -311,7 +309,7 @@ const DragDropSelector: React.FC<DragDropSelectorProps> = ({
                   isSelected={methodsSelected.includes(method.value)}
                   onDragStart={handleDragStart}
                   onClick={() => addMethod(method.value)}
-                  colorClass="bg-white dark:bg-slate-700"
+                  colorClass="bg-white dark:bg-stone-700"
                   itemType="method"
                 />
               ))
@@ -321,12 +319,12 @@ const DragDropSelector: React.FC<DragDropSelectorProps> = ({
 
         {/* Techniques */}
         <div>
-          <label className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2 block">
+          <label className="text-xs font-medium text-stone-600 dark:text-stone-400 mb-2 block">
             Kỹ thuật dạy học
           </label>
-          <div className="space-y-1 max-h-[180px] overflow-y-auto pr-1 border border-slate-200 dark:border-slate-600">
+          <div className="space-y-1 max-h-[180px] overflow-y-auto pr-1 border border-stone-200 dark:border-stone-600">
             {techniquesToShow.length === 0 ? (
-              <p className="text-xs text-slate-400 p-2">Chưa có kỹ thuật nào</p>
+              <p className="text-xs text-stone-400 p-2">Chưa có kỹ thuật nào</p>
             ) : (
               techniquesToShow.map((technique) => (
                 <DraggableItem
@@ -336,7 +334,7 @@ const DragDropSelector: React.FC<DragDropSelectorProps> = ({
                   isSelected={techniquesSelected.includes(technique.value)}
                   onDragStart={handleDragStart}
                   onClick={() => addTechnique(technique.value)}
-                  colorClass="bg-white dark:bg-slate-700"
+                  colorClass="bg-white dark:bg-stone-700"
                   itemType="technique"
                 />
               ))
@@ -366,7 +364,7 @@ const DragDropSelector: React.FC<DragDropSelectorProps> = ({
 
         {/* Yêu cầu bổ sung */}
         <div>
-          <label className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2 flex items-center gap-1.5">
+          <label className="text-xs font-medium text-stone-600 dark:text-stone-400 mb-2 flex items-center gap-1.5">
             <MessageSquare className="w-3.5 h-3.5" />
             Yêu cầu bổ sung
           </label>
@@ -375,7 +373,7 @@ const DragDropSelector: React.FC<DragDropSelectorProps> = ({
             onChange={(e) => onCustomRequestChange?.(e.target.value)}
             placeholder=""
             rows={2}
-            className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            className="w-full px-3 py-2 text-sm border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-700 text-stone-700 dark:text-stone-200 focus:outline-none focus:ring-2 focus:ring-brand resize-none"
           />
         </div>
       </div>
@@ -393,6 +391,7 @@ interface ActivityCardProps {
   availableMethods: { value: string; label: string }[];
   availableTechniques: { value: string; label: string }[];
   loadingData?: boolean;
+  lessonDetail: LessonDetail;
 }
 
 const ActivityCard: React.FC<ActivityCardProps> = ({
@@ -405,49 +404,42 @@ const ActivityCard: React.FC<ActivityCardProps> = ({
   availableMethods,
   availableTechniques,
   loadingData,
+  lessonDetail,
 }) => {
   const Icon = ACTIVITY_ICONS[activity.activity_type];
   const colorClass = ACTIVITY_COLORS[activity.activity_type];
   const borderClass = ACTIVITY_BORDER[activity.activity_type];
 
   return (
-    <div className={`border border-slate-200 dark:border-slate-700 overflow-hidden border-l-4 ${borderClass} ${isExpanded ? "bg-slate-50 dark:bg-slate-800/50" : "bg-white dark:bg-slate-800"}`}>
+    <div className={`border border-stone-200 dark:border-stone-700 overflow-hidden border-l-4 ${borderClass} ${isExpanded ? "bg-stone-50 dark:bg-stone-800/50" : "bg-white dark:bg-stone-800"}`}>
       {/* Header */}
       <button
         onClick={onToggle}
-        className="w-full px-4 py-3 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+        className="w-full px-4 py-3 flex items-center gap-3 hover:bg-stone-50 dark:hover:bg-stone-700/50 transition-colors"
       >
         <div className={`p-1.5 ${colorClass}`}>
           <Icon className="w-4 h-4 text-white" />
         </div>
         <div className="flex-1 text-left">
-          <h4 className="font-medium text-slate-800 dark:text-white text-sm">
+          <h4 className="font-medium text-stone-800 dark:text-white text-sm">
             {activity.activity_name}
           </h4>
           {activity.chi_muc && (
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
+            <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5 line-clamp-1">
               {activity.chi_muc}
             </p>
           )}
           <div className="flex items-center gap-2 mt-1">
-            <span className="text-xs text-blue-600 dark:text-blue-400">
+            <span className="text-xs text-brand dark:text-sky-400">
               {activity.selected_methods.length} PP
             </span>
-            <span className="text-xs text-slate-300">|</span>
+            <span className="text-xs text-stone-300">|</span>
             <span className="text-xs text-purple-600 dark:text-purple-400">
               {activity.selected_techniques.length} KT
             </span>
-            {activity.activity_format && (
-              <>
-                <span className="text-xs text-slate-300">|</span>
-                <span className="text-xs text-emerald-600 dark:text-emerald-400">
-                  {ACTIVITY_FORMATS.find(f => f.value === activity.activity_format)?.label}
-                </span>
-              </>
-            )}
             {activity.custom_request && (
               <>
-                <span className="text-xs text-slate-300">|</span>
+                <span className="text-xs text-stone-300">|</span>
                 <span className="text-xs text-amber-600 dark:text-amber-400">
                   Có yêu cầu
                 </span>
@@ -457,49 +449,27 @@ const ActivityCard: React.FC<ActivityCardProps> = ({
         </div>
         <div className="p-1">
           {isExpanded ? (
-            <ChevronUp className="w-4 h-4 text-slate-400" />
+            <ChevronUp className="w-4 h-4 text-stone-400" />
           ) : (
-            <ChevronDown className="w-4 h-4 text-slate-400" />
+            <ChevronDown className="w-4 h-4 text-stone-400" />
           )}
         </div>
       </button>
 
       {/* Content */}
       {isExpanded && (
-        <div className="px-4 pb-4 pt-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 space-y-4">
-          {/* Hình thức kiểm tra/đánh giá */}
-          <div>
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2 block">
-              Hình thức kiểm tra/đánh giá
-            </label>
-            <select
-              value={activity.activity_format || ""}
-              onChange={(e) => onUpdate({ 
-                ...activity, 
-                activity_format: e.target.value as "trac_nghiem" | "phieu_hoc_tap" | "bai_tap_code" | undefined || undefined 
-              })}
-              className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">-- Không chọn --</option>
-              {ACTIVITY_FORMATS.map((format) => (
-                <option key={format.value} value={format.value}>
-                  {format.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
+        <div className="px-4 pb-4 pt-3 border-t border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 space-y-4">
           {/* Drag and Drop Selector for Methods & Techniques */}
           <DragDropSelector
             methodsSelected={activity.selected_methods}
             techniquesSelected={activity.selected_techniques}
-            onMethodsChange={(methods, methodsContent) =>
-              onUpdate({ 
-                ...activity, 
+            onMethodsChange={(methods, methodsContent) => {
+              onUpdate({
+                ...activity,
                 selected_methods: methods,
-                methods_content: methodsContent
-              })
-            }
+                methods_content: methodsContent,
+              });
+            }}
             onTechniquesChange={(techniques, techniquesContent) =>
               onUpdate({ 
                 ...activity, 
@@ -517,6 +487,7 @@ const ActivityCard: React.FC<ActivityCardProps> = ({
               onUpdate({ ...activity, custom_request: value || undefined })
             }
           />
+
         </div>
       )}
     </div>
@@ -646,10 +617,10 @@ export const ActivityConfigPanel: React.FC<ActivityConfigPanelProps> = ({
   }> = ({ group, label }) => {
     const currentLocation = getGroupLocation(group);
     return (
-      <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-slate-100 to-slate-50 dark:from-slate-700/50 dark:to-slate-700/30 border border-slate-200 dark:border-slate-600 rounded-lg">
+      <div className="flex items-center gap-3 p-3 bg-stone-100 dark:bg-stone-700/50 border border-stone-200 dark:border-stone-600 rounded-lg">
         <div className="flex items-center gap-2">
-          <MapPin className="w-4 h-4 text-blue-500" />
-          <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">
+          <MapPin className="w-4 h-4 text-brand" />
+          <span className="text-xs font-semibold text-stone-600 dark:text-stone-300 uppercase tracking-wide">
             {label}
           </span>
         </div>
@@ -660,8 +631,8 @@ export const ActivityConfigPanel: React.FC<ActivityConfigPanelProps> = ({
               onClick={() => handleLocationChange(group, loc.value as "lop_hoc" | "phong_may")}
               className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                 currentLocation === loc.value
-                  ? "bg-blue-500 text-white shadow-sm"
-                  : "bg-white dark:bg-slate-600 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-500 hover:border-blue-300 dark:hover:border-blue-500"
+                  ? "bg-brand text-white shadow-sm"
+                  : "bg-white dark:bg-stone-600 text-stone-600 dark:text-stone-300 border border-stone-200 dark:border-stone-500 hover:border-sky-300 dark:hover:border-brand"
               }`}
             >
               {loc.label}
@@ -675,21 +646,21 @@ export const ActivityConfigPanel: React.FC<ActivityConfigPanelProps> = ({
   return (
     <div className="space-y-3">
       {/* Header with Reset */}
-      <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-700">
+      <div className="flex items-center justify-between pb-3 border-b border-stone-200 dark:border-stone-700">
         <div>
-          <h3 className="text-sm font-semibold text-slate-800 dark:text-white">
+          <h3 className="text-sm font-semibold text-stone-800 dark:text-white">
             Danh sách hoạt động dạy học
           </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
             Click vào từng hoạt động để chọn phương pháp và kỹ thuật
           </p>
         </div>
         <button
           onClick={handleResetActivities}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+          className="p-1.5 text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-700 transition-colors"
+          title="Đặt lại"
         >
           <RotateCcw className="w-3.5 h-3.5" />
-          Đặt lại
         </button>
       </div>
 
@@ -714,13 +685,14 @@ export const ActivityConfigPanel: React.FC<ActivityConfigPanelProps> = ({
               availableMethods={methods}
               availableTechniques={techniques}
               loadingData={loadingTeachingData}
+              lessonDetail={lessonDetail}
             />
           );
         })}
       </div>
 
       {/* Group 2: Luyện tập + Vận dụng */}
-      <div className="space-y-2 mt-4 pt-4 border-t border-slate-200 dark:border-slate-600">
+      <div className="space-y-2 mt-4 pt-4 border-t border-stone-200 dark:border-stone-600">
         <LocationSelector group="group2" label="Vị trí (Luyện tập + Vận dụng)" />
         {group2Activities.map((activity) => {
           const originalIndex = activities.findIndex(
@@ -740,10 +712,12 @@ export const ActivityConfigPanel: React.FC<ActivityConfigPanelProps> = ({
               availableMethods={methods}
               availableTechniques={techniques}
               loadingData={loadingTeachingData}
+              lessonDetail={lessonDetail}
             />
           );
         })}
       </div>
+
     </div>
   );
 };

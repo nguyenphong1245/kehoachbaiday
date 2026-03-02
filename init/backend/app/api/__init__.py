@@ -5,7 +5,6 @@ from app.api.routes import (
     auth,
     roles,
     users,
-    chat,
     lesson_builder,
     shared_worksheets,
     shared_quizzes,
@@ -15,6 +14,7 @@ from app.api.routes import (
     assignments,
     student,
     peer_review,
+    guide_cards,
 )
 
 api_router = APIRouter()
@@ -33,9 +33,6 @@ api_router.include_router(roles.permissions_router, prefix="/permissions", tags=
 
 # User routes
 api_router.include_router(users.router, tags=["users"])
-
-# Chat routes
-api_router.include_router(chat.router, prefix="/chat", tags=["chat"])
 
 # Lesson builder routes
 api_router.include_router(lesson_builder.router, prefix="/lesson-builder", tags=["lesson-builder"])
@@ -63,4 +60,7 @@ api_router.include_router(student.router, prefix="/student", tags=["student"])
 
 # Peer review routes
 api_router.include_router(peer_review.router, prefix="/peer-review", tags=["peer-review"])
+
+# Guide cards routes
+api_router.include_router(guide_cards.router, prefix="/guide-cards", tags=["guide-cards"])
 

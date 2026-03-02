@@ -5,30 +5,22 @@ import secrets
 import re
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from sqlalchemy import select, func, delete
-from app.core.rate_limiter import limiter
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
 from app.models.shared_worksheet import SharedWorksheet, WorksheetResponse
-from app.models.submission_session import SubmissionSession
 from app.schemas.shared_worksheet import (
     CreateSharedWorksheetRequest,
     CreateSharedWorksheetResponse,
     UpdateWorksheetRequest,
     SharedWorksheetResponse,
     SharedWorksheetListResponse,
-    WorksheetPublicResponse,
-    SubmitWorksheetRequest,
-    SubmitWorksheetResponse,
     WorksheetResponsesListResponse,
     WorksheetResponseItem,
 )
-from app.schemas.shared_quiz import StartSessionRequest, StartSessionResponse
 from app.core.config import get_settings
 
 router = APIRouter(prefix="/worksheets", tags=["Shared Worksheets"])
@@ -236,10 +228,20 @@ async def delete_shared_worksheet(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Không tìm thấy phiếu học tập"
         )
-    
+
+    # Cascade: xóa học liệu tham chiếu trong các lớp học
+    from app.models.classroom_material import ClassroomMaterial
+    from sqlalchemy import delete as sql_delete
+    await db.execute(
+        sql_delete(ClassroomMaterial).where(
+            ClassroomMaterial.content_type == "worksheet",
+            ClassroomMaterial.content_id == worksheet_id,
+        )
+    )
+
     await db.delete(worksheet)
     await db.commit()
-    
+
     return {"message": "Đã xóa phiếu học tập"}
 
 
@@ -332,206 +334,3 @@ async def toggle_worksheet_active(
     
     status_text = "đã bật" if worksheet.is_active else "đã tắt"
     return {"message": f"Phiếu học tập {status_text}", "is_active": worksheet.is_active}
-
-
-# ============== PUBLIC ENDPOINTS (Học sinh) ==============
-
-@router.get("/public/{share_code}", response_model=WorksheetPublicResponse)
-@limiter.limit("30/minute")
-async def get_public_worksheet(
-    request: Request,
-    share_code: str,
-    db: AsyncSession = Depends(get_db),
-):
-    """Lấy phiếu học tập theo mã chia sẻ (public, không cần đăng nhập)"""
-    logger.info(f"[PUBLIC] Requesting worksheet with share_code: {share_code}")
-    
-    query = select(SharedWorksheet).options(
-        selectinload(SharedWorksheet.user)
-    ).where(SharedWorksheet.share_code == share_code)
-    
-    result = await db.execute(query)
-    worksheet = result.scalar_one_or_none()
-    
-    if not worksheet:
-        logger.warning(f"[PUBLIC] Worksheet not found for share_code: {share_code}")
-        # Kiểm tra xem có worksheet nào trong DB không
-        count_query = select(func.count(SharedWorksheet.id))
-        count_result = await db.execute(count_query)
-        total_worksheets = count_result.scalar() or 0
-        logger.info(f"[PUBLIC] Total worksheets in DB: {total_worksheets}")
-        
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy phiếu học tập"
-        )
-    
-    logger.info(f"[PUBLIC] Found worksheet: id={worksheet.id}, title={worksheet.title}")
-    
-    # Kiểm tra hết hạn
-    if worksheet.expires_at and worksheet.expires_at < datetime.utcnow():
-        raise HTTPException(
-            status_code=status.HTTP_410_GONE,
-            detail="Phiếu học tập đã hết hạn"
-        )
-    
-    # Kiểm tra số lượt submit
-    if worksheet.max_submissions:
-        count_query = select(func.count(WorksheetResponse.id)).where(
-            WorksheetResponse.worksheet_id == worksheet.id
-        )
-        count_result = await db.execute(count_query)
-        current_count = count_result.scalar() or 0
-        if current_count >= worksheet.max_submissions:
-            raise HTTPException(
-                status_code=status.HTTP_410_GONE,
-                detail="Phiếu học tập đã đạt số lượt nộp tối đa"
-            )
-    
-    if not worksheet.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Phiếu học tập đã bị tắt"
-        )
-    
-    # Lấy tên giáo viên (dùng email thay vì username)
-    teacher_name = None
-    if worksheet.user:
-        teacher_name = worksheet.user.email.split('@')[0]  # Lấy phần trước @ làm tên
-    
-    return WorksheetPublicResponse(
-        title=worksheet.title,
-        content=worksheet.content,
-        lesson_info=worksheet.lesson_info,
-        questions=worksheet.questions,
-        is_active=worksheet.is_active,
-        teacher_name=teacher_name,
-    )
-
-
-# [NOTE] KHONG dung /{share_code} truc tiep vi se conflict voi cac routes khac
-# Frontend phai goi /public/{share_code}
-
-
-@router.post("/public/{share_code}/start-session", response_model=StartSessionResponse)
-@limiter.limit("10/minute")
-async def start_worksheet_session(
-    request: Request,
-    share_code: str,
-    body: StartSessionRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    """Bắt đầu phiên làm phiếu học tập - trả về session token"""
-    result = await db.execute(
-        select(SharedWorksheet).where(SharedWorksheet.share_code == share_code)
-    )
-    worksheet = result.scalar_one_or_none()
-
-    if not worksheet or not worksheet.is_active:
-        raise HTTPException(status_code=404, detail="Không tìm thấy phiếu học tập")
-
-    if worksheet.expires_at and worksheet.expires_at < datetime.utcnow():
-        raise HTTPException(status_code=410, detail="Phiếu học tập đã hết hạn")
-
-    client_ip = request.client.host if request.client else None
-    session = SubmissionSession(
-        share_code=share_code,
-        resource_type="worksheet",
-        student_name=body.student_name,
-        student_class=body.student_class or "",
-        ip_address=client_ip,
-    )
-    db.add(session)
-    await db.commit()
-    await db.refresh(session)
-
-    return StartSessionResponse(session_token=session.session_token)
-
-
-@router.post("/public/{share_code}/submit", response_model=SubmitWorksheetResponse)
-@limiter.limit("5/minute")
-async def submit_worksheet(
-    request: Request,
-    share_code: str,
-    body: SubmitWorksheetRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    """Học sinh nộp phiếu học tập (public, không cần đăng nhập)"""
-    # Verify session token
-    session_result = await db.execute(
-        select(SubmissionSession).where(
-            SubmissionSession.session_token == body.session_token,
-            SubmissionSession.share_code == share_code,
-            SubmissionSession.resource_type == "worksheet",
-            SubmissionSession.student_name == body.student_name,
-        )
-    )
-    session = session_result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Phiên làm bài không hợp lệ. Vui lòng bắt đầu lại."
-        )
-    if session.expires_at and session.expires_at < datetime.utcnow():
-        raise HTTPException(
-            status_code=status.HTTP_410_GONE,
-            detail="Phiên làm bài đã hết hạn. Vui lòng bắt đầu lại."
-        )
-
-    query = select(SharedWorksheet).where(SharedWorksheet.share_code == share_code)
-    result = await db.execute(query)
-    worksheet = result.scalar_one_or_none()
-
-    if not worksheet:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy phiếu học tập"
-        )
-    
-    # Kiểm tra các điều kiện
-    if not worksheet.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Phiếu học tập đã bị tắt"
-        )
-    
-    if worksheet.expires_at and worksheet.expires_at < datetime.utcnow():
-        raise HTTPException(
-            status_code=status.HTTP_410_GONE,
-            detail="Phiếu học tập đã hết hạn"
-        )
-    
-    if worksheet.max_submissions:
-        count_query = select(func.count(WorksheetResponse.id)).where(
-            WorksheetResponse.worksheet_id == worksheet.id
-        )
-        count_result = await db.execute(count_query)
-        current_count = count_result.scalar() or 0
-        if current_count >= worksheet.max_submissions:
-            raise HTTPException(
-                status_code=status.HTTP_410_GONE,
-                detail="Phiếu học tập đã đạt số lượt nộp tối đa"
-            )
-    
-    # Lấy IP
-    client_ip = request.client.host if request.client else None
-
-    # Lưu câu trả lời
-    response = WorksheetResponse(
-        worksheet_id=worksheet.id,
-        student_name=body.student_name,
-        student_class=body.student_class,
-        student_group=body.student_group,
-        answers=body.answers,
-        ip_address=client_ip,
-    )
-
-    db.add(response)
-    await db.commit()
-
-    logger.info(f"Student {body.student_name} submitted worksheet {worksheet.id}")
-    
-    return SubmitWorksheetResponse(
-        success=True,
-        message="Đã nộp phiếu học tập thành công! Cảm ơn em đã hoàn thành."
-    )

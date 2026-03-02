@@ -87,32 +87,32 @@ const parseWorksheetTitle = (content: string): string => {
 const mdComponents = {
   table: ({ children }: any) => (
     <div className="overflow-x-auto my-3">
-      <table className="w-full border-collapse border border-gray-300 dark:border-gray-600">{children}</table>
+      <table className="w-full border-collapse border border-stone-300 dark:border-stone-600">{children}</table>
     </div>
   ),
-  thead: ({ children }: any) => <thead className="bg-gray-100 dark:bg-gray-700">{children}</thead>,
-  th: ({ children }: any) => <th className="border border-gray-300 dark:border-gray-600 px-3 py-2 text-left text-sm font-semibold text-gray-800 dark:text-gray-100">{children}</th>,
+  thead: ({ children }: any) => <thead className="bg-stone-100 dark:bg-stone-700">{children}</thead>,
+  th: ({ children }: any) => <th className="border border-stone-300 dark:border-stone-600 px-3 py-2 text-left text-sm font-semibold text-stone-800 dark:text-stone-100">{children}</th>,
   tbody: ({ children }: any) => <tbody>{children}</tbody>,
   tr: ({ children }: any) => <tr>{children}</tr>,
-  td: ({ children }: any) => <td className="border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-700 dark:text-gray-200">{children}</td>,
+  td: ({ children }: any) => <td className="border border-stone-300 dark:border-stone-600 px-3 py-2 text-sm text-stone-700 dark:text-stone-200">{children}</td>,
   p: ({ node, children }: any) => {
     const firstChild = node?.children?.[0] as { value?: string } | undefined;
     const text = firstChild?.value || '';
     if (text.includes('[SECTION:') || text.includes('[/SECTION')) return null;
-    return <p className="text-gray-700 dark:text-gray-200 leading-relaxed mb-2">{children}</p>;
+    return <p className="text-stone-700 dark:text-stone-200 leading-relaxed mb-2">{children}</p>;
   },
-  h1: ({ children }: any) => <h1 className="text-gray-900 dark:text-white font-bold text-xl mb-3">{children}</h1>,
-  h2: ({ children }: any) => <h2 className="text-gray-900 dark:text-white font-bold text-lg mb-2">{children}</h2>,
-  h3: ({ children }: any) => <h3 className="text-gray-900 dark:text-white font-semibold mb-2">{children}</h3>,
-  li: ({ children }: any) => <li className="text-gray-700 dark:text-gray-200">{children}</li>,
-  strong: ({ children }: any) => <strong className="text-gray-900 dark:text-white font-semibold">{children}</strong>,
+  h1: ({ children }: any) => <h1 className="text-stone-900 dark:text-white font-bold text-xl mb-3">{children}</h1>,
+  h2: ({ children }: any) => <h2 className="text-stone-900 dark:text-white font-bold text-lg mb-2">{children}</h2>,
+  h3: ({ children }: any) => <h3 className="text-stone-900 dark:text-white font-semibold mb-2">{children}</h3>,
+  li: ({ children }: any) => <li className="text-stone-700 dark:text-stone-200">{children}</li>,
+  strong: ({ children }: any) => <strong className="text-stone-900 dark:text-white font-semibold">{children}</strong>,
   code({ className, children, ...props }: any) {
     const isInline = !className;
     if (isInline) {
-      return <code className="bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded text-sm font-mono" {...props}>{children}</code>;
+      return <code className="bg-stone-100 dark:bg-stone-800 text-stone-800 dark:text-stone-200 px-1.5 py-0.5 rounded text-sm font-mono" {...props}>{children}</code>;
     }
     const codeStr = String(children).replace(/\n$/, '');
-    return <pre className="bg-gray-900 text-gray-100 rounded-lg p-4 my-3 overflow-x-auto text-sm"><code className="font-mono">{codeStr}</code></pre>;
+    return <pre className="bg-stone-900 text-stone-100 rounded-lg p-4 my-3 overflow-x-auto text-sm"><code className="font-mono">{codeStr}</code></pre>;
   },
 };
 
@@ -383,8 +383,8 @@ const GroupPeerReviewPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      <div className="min-h-screen bg-stone-50 dark:bg-stone-900 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-brand" />
       </div>
     );
   }
@@ -396,15 +396,15 @@ const GroupPeerReviewPage: React.FC = () => {
     const allMembersForEval = evalStatus?.members || [];
 
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+      <div className="min-h-screen bg-stone-50 dark:bg-stone-900">
+        <div className="border-b border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800">
           <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
-            <button onClick={() => navigate("/student/dashboard")} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700" title="Quay lại">
-              <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+            <button onClick={() => navigate("/student/dashboard")} className="p-2 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-700" title="Quay lại">
+              <ArrowLeft className="w-5 h-5 text-stone-600 dark:text-stone-300" />
             </button>
             <div>
-              <h1 className="font-semibold text-gray-900 dark:text-white">Đánh giá chéo</h1>
-              <p className="text-sm text-gray-500">{groupName}</p>
+              <h1 className="font-semibold text-stone-900 dark:text-white">Đánh giá chéo</h1>
+              <p className="text-sm text-stone-500">{groupName}</p>
             </div>
           </div>
         </div>
@@ -412,13 +412,13 @@ const GroupPeerReviewPage: React.FC = () => {
         <div className="max-w-xl mx-auto px-4 py-8">
           {/* Member Evaluation Form - Show if group submitted but user hasn't evaluated - ALL MEMBERS INCLUDING SELF */}
           {needsEvaluation && allMembersForEval.length > 0 ? (
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-amber-200 dark:border-amber-800 p-6 shadow-sm mb-6">
+            <div className="bg-white dark:bg-stone-800 rounded-xl border border-amber-200 dark:border-amber-800 p-6 shadow-sm mb-6">
               <div className="text-center mb-6">
                 <div className="w-14 h-14 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-3">
                   <Star className="w-7 h-7 text-amber-500" />
                 </div>
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Đánh giá thành viên nhóm</h2>
-                <p className="text-sm text-gray-500 mt-1">
+                <h2 className="text-lg font-bold text-stone-900 dark:text-white">Đánh giá thành viên nhóm</h2>
+                <p className="text-sm text-stone-500 mt-1">
                   <span className="text-red-500">*</span> Đánh giá tất cả thành viên (kể cả bản thân)
                 </p>
               </div>
@@ -428,12 +428,12 @@ const GroupPeerReviewPage: React.FC = () => {
                   const hasRating = evalRatings[m.student_id] && evalRatings[m.student_id] > 0;
                   const isMe = m.student_id === evalStatus?.my_student_id;
                   return (
-                    <div key={m.student_id} className={`p-3 rounded-lg ${hasRating ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' : 'bg-gray-50 dark:bg-gray-700/50 border border-red-200 dark:border-red-800'}`}>
+                    <div key={m.student_id} className={`p-3 rounded-lg ${hasRating ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' : 'bg-stone-50 dark:bg-stone-700/50 border border-red-200 dark:border-red-800'}`}>
                       <div className="flex items-center gap-2 mb-2">
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium ${isMe ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'}`}>
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium ${isMe ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' : 'bg-sky-100 dark:bg-sky-900/30 text-brand dark:text-sky-400'}`}>
                           {m.full_name.charAt(m.full_name.lastIndexOf(" ") + 1)}
                         </div>
-                        <span className="text-sm font-medium text-gray-900 dark:text-white">{m.full_name}</span>
+                        <span className="text-sm font-medium text-stone-900 dark:text-white">{m.full_name}</span>
                         {isMe && <span className="text-xs px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded">Bạn</span>}
                         {!hasRating && <span className="text-xs text-red-500">* Bắt buộc</span>}
                         {hasRating && <CheckCircle2 className="w-4 h-4 text-green-500" />}
@@ -451,7 +451,7 @@ const GroupPeerReviewPage: React.FC = () => {
                               className={`w-5 h-5 transition-colors ${
                                 star <= (evalRatings[m.student_id] || 0)
                                   ? "text-amber-400 fill-amber-400"
-                                  : "text-gray-300 dark:text-gray-600"
+                                  : "text-stone-300 dark:text-stone-600"
                               }`}
                             />
                           </button>
@@ -462,7 +462,7 @@ const GroupPeerReviewPage: React.FC = () => {
                         value={evalComments[m.student_id] || ""}
                         onChange={(e) => setEvalComments((prev) => ({ ...prev, [m.student_id]: e.target.value }))}
                         placeholder={isMe ? "Tự đánh giá bản thân (tùy chọn)" : "Nhận xét (tùy chọn)"}
-                        className="w-full px-2.5 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="w-full px-2.5 py-1.5 text-xs border border-stone-200 dark:border-stone-600 rounded bg-white dark:bg-stone-700 text-stone-900 dark:text-white"
                       />
                     </div>
                   );
@@ -486,7 +486,7 @@ const GroupPeerReviewPage: React.FC = () => {
                       className={`w-full px-4 py-2.5 text-sm rounded-lg flex items-center justify-center gap-1.5 transition-colors ${
                         allRated
                           ? 'bg-amber-500 text-white hover:bg-amber-600'
-                          : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                          : 'bg-stone-200 dark:bg-stone-700 text-stone-400 cursor-not-allowed'
                       } disabled:opacity-50`}
                     >
                       {evalSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -500,8 +500,8 @@ const GroupPeerReviewPage: React.FC = () => {
 
           {/* Evaluation status - show who has evaluated */}
           {evalStatus && evalStatus.group_submitted && evalStatus.evaluators && evalStatus.evaluators.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 shadow-sm mb-6">
-              <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+            <div className="bg-white dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 p-4 shadow-sm mb-6">
+              <p className="text-sm font-semibold text-stone-700 dark:text-stone-300 mb-3 flex items-center gap-2">
                 <Star className="w-4 h-4 text-amber-500" />
                 Trạng thái đánh giá thành viên
               </p>
@@ -511,7 +511,7 @@ const GroupPeerReviewPage: React.FC = () => {
                   const isMe = m.student_id === evalStatus.my_student_id;
                   return (
                     <div key={m.student_id} className="flex items-center justify-between text-sm">
-                      <span className={`${isMe ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300'}`}>
+                      <span className={`${isMe ? 'font-medium text-brand dark:text-sky-400' : 'text-stone-700 dark:text-stone-300'}`}>
                         {m.full_name} {isMe && '(Bạn)'}
                       </span>
                       {hasEvaluated ? (
@@ -519,7 +519,7 @@ const GroupPeerReviewPage: React.FC = () => {
                           <CheckCircle2 className="w-3.5 h-3.5" /> Đã đánh giá
                         </span>
                       ) : (
-                        <span className="text-gray-400 flex items-center gap-1">
+                        <span className="text-stone-400 flex items-center gap-1">
                           <Clock className="w-3.5 h-3.5" /> Chưa đánh giá
                         </span>
                       )}
@@ -531,26 +531,26 @@ const GroupPeerReviewPage: React.FC = () => {
           )}
 
           {/* Waiting card */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center shadow-sm">
-            <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Clock className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+          <div className="bg-white dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 p-8 text-center shadow-sm">
+            <div className="w-16 h-16 bg-sky-100 dark:bg-sky-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Clock className="w-8 h-8 text-brand dark:text-sky-400" />
             </div>
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Đang chờ đánh giá chéo</h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">Tất cả các nhóm cần nộp bài trước khi bắt đầu đánh giá chéo giữa các nhóm</p>
+            <h2 className="text-xl font-semibold text-stone-900 dark:text-white mb-2">Đang chờ đánh giá chéo</h2>
+            <p className="text-stone-600 dark:text-stone-400 mb-6">Tất cả các nhóm cần nộp bài trước khi bắt đầu đánh giá chéo giữa các nhóm</p>
 
             {groupMembers.length > 0 && (
-              <div className="text-left mb-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+              <div className="text-left mb-6 p-4 bg-stone-50 dark:bg-stone-700/50 rounded-lg">
+                <p className="text-sm font-semibold text-stone-700 dark:text-stone-300 mb-3 flex items-center gap-2">
                   <Users className="w-4 h-4" />
                   Nhóm của bạn
                 </p>
                 <div className="space-y-2">
                   {groupMembers.map((m) => (
                     <div key={m.student_id} className="flex items-center gap-3">
-                      <span className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-medium">
+                      <span className="w-8 h-8 rounded-full bg-brand text-white flex items-center justify-center text-sm font-medium">
                         {m.full_name.charAt(m.full_name.lastIndexOf(" ") + 1)}
                       </span>
-                      <span className="text-gray-800 dark:text-gray-200">{m.full_name}</span>
+                      <span className="text-stone-800 dark:text-stone-200">{m.full_name}</span>
                       {m.is_leader && <Crown className="w-4 h-4 text-amber-500" />}
                     </div>
                   ))}
@@ -558,11 +558,11 @@ const GroupPeerReviewPage: React.FC = () => {
               </div>
             )}
 
-            <button onClick={loadData} className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
+            <button onClick={loadData} className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand text-white rounded-lg hover:bg-brand-dark font-medium">
               <RefreshCw className="w-4 h-4" />
               Kiểm tra ngay
             </button>
-            <p className="text-sm text-gray-500 mt-3">Tự động kiểm tra mỗi 10 giây</p>
+            <p className="text-sm text-stone-500 mt-3">Tự động kiểm tra mỗi 10 giây</p>
           </div>
 
           {/* Chat removed from waiting state */}
@@ -577,26 +577,26 @@ const GroupPeerReviewPage: React.FC = () => {
     const allMembersSubmitted = evalStatus?.members || [];
 
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+      <div className="min-h-screen bg-stone-50 dark:bg-stone-900">
+        <div className="border-b border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800">
           <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
-            <button onClick={() => navigate("/student/dashboard")} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700" title="Quay lại">
-              <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+            <button onClick={() => navigate("/student/dashboard")} className="p-2 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-700" title="Quay lại">
+              <ArrowLeft className="w-5 h-5 text-stone-600 dark:text-stone-300" />
             </button>
-            <h1 className="font-semibold text-gray-900 dark:text-white">Đánh giá chéo</h1>
+            <h1 className="font-semibold text-stone-900 dark:text-white">Đánh giá chéo</h1>
           </div>
         </div>
 
         <div className="max-w-md mx-auto px-4 py-8">
           {/* Member Evaluation Form in submitted state - ALL MEMBERS INCLUDING SELF */}
           {needsMemberEval && allMembersSubmitted.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-amber-200 dark:border-amber-800 p-6 shadow-sm mb-6">
+            <div className="bg-white dark:bg-stone-800 rounded-xl border border-amber-200 dark:border-amber-800 p-6 shadow-sm mb-6">
               <div className="text-center mb-4">
                 <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-3">
                   <Star className="w-6 h-6 text-amber-500" />
                 </div>
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Đánh giá thành viên nhóm</h2>
-                <p className="text-sm text-gray-500 mt-1">Đánh giá tất cả thành viên (kể cả bản thân)</p>
+                <h2 className="text-lg font-bold text-stone-900 dark:text-white">Đánh giá thành viên nhóm</h2>
+                <p className="text-sm text-stone-500 mt-1">Đánh giá tất cả thành viên (kể cả bản thân)</p>
               </div>
 
               <div className="space-y-3">
@@ -604,12 +604,12 @@ const GroupPeerReviewPage: React.FC = () => {
                   const hasRating = evalRatings[m.student_id] && evalRatings[m.student_id] > 0;
                   const isMe = m.student_id === evalStatus?.my_student_id;
                   return (
-                    <div key={m.student_id} className={`p-3 rounded-lg ${hasRating ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' : 'bg-gray-50 dark:bg-gray-700/50 border border-red-200 dark:border-red-800'}`}>
+                    <div key={m.student_id} className={`p-3 rounded-lg ${hasRating ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' : 'bg-stone-50 dark:bg-stone-700/50 border border-red-200 dark:border-red-800'}`}>
                       <div className="flex items-center gap-2 mb-2">
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium ${isMe ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'}`}>
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium ${isMe ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' : 'bg-sky-100 dark:bg-sky-900/30 text-brand dark:text-sky-400'}`}>
                           {m.full_name.charAt(m.full_name.lastIndexOf(" ") + 1)}
                         </div>
-                        <span className="text-sm font-medium text-gray-900 dark:text-white">{m.full_name}</span>
+                        <span className="text-sm font-medium text-stone-900 dark:text-white">{m.full_name}</span>
                         {isMe && <span className="text-xs px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded">Bạn</span>}
                         {!hasRating && <span className="text-xs text-red-500">* Bắt buộc</span>}
                         {hasRating && <CheckCircle2 className="w-4 h-4 text-green-500" />}
@@ -626,7 +626,7 @@ const GroupPeerReviewPage: React.FC = () => {
                               className={`w-5 h-5 transition-colors ${
                                 star <= (evalRatings[m.student_id] || 0)
                                   ? "text-amber-400 fill-amber-400"
-                                  : "text-gray-300 dark:text-gray-600"
+                                  : "text-stone-300 dark:text-stone-600"
                               }`}
                             />
                           </button>
@@ -637,7 +637,7 @@ const GroupPeerReviewPage: React.FC = () => {
                         value={evalComments[m.student_id] || ""}
                         onChange={(e) => setEvalComments((prev) => ({ ...prev, [m.student_id]: e.target.value }))}
                         placeholder={isMe ? "Tự đánh giá bản thân (tùy chọn)" : "Nhận xét (tùy chọn)"}
-                        className="w-full px-2.5 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="w-full px-2.5 py-1.5 text-xs border border-stone-200 dark:border-stone-600 rounded bg-white dark:bg-stone-700 text-stone-900 dark:text-white"
                       />
                     </div>
                   );
@@ -655,7 +655,7 @@ const GroupPeerReviewPage: React.FC = () => {
                       className={`w-full px-4 py-2.5 text-sm rounded-lg flex items-center justify-center gap-1.5 transition-colors ${
                         allRated
                           ? 'bg-amber-500 text-white hover:bg-amber-600'
-                          : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                          : 'bg-stone-200 dark:bg-stone-700 text-stone-400 cursor-not-allowed'
                       } disabled:opacity-50`}
                     >
                       {evalSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -672,15 +672,15 @@ const GroupPeerReviewPage: React.FC = () => {
             <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
               <CheckCircle2 className="w-8 h-8 text-green-600 dark:text-green-400" />
             </div>
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Đã hoàn thành đánh giá chéo!</h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">Điểm đã cho: <span className="font-semibold text-gray-900 dark:text-white">{score}/10</span></p>
+            <h2 className="text-xl font-semibold text-stone-900 dark:text-white mb-2">Đã hoàn thành đánh giá chéo!</h2>
+            <p className="text-stone-600 dark:text-stone-400 mb-6">Điểm đã cho: <span className="font-semibold text-stone-900 dark:text-white">{score}/10</span></p>
             {evalStatus?.my_evaluation_submitted && (
               <p className="text-green-600 dark:text-green-400 mb-4 flex items-center justify-center gap-1">
                 <CheckCircle2 className="w-4 h-4" />
                 Đã đánh giá thành viên nhóm
               </p>
             )}
-            <button onClick={() => navigate("/student/dashboard")} className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
+            <button onClick={() => navigate("/student/dashboard")} className="px-6 py-2.5 bg-brand text-white rounded-lg hover:bg-brand-dark font-medium">
               Về trang chủ
             </button>
           </div>
@@ -691,16 +691,16 @@ const GroupPeerReviewPage: React.FC = () => {
 
   // ========== MAIN REVIEW UI ==========
   return (
-    <div className="h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+    <div className="h-screen bg-stone-50 dark:bg-stone-900 flex flex-col">
       {/* Header */}
-      <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 flex items-center justify-between flex-shrink-0">
+      <div className="border-b border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate("/student/dashboard")} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700" title="Quay lại">
-            <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+          <button onClick={() => navigate("/student/dashboard")} className="p-2 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-700" title="Quay lại">
+            <ArrowLeft className="w-5 h-5 text-stone-600 dark:text-stone-300" />
           </button>
           <div>
-            <h1 className="font-semibold text-gray-900 dark:text-white">Đánh giá chéo</h1>
-            <p className="text-sm text-gray-500">{groupName}</p>
+            <h1 className="font-semibold text-stone-900 dark:text-white">Đánh giá chéo</h1>
+            <p className="text-sm text-stone-500">{groupName}</p>
           </div>
         </div>
         {isLeader && (
@@ -716,31 +716,31 @@ const GroupPeerReviewPage: React.FC = () => {
       {/* Main */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left - Members */}
-        <div className="w-56 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-shrink-0 flex flex-col">
-          <div className="p-4 border-b border-gray-100 dark:border-gray-700">
-            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+        <div className="w-56 bg-white dark:bg-stone-800 border-r border-stone-200 dark:border-stone-700 flex-shrink-0 flex flex-col">
+          <div className="p-4 border-b border-stone-100 dark:border-stone-700">
+            <h2 className="text-sm font-semibold text-stone-700 dark:text-stone-300 flex items-center gap-2">
               <Users className="w-4 h-4" />
               Nhóm của bạn
             </h2>
           </div>
           <div className="flex-1 overflow-y-auto p-3">
             {groupMembers.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-4">Không có thành viên</p>
+              <p className="text-sm text-stone-400 text-center py-4">Không có thành viên</p>
             ) : (
               <div className="space-y-2">
                 {groupMembers.map((m) => {
                   const isOnline = membersOnline.some((o) => o.name === m.full_name);
                   const hasEvaluated = evalStatus?.evaluators?.includes(String(m.student_id));
                   return (
-                    <div key={m.student_id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                    <div key={m.student_id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-stone-50 dark:hover:bg-stone-700/50">
                       <div className="relative">
-                        <span className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-medium">
+                        <span className="w-9 h-9 rounded-full bg-brand text-white flex items-center justify-center text-sm font-medium">
                           {m.full_name.charAt(m.full_name.lastIndexOf(" ") + 1)}
                         </span>
-                        {isOnline && <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white dark:border-gray-800" />}
+                        {isOnline && <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white dark:border-stone-800" />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{m.full_name}</p>
+                        <p className="text-sm font-medium text-stone-800 dark:text-stone-200 truncate">{m.full_name}</p>
                         {m.is_leader && <p className="text-xs text-amber-600 dark:text-amber-400">Nhóm trưởng</p>}
                       </div>
                     </div>
@@ -752,8 +752,8 @@ const GroupPeerReviewPage: React.FC = () => {
 
           {/* Member evaluation status - show who has submitted */}
           {evalStatus && evalStatus.group_submitted && (
-            <div className="p-3 border-t border-gray-100 dark:border-gray-700">
-              <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2 flex items-center gap-1">
+            <div className="p-3 border-t border-stone-100 dark:border-stone-700">
+              <p className="text-xs font-semibold text-stone-600 dark:text-stone-400 mb-2 flex items-center gap-1">
                 <Star className="w-3 h-3 text-amber-500" />
                 Đánh giá thành viên
               </p>
@@ -763,13 +763,13 @@ const GroupPeerReviewPage: React.FC = () => {
                   const isMe = m.student_id === evalStatus.my_student_id;
                   return (
                     <div key={m.student_id} className="flex items-center justify-between text-xs">
-                      <span className={isMe ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'}>
+                      <span className={isMe ? 'font-medium text-brand dark:text-sky-400' : 'text-stone-600 dark:text-stone-400'}>
                         {m.full_name.split(' ').pop()} {isMe && '(Bạn)'}
                       </span>
                       {hasEvaluated ? (
                         <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
                       ) : (
-                        <Clock className="w-3.5 h-3.5 text-gray-400" />
+                        <Clock className="w-3.5 h-3.5 text-stone-400" />
                       )}
                     </div>
                   );
@@ -782,14 +782,14 @@ const GroupPeerReviewPage: React.FC = () => {
         {/* Center - Content */}
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto p-6">
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+            <div className="bg-white dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 shadow-sm">
               {/* Worksheet header */}
-              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-blue-50 dark:bg-blue-900/20">
-                <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              <div className="px-6 py-4 border-b border-stone-200 dark:border-stone-700 bg-sky-50 dark:bg-sky-900/20">
+                <h3 className="font-semibold text-stone-900 dark:text-white flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-brand dark:text-sky-400" />
                   {worksheetTitle}
                 </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Bài làm của nhóm khác - Hãy đánh giá cẩn thận</p>
+                <p className="text-sm text-stone-600 dark:text-stone-400 mt-1">Bài làm của nhóm khác - Hãy đánh giá cẩn thận</p>
               </div>
 
               {/* Content */}
@@ -806,20 +806,20 @@ const GroupPeerReviewPage: React.FC = () => {
                     const answerKey = `q_${block.questionNum}`;
                     const answer = reviewData?.reviewee_answers?.[answerKey] || "";
                     return (
-                      <div key={`q-${idx}`} className="border-l-4 border-blue-500 pl-4">
+                      <div key={`q-${idx}`} className="border-l-4 border-brand pl-4">
                         <div className="mb-3">
                           <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{block.questionLine}</ReactMarkdown>
                         </div>
                         <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 mb-3 border border-green-200 dark:border-green-800">
                           <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-2">Câu trả lời:</p>
-                          <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{answer || "(Chưa trả lời)"}</p>
+                          <p className="text-stone-800 dark:text-stone-200 whitespace-pre-wrap">{answer || "(Chưa trả lời)"}</p>
                         </div>
                         <input
                           type="text"
                           placeholder={`Nhận xét cho câu ${block.questionNum}...`}
                           value={comments[block.questionNum] || ""}
                           onChange={(e) => handleCommentChange(block.questionNum, e.target.value)}
-                          className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          className="w-full px-4 py-2.5 border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-700 text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent"
                         />
                       </div>
                     );
@@ -828,18 +828,18 @@ const GroupPeerReviewPage: React.FC = () => {
                   reviewData?.reviewee_answers && Object.entries(reviewData.reviewee_answers)
                     .filter(([key]) => !key.startsWith("_"))
                     .map(([qId, answer]) => (
-                      <div key={qId} className="border-l-4 border-blue-500 pl-4">
-                        <p className="font-semibold text-gray-800 dark:text-gray-200 mb-3">Câu {qId}</p>
+                      <div key={qId} className="border-l-4 border-brand pl-4">
+                        <p className="font-semibold text-stone-800 dark:text-stone-200 mb-3">Câu {qId}</p>
                         <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 mb-3 border border-green-200 dark:border-green-800">
                           <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-2">Câu trả lời:</p>
-                          <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{String(answer) || "(Chưa trả lời)"}</p>
+                          <p className="text-stone-800 dark:text-stone-200 whitespace-pre-wrap">{String(answer) || "(Chưa trả lời)"}</p>
                         </div>
                         <input
                           type="text"
                           placeholder={`Nhận xét cho câu ${qId}...`}
                           value={comments[qId] || ""}
                           onChange={(e) => handleCommentChange(qId, e.target.value)}
-                          className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          className="w-full px-4 py-2.5 border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-700 text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent"
                         />
                       </div>
                     ))
@@ -848,24 +848,24 @@ const GroupPeerReviewPage: React.FC = () => {
 {/* Member evaluation is moved to AFTER peer review submission - shown in submitted state */}
 
                 {/* Review summary */}
-                <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Đánh giá tổng hợp</h4>
+                <div className="mt-8 pt-6 border-t border-stone-200 dark:border-stone-700">
+                  <h4 className="text-lg font-semibold text-stone-900 dark:text-white mb-4">Đánh giá tổng hợp</h4>
 
                   <div className="mb-5">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Nhận xét chung</label>
+                    <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-2">Nhận xét chung</label>
                     <textarea
                       value={generalComment}
                       onChange={(e) => setGeneralComment(e.target.value)}
                       placeholder="Viết nhận xét về bài làm của nhóm khác..."
                       rows={3}
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-3 border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-700 text-stone-900 dark:text-white placeholder-stone-400 resize-none focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent"
                     />
                   </div>
 
                   {/* Score input - Only visible to leader */}
                   {isLeader && (
                     <div className="mb-5">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Cho điểm (1-10)</label>
+                      <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-2">Cho điểm (1-10)</label>
                       <div className="flex items-center gap-2 flex-wrap">
                         {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
                           <button
@@ -873,14 +873,14 @@ const GroupPeerReviewPage: React.FC = () => {
                             onClick={() => handleScoreChange(n)}
                             className={`w-10 h-10 rounded-lg text-sm font-semibold transition-all ${
                               score >= n
-                                ? "bg-blue-600 text-white"
-                                : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"
+                                ? "bg-brand text-white"
+                                : "bg-stone-100 dark:bg-stone-700 text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-600"
                             }`}
                           >
                             {n}
                           </button>
                         ))}
-                        <span className="ml-3 text-2xl font-bold text-blue-600 dark:text-blue-400">{score}/10</span>
+                        <span className="ml-3 text-2xl font-bold text-brand dark:text-sky-400">{score}/10</span>
                       </div>
                     </div>
                   )}
@@ -895,7 +895,7 @@ const GroupPeerReviewPage: React.FC = () => {
                       Nộp đánh giá cho nhóm
                     </button>
                   ) : (
-                    <div className="text-center py-3 text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                    <div className="text-center py-3 text-stone-500 dark:text-stone-400 bg-stone-100 dark:bg-stone-700 rounded-lg">
                       Chỉ nhóm trưởng mới được nộp đánh giá
                     </div>
                   )}
@@ -906,38 +906,38 @@ const GroupPeerReviewPage: React.FC = () => {
         </div>
 
         {/* Right - Chat */}
-        <div className={`${chatOpen ? 'w-72' : 'w-12'} bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col flex-shrink-0 transition-all duration-200`}>
-          <div className="p-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+        <div className={`${chatOpen ? 'w-72' : 'w-12'} bg-white dark:bg-stone-800 border-l border-stone-200 dark:border-stone-700 flex flex-col flex-shrink-0 transition-all duration-200`}>
+          <div className="p-3 border-b border-stone-100 dark:border-stone-700 flex items-center justify-between">
             {chatOpen ? (
-              <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+              <span className="text-sm font-semibold text-stone-700 dark:text-stone-300 flex items-center gap-2">
                 <MessageCircle className="w-4 h-4" />
                 Chat nhóm
               </span>
             ) : (
-              <MessageCircle className="w-5 h-5 text-gray-400 mx-auto" />
+              <MessageCircle className="w-5 h-5 text-stone-400 mx-auto" />
             )}
-            <button onClick={() => setChatOpen(!chatOpen)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
-              {chatOpen ? <ChevronRight className="w-4 h-4 text-gray-500" /> : <ChevronLeft className="w-4 h-4 text-gray-500" />}
+            <button onClick={() => setChatOpen(!chatOpen)} className="p-1.5 hover:bg-stone-100 dark:hover:bg-stone-700 rounded-lg">
+              {chatOpen ? <ChevronRight className="w-4 h-4 text-stone-500" /> : <ChevronLeft className="w-4 h-4 text-stone-500" />}
             </button>
           </div>
 
           {chatOpen && (
             <>
-              <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-700">
-                <span className={`text-sm ${connected ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`}>
+              <div className="px-3 py-2 border-b border-stone-100 dark:border-stone-700">
+                <span className={`text-sm ${connected ? 'text-green-600 dark:text-green-400' : 'text-stone-400'}`}>
                   {connected ? `${membersOnline.length} đang online` : 'Đang kết nối...'}
                 </span>
               </div>
 
               <div className="flex-1 overflow-y-auto p-3 space-y-3">
-                {chatMessages.length === 0 && <p className="text-sm text-gray-400 text-center py-6">Chưa có tin nhắn</p>}
+                {chatMessages.length === 0 && <p className="text-sm text-stone-400 text-center py-6">Chưa có tin nhắn</p>}
                 {chatMessages.map((msg) => {
                   const isMe = msg.user_id === currentUser?.id;
                   return (
                     <div key={msg.id} className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}>
-                      <span className="text-xs text-gray-500 mb-1">{msg.user_name}</span>
+                      <span className="text-xs text-stone-500 mb-1">{msg.user_name}</span>
                       <div className={`px-3 py-2 rounded-xl text-sm max-w-[85%] ${
-                        isMe ? "bg-blue-600 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+                        isMe ? "bg-brand text-white" : "bg-stone-100 dark:bg-stone-700 text-stone-800 dark:text-stone-200"
                       }`}>
                         {msg.message}
                       </div>
@@ -947,7 +947,7 @@ const GroupPeerReviewPage: React.FC = () => {
                 <div ref={chatEndRef} />
               </div>
 
-              <div className="p-3 border-t border-gray-100 dark:border-gray-700">
+              <div className="p-3 border-t border-stone-100 dark:border-stone-700">
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -955,9 +955,9 @@ const GroupPeerReviewPage: React.FC = () => {
                     onChange={(e) => setChatInput(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleSendChat())}
                     placeholder="Nhập tin nhắn..."
-                    className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex-1 px-3 py-2 text-sm border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-700 text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand"
                   />
-                  <button onClick={handleSendChat} disabled={!chatInput.trim()} className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                  <button onClick={handleSendChat} disabled={!chatInput.trim()} className="px-3 py-2 bg-brand text-white rounded-lg hover:bg-brand-dark disabled:opacity-50">
                     <Send className="w-4 h-4" />
                   </button>
                 </div>

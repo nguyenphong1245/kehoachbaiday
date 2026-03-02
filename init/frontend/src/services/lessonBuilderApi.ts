@@ -16,15 +16,26 @@ import type {
 } from "@/types/lessonBuilder";
 
 /**
- * Lấy danh sách chủ đề từ Neo4j theo loại sách và lớp
+ * Lấy danh sách môn học từ Neo4j
+ */
+export const getSubjects = async (): Promise<string[]> => {
+  const { data } = await api.get<{ subjects: string[] }>(
+    "/lesson-builder/subjects"
+  );
+  return data.subjects;
+};
+
+/**
+ * Lấy danh sách chủ đề từ Neo4j theo loại sách, lớp và môn
  */
 export const getTopics = async (
   bookType: string,
-  grade: string
+  grade: string,
+  subject: string = ""
 ): Promise<string[]> => {
   const { data } = await api.get<{ topics: string[] }>(
     "/lesson-builder/topics",
-    { params: { book_type: bookType, grade: grade } }
+    { params: { book_type: bookType, grade: grade, subject: subject } }
   );
   return data.topics;
 };
@@ -35,7 +46,8 @@ export const getTopics = async (
 export const searchLessons = async (
   bookType: string,
   grade: string,
-  topic: string
+  topic: string,
+  subject: string = ""
 ): Promise<LessonSearchResponse> => {
   const { data } = await api.post<LessonSearchResponse>(
     "/lesson-builder/lessons/search",
@@ -43,6 +55,7 @@ export const searchLessons = async (
       book_type: bookType,
       grade: grade,
       topic: topic,
+      subject: subject,
     }
   );
   return data;
@@ -326,6 +339,50 @@ export const deleteSavedLessonPlan = async (
   await api.delete(`/lesson-builder/saved/${lessonPlanId}`);
 };
 
+// ============== NLS (Năng lực số) API ==============
+
+import type {
+  NLSMienNangLuc,
+  NLSNangLucThanhPhan,
+  NLSChiBao,
+} from "@/types/lessonBuilder";
+
+/**
+ * Lấy danh sách Miền năng lực từ Neo4j
+ */
+export const getNLSMienNangLuc = async (): Promise<NLSMienNangLuc[]> => {
+  const { data } = await api.get<{ mien_nang_luc: NLSMienNangLuc[] }>(
+    "/lesson-builder/nls/mien-nang-luc"
+  );
+  return data.mien_nang_luc;
+};
+
+/**
+ * Lấy danh sách Năng lực thành phần theo Miền năng lực từ Neo4j
+ */
+export const getNLSNangLucThanhPhan = async (
+  mienNangLuc: string
+): Promise<NLSNangLucThanhPhan[]> => {
+  const { data } = await api.get<{ nang_luc_thanh_phan: NLSNangLucThanhPhan[] }>(
+    "/lesson-builder/nls/nang-luc-thanh-phan",
+    { params: { mien_nang_luc: mienNangLuc } }
+  );
+  return data.nang_luc_thanh_phan;
+};
+
+/**
+ * Lấy danh sách Chỉ báo theo Năng lực thành phần từ Neo4j
+ */
+export const getNLSChiBao = async (
+  nangLucThanhPhan: string
+): Promise<NLSChiBao[]> => {
+  const { data } = await api.get<{ chi_bao: NLSChiBao[] }>(
+    "/lesson-builder/nls/chi-bao",
+    { params: { nang_luc_thanh_phan: nangLucThanhPhan } }
+  );
+  return data.chi_bao;
+};
+
 // Export as lessonBuilderApi object for convenience
 export const lessonBuilderApi = {
   getTopics,
@@ -338,4 +395,8 @@ export const lessonBuilderApi = {
   getSavedLessonPlans,
   getSavedLessonPlan,
   deleteSavedLessonPlan,
+  // NLS API
+  getNLSMienNangLuc,
+  getNLSNangLucThanhPhan,
+  getNLSChiBao,
 };

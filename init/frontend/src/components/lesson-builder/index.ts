@@ -5,3 +5,4 @@ export { LessonPlanBuilderSidebar } from "./LessonPlanBuilderSidebar";
 export { ActivityConfigPanel } from "./ActivityConfigPanel";
 export { LessonPlanOutput } from "./LessonPlanOutput";
 export { SavedLessonsSidebar } from "./SavedLessonsSidebar";
+export { NLSConfigSection } from "./NLSConfigSection";

@@ -158,7 +158,7 @@ const AdminUsersPage = () => {
     // Students don't have tokens
     if (isOnlyStudent(user)) {
       return (
-        <span className="text-xs text-slate-400 italic">-</span>
+        <span className="text-xs text-stone-400 italic">-</span>
       );
     }
 
@@ -174,13 +174,13 @@ const AdminUsersPage = () => {
             value={tokenInput}
             onChange={(e) => setTokenInput(e.target.value)}
             onKeyDown={(e) => handleTokenKeyDown(e, user.id)}
-            className={`${isMobile ? "w-24" : "w-28"} px-2 py-1 text-xs ${isMobile ? "" : "text-right"} border border-blue-300 rounded bg-white dark:bg-slate-700 dark:border-slate-600 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500`}
+            className={`${isMobile ? "w-24" : "w-28"} px-2 py-1 text-xs ${isMobile ? "" : "text-right"} border border-sky-300 rounded bg-white dark:bg-stone-700 dark:border-stone-600 text-stone-700 dark:text-stone-200 focus:outline-none focus:ring-1 focus:ring-brand`}
             autoFocus
           />
           <button
             onClick={() => handleTokenSave(user.id)}
             disabled={savingTokenId === user.id}
-            className="p-1 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded"
+            className="p-1 text-brand hover:bg-sky-50 dark:hover:bg-sky-900/20 rounded"
           >
             {savingTokenId === user.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
           </button>
@@ -199,7 +199,7 @@ const AdminUsersPage = () => {
           >
             Còn: {formatTokens(tokenBalance)}
           </button>
-          <span className="text-xs text-slate-400">
+          <span className="text-xs text-stone-400">
             Đã dùng: {formatTokens(tokensUsed)}
           </span>
         </div>
@@ -253,10 +253,10 @@ const AdminUsersPage = () => {
   return (
     <section className="max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
       <div className="mb-6">
-        <h1 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white">
+        <h1 className="text-xl sm:text-2xl font-bold text-stone-800 dark:text-white">
           Tài khoản
         </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+        <p className="text-sm text-stone-500 dark:text-stone-400 mt-1">
           Phân quyền và quản lý tài khoản người dùng
         </p>
       </div>
@@ -276,49 +276,49 @@ const AdminUsersPage = () => {
       {/* Search */}
       <div className="mb-4">
         <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
           <input
             type="text"
             placeholder="Tìm theo email..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+            className="w-full pl-9 pr-4 py-2 text-sm border border-stone-200 dark:border-stone-700 rounded-lg bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 focus:ring-2 focus:ring-brand focus:border-brand focus:outline-none"
           />
         </div>
       </div>
 
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+          <Loader2 className="w-6 h-6 animate-spin text-brand" />
         </div>
       ) : filteredUsers.length === 0 ? (
-        <div className="text-center py-16 text-slate-400">
+        <div className="text-center py-16 text-stone-400">
           {searchQuery ? "Không tìm thấy người dùng phù hợp" : "Chưa có người dùng"}
         </div>
       ) : (
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-          <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-700">
-            <p className="text-sm text-slate-500 dark:text-slate-400">
+        <div className="bg-white dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 overflow-hidden">
+          <div className="px-5 py-3 border-b border-stone-100 dark:border-stone-700">
+            <p className="text-sm text-stone-500 dark:text-stone-400">
               {filteredUsers.length} người dùng {searchQuery && `(lọc từ ${users.length})`}
             </p>
           </div>
 
           {/* Mobile cards */}
-          <div className="block sm:hidden divide-y divide-slate-100 dark:divide-slate-700">
+          <div className="block sm:hidden divide-y divide-stone-100 dark:divide-stone-700">
             {filteredUsers.map((user) => (
               <div key={user.id} className="p-4">
                 <div className="flex items-start justify-between gap-2 mb-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{user.email}</p>
+                    <p className="text-sm font-medium text-stone-800 dark:text-stone-200 truncate">{user.email}</p>
                     <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs text-slate-400">#{user.id}</span>
+                      <span className="text-xs text-stone-400">#{user.id}</span>
                       {user.created_at && (
-                        <span className="text-xs text-slate-400">{formatDate(user.created_at)}</span>
+                        <span className="text-xs text-stone-400">{formatDate(user.created_at)}</span>
                       )}
                       {user.is_verified ? (
                         <CheckCircle className="w-3 h-3 text-green-500" />
                       ) : (
-                        <XCircle className="w-3 h-3 text-slate-300" />
+                        <XCircle className="w-3 h-3 text-stone-300" />
                       )}
                     </div>
                   </div>
@@ -345,21 +345,21 @@ const AdminUsersPage = () => {
                     return (
                       <label key={role.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer transition-colors ${
                         updatingRole?.userId === user.id && updatingRole?.roleId === role.id
-                          ? "bg-blue-100 dark:bg-blue-900/30"
-                          : "bg-slate-50 dark:bg-slate-700/50"
+                          ? "bg-sky-100 dark:bg-sky-900/30"
+                          : "bg-stone-50 dark:bg-stone-700/50"
                       }`}>
                         {updatingRole?.userId === user.id && updatingRole?.roleId === role.id ? (
-                          <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                          <Loader2 className="w-4 h-4 animate-spin text-brand" />
                         ) : (
                           <input
                             type="checkbox"
                             checked={checked}
                             onChange={(e) => handleToggleRole(user.id, role.id, e.target.checked)}
                             disabled={updatingRole !== null}
-                            className="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-500"
+                            className="h-4 w-4 rounded border-stone-300 dark:border-stone-600 text-brand"
                           />
                         )}
-                        <span className="text-xs text-slate-600 dark:text-slate-300 flex items-center gap-1">
+                        <span className="text-xs text-stone-600 dark:text-stone-300 flex items-center gap-1">
                           {getRoleIcon(role.name)}
                           {getRoleDisplayName(role.name)}
                         </span>
@@ -373,8 +373,8 @@ const AdminUsersPage = () => {
 
           {/* Desktop table */}
           <table className="hidden sm:table w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-900/50">
-              <tr className="text-left text-slate-500 dark:text-slate-400">
+            <thead className="bg-stone-50 dark:bg-stone-900/50">
+              <tr className="text-left text-stone-500 dark:text-stone-400">
                 <th className="px-5 py-3 font-medium">Email</th>
                 <th className="px-5 py-3 font-medium">Ngày đăng ký</th>
                 <th className="px-5 py-3 font-medium text-center">Xác thực</th>
@@ -385,23 +385,23 @@ const AdminUsersPage = () => {
                 <th className="px-5 py-3 font-medium text-center">Thao tác</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+            <tbody className="divide-y divide-stone-100 dark:divide-stone-700">
               {filteredUsers.map((user) => (
-                <tr key={user.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 text-slate-700 dark:text-slate-300">
+                <tr key={user.id} className="hover:bg-stone-50 dark:hover:bg-stone-700/30 text-stone-700 dark:text-stone-300">
                   <td className="px-5 py-3">
                     <div>
                       <span className="font-medium">{user.email}</span>
-                      <span className="text-xs text-slate-400 ml-2">#{user.id}</span>
+                      <span className="text-xs text-stone-400 ml-2">#{user.id}</span>
                     </div>
                   </td>
-                  <td className="px-5 py-3 text-xs text-slate-500">
+                  <td className="px-5 py-3 text-xs text-stone-500">
                     {user.created_at ? formatDate(user.created_at) : "-"}
                   </td>
                   <td className="px-5 py-3 text-center">
                     {user.is_verified ? (
                       <CheckCircle className="w-4 h-4 text-green-500 mx-auto" />
                     ) : (
-                      <XCircle className="w-4 h-4 text-slate-300 mx-auto" />
+                      <XCircle className="w-4 h-4 text-stone-300 mx-auto" />
                     )}
                   </td>
                   <td className="px-5 py-3 text-right">
@@ -413,14 +413,14 @@ const AdminUsersPage = () => {
                     return (
                       <td key={role.id} className="px-5 py-3 text-center">
                         {isUpdating ? (
-                          <Loader2 className="w-4 h-4 animate-spin text-blue-500 mx-auto" />
+                          <Loader2 className="w-4 h-4 animate-spin text-brand mx-auto" />
                         ) : (
                           <input
                             type="checkbox"
                             checked={checked}
                             onChange={(e) => handleToggleRole(user.id, role.id, e.target.checked)}
                             disabled={updatingRole !== null}
-                            className="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-500 cursor-pointer disabled:opacity-50"
+                            className="h-4 w-4 rounded border-stone-300 dark:border-stone-600 text-brand cursor-pointer disabled:opacity-50"
                           />
                         )}
                       </td>
@@ -441,7 +441,7 @@ const AdminUsersPage = () => {
                         Xóa
                       </button>
                     ) : (
-                      <span className="text-xs text-slate-400 italic">Bạn</span>
+                      <span className="text-xs text-stone-400 italic">Bạn</span>
                     )}
                   </td>
                 </tr>

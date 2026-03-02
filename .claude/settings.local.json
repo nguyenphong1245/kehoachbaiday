@@ -4,7 +4,17 @@
       "Bash(powershell.exe:*)",
       "Bash(curl:*)",
       "Bash(python:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(ssh root@14.225.204.15 \"cd /root/kehoachbaiday/init && docker compose logs backend --tail=20\")",
+      "Bash(docker exec:*)",
+      "Bash(MSYS_NO_PATHCONV=1 curl -s -w \"\\\\nHTTP:%{http_code}\" -c /tmp/test_cookies.txt -X POST http://localhost:8000/api/v1/auth/login -H 'Content-Type: application/json' -d '{\"\"email\"\":\"\"testapi@example.com\"\",\"\"password\"\":\"\"TestPassword123\"\"}')",
+      "Bash(CID=8)",
+      "Bash(__NEW_LINE_ec7f0d9630bd1b7c__ echo \"============================================\")",
+      "Bash(echo:*)",
+      "Bash(__NEW_LINE_9df457980191010f__ echo \"============================================\")",
+      "Bash(# Check the classrooms routes to see what fields materials expect docker exec khbd-backend grep -n \"\"material\"\" /app/app/api/routes/classrooms.py)",
+      "Bash(__NEW_LINE_0cc0d494e76cc98a__ echo \"============================================\")",
+      "Bash(__NEW_LINE_246c1d54bdd8146e__ echo \"============================================\")"
     ]
   }
 }

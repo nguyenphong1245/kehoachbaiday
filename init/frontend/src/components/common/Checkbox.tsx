@@ -8,7 +8,7 @@ export type CheckboxProps = React.InputHTMLAttributes<HTMLInputElement> & {
 export const Checkbox: React.FC<CheckboxProps> = ({ label, error, className = '', checked, onChange, required, disabled, ...rest }) => {
   return (
     <div>
-      <label className="inline-flex items-center gap-3 text-sm text-slate-700 dark:text-gray-200">
+      <label className="inline-flex items-center gap-3 text-sm text-stone-700 dark:text-stone-200">
         {/* visually-hidden native input for accessibility, use peer for styling */}
         <input
           type="checkbox"
@@ -27,8 +27,8 @@ export const Checkbox: React.FC<CheckboxProps> = ({ label, error, className = ''
                 'flex h-5 w-5 items-center justify-center rounded transition-colors',
                 // box background/border when checked vs unchecked
                 checked
-                  ? 'bg-white dark:bg-gray-700 border border-brand'
-                  : 'bg-white dark:bg-gray-800 border border-slate-300 dark:border-gray-700',
+                  ? 'bg-white dark:bg-stone-700 border border-brand'
+                  : 'bg-white dark:bg-stone-800 border border-stone-300 dark:border-stone-700',
               ].join(' ')}
               aria-hidden
             >

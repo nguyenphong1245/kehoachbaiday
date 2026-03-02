@@ -60,7 +60,6 @@ class ClassStudentRead(BaseModel):
 
 class AddStudentRequest(BaseModel):
     full_name: str = Field(..., max_length=255)
-    student_code: Optional[str] = Field(None, max_length=50)
     date_of_birth: Optional[str] = Field(None, description="Ngày sinh DD/MM/YYYY")
 
 

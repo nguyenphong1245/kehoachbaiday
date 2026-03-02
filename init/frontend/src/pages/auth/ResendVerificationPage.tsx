@@ -54,7 +54,7 @@ const ResendVerificationPage = () => {
         />
         <SubmitButton label="Gửi xác minh" isLoading={isSubmitting} />
       </form>
-      <p className="mt-4 text-center text-sm text-slate-500 dark:text-slate-400">
+      <p className="mt-4 text-center text-sm text-stone-500 dark:text-stone-400">
         Đã nhớ mật khẩu? <Link to="/login">Đăng nhập</Link>
       </p>
     </AuthCard>

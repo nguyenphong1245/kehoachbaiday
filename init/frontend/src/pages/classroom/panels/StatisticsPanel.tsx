@@ -197,10 +197,10 @@ const contentTypeLabel = (type: string) => {
 };
 
 const pctColor = (pct: number) =>
-  pct >= 80 ? "text-green-600 dark:text-green-400" : pct >= 50 ? "text-blue-600 dark:text-blue-400" : "text-red-500";
+  pct >= 80 ? "text-green-600 dark:text-green-400" : pct >= 50 ? "text-brand dark:text-sky-400" : "text-red-500";
 
 const barColor = (pct: number) =>
-  pct >= 80 ? "bg-green-500" : pct >= 50 ? "bg-blue-500" : "bg-amber-500";
+  pct >= 80 ? "bg-green-500" : pct >= 50 ? "bg-brand" : "bg-amber-500";
 
 const fmtPct = (score: number, max: number) => max > 0 ? Math.round((score / max) * 100) : 0;
 
@@ -405,27 +405,50 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
   const renderScore = (stat: StudentStat) => {
     if (!stat.score) {
       if (stat.status === "submitted") {
-        // Check if there's a teacher_score at stat level (for worksheet/code without auto-score)
         if (stat.teacher_score != null) {
           const pct = fmtPct(stat.teacher_score, 10);
           return <span className={`text-xs font-medium ${pctColor(pct)}`}>GV: {stat.teacher_score}/10</span>;
         }
-        return <span className="text-xs text-slate-400 italic">Chưa chấm</span>;
+        return <span className="text-xs text-stone-400 italic">Chưa chấm</span>;
       }
       return null;
     }
-    // Teacher scored (worksheet or code_exercise with teacher override)
-    if (stat.score.teacher_score != null) {
-      const pct = fmtPct(stat.score.teacher_score, stat.score.max_score || 10);
+
+    const hasTeacherScore = stat.score.teacher_score != null;
+    const hasQuizAuto = stat.score.total_questions != null;
+    const hasCodeAuto = stat.score.total_tests != null && !stat.score.no_test;
+
+    // Teacher scored + auto-score available → show both
+    if (hasTeacherScore && (hasQuizAuto || hasCodeAuto)) {
+      const teacherPct = fmtPct(stat.score.teacher_score!, stat.score.max_score || 10);
+      const autoLabel = hasQuizAuto
+        ? `${stat.score.total_correct}/${stat.score.total_questions}`
+        : `${stat.score.passed_tests}/${stat.score.total_tests} tests`;
+      return (
+        <span className="text-xs">
+          <span className={`font-medium ${pctColor(teacherPct)}`}>GV: {stat.score.teacher_score}/{stat.score.max_score || 10}</span>
+          <span className="text-stone-400 ml-1">({autoLabel})</span>
+        </span>
+      );
+    }
+
+    // Teacher scored only (worksheet)
+    if (hasTeacherScore) {
+      const pct = fmtPct(stat.score.teacher_score!, stat.score.max_score || 10);
       return <span className={`text-xs font-medium ${pctColor(pct)}`}>GV: {stat.score.teacher_score}/{stat.score.max_score || 10}</span>;
     }
-    if (stat.score.total_questions != null) {
-      const pct = fmtPct(stat.score.total_correct || 0, stat.score.total_questions);
+
+    // Quiz auto-score only
+    if (hasQuizAuto) {
+      const pct = fmtPct(stat.score.total_correct || 0, stat.score.total_questions!);
       return <span className={`text-xs font-medium ${pctColor(pct)}`}>{stat.score.total_correct}/{stat.score.total_questions} ({pct}%)</span>;
     }
-    if (stat.score.no_test) return <span className="text-xs text-slate-400 italic">Chưa chấm</span>;
-    if (stat.score.total_tests != null) {
-      const pct = fmtPct(stat.score.passed_tests || 0, stat.score.total_tests);
+
+    if (stat.score.no_test) return <span className="text-xs text-stone-400 italic">Chưa chấm</span>;
+
+    // Code auto-score only
+    if (hasCodeAuto) {
+      const pct = fmtPct(stat.score.passed_tests || 0, stat.score.total_tests!);
       return <span className={`text-xs font-medium ${pctColor(pct)}`}>{stat.score.passed_tests}/{stat.score.total_tests} tests ({pct}%)</span>;
     }
     return null;
@@ -437,7 +460,7 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
       return <span className={`text-xs font-medium ${pctColor(pct)}`}>GV: {stat.teacher_score}/10</span>;
     }
     if (!stat.score) {
-      if (stat.status === "submitted") return <span className="text-xs text-slate-400 italic">Chưa chấm</span>;
+      if (stat.status === "submitted") return <span className="text-xs text-stone-400 italic">Chưa chấm</span>;
       return null;
     }
     const pct = fmtPct(stat.score.passed_tests || 0, stat.score.total_tests || 0);
@@ -445,21 +468,21 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
   };
 
   /* ── Loading / Error / Empty ── */
-  if (loading) return <div className="flex items-center justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>;
+  if (loading) return <div className="flex items-center justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-brand" /></div>;
 
   if (error) return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl border border-red-200 dark:border-red-800 p-8 text-center">
+    <div className="bg-white dark:bg-stone-800 rounded-xl border border-red-200 dark:border-red-800 p-8 text-center">
       <BarChart3 className="w-12 h-12 mx-auto mb-3 text-red-300 dark:text-red-600" />
       <p className="text-red-600 dark:text-red-400 font-medium">{error}</p>
-      <button onClick={loadStats} className="mt-3 px-4 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">Thử lại</button>
+      <button onClick={loadStats} className="mt-3 px-4 py-1.5 text-sm bg-brand text-white rounded-lg hover:bg-brand-dark">Thử lại</button>
     </div>
   );
 
   if (!data || data.lessons.length === 0) return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-8 text-center">
-      <BarChart3 className="w-12 h-12 mx-auto mb-3 text-slate-300 dark:text-slate-600" />
-      <p className="text-slate-500 dark:text-slate-400">Chưa có dữ liệu thống kê</p>
-      <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">Giao bài cho học sinh để bắt đầu theo dõi.</p>
+    <div className="bg-white dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 p-8 text-center">
+      <BarChart3 className="w-12 h-12 mx-auto mb-3 text-stone-300 dark:text-stone-600" />
+      <p className="text-stone-500 dark:text-stone-400">Chưa có dữ liệu thống kê</p>
+      <p className="text-stone-400 dark:text-stone-500 text-sm mt-1">Giao bài cho học sinh để bắt đầu theo dõi.</p>
     </div>
   );
 
@@ -477,24 +500,24 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
         {/* Summary cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { label: "Tổng bài giao", value: overviewStats.totalAssignments, color: "text-slate-800 dark:text-white" },
-            { label: "Học sinh", value: data.total_students, color: "text-slate-800 dark:text-white" },
+            { label: "Tổng bài giao", value: overviewStats.totalAssignments, color: "text-stone-800 dark:text-white" },
+            { label: "Học sinh", value: data.total_students, color: "text-stone-800 dark:text-white" },
             { label: "Đã nộp", value: overviewStats.totalSubmissions, color: "text-green-600 dark:text-green-400" },
-            { label: "Tỉ lệ nộp", value: `${overallPct}%`, color: "text-blue-600 dark:text-blue-400" },
+            { label: "Tỉ lệ nộp", value: `${overallPct}%`, color: "text-brand dark:text-sky-400" },
           ].map((c) => (
-            <div key={c.label} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-              <div className="text-xs text-slate-500 dark:text-slate-400">{c.label}</div>
+            <div key={c.label} className="bg-white dark:bg-stone-800 rounded-lg border border-stone-200 dark:border-stone-700 p-3">
+              <div className="text-xs text-stone-500 dark:text-stone-400">{c.label}</div>
               <div className={`text-2xl font-bold mt-1 ${c.color}`}>{c.value}</div>
             </div>
           ))}
         </div>
 
         {/* By content type with submission bar + average scores */}
-        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-          <h3 className="text-sm font-semibold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-blue-500" /> Theo loại bài
+        <div className="bg-white dark:bg-stone-800 rounded-lg border border-stone-200 dark:border-stone-700 p-4">
+          <h3 className="text-sm font-semibold text-stone-800 dark:text-white mb-3 flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-brand" /> Theo loại bài
             {overviewStats.typeAvg.overall !== null && (
-              <span className={`ml-auto text-xs font-medium px-2 py-0.5 rounded-full ${overviewStats.typeAvg.overall >= 80 ? "bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400" : overviewStats.typeAvg.overall >= 50 ? "bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400" : "bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400"}`}>
+              <span className={`ml-auto text-xs font-medium px-2 py-0.5 rounded-full ${overviewStats.typeAvg.overall >= 80 ? "bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400" : overviewStats.typeAvg.overall >= 50 ? "bg-sky-50 text-brand dark:bg-sky-900/30 dark:text-sky-400" : "bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400"}`}>
                 TB chung: {overviewStats.typeAvg.overall}%
               </span>
             )}
@@ -509,14 +532,14 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
               return (
                 <div key={type} className="space-y-1">
                   <div className="flex items-center gap-3">
-                    <div className={`flex-shrink-0 ${type === "quiz" ? "text-purple-500" : type === "code_exercise" ? "text-green-500" : "text-blue-500"}`}>
+                    <div className={`flex-shrink-0 ${type === "quiz" ? "text-purple-500" : type === "code_exercise" ? "text-green-500" : "text-brand"}`}>
                       {contentTypeIcon(type)}
                     </div>
-                    <div className="w-28 text-xs text-slate-600 dark:text-slate-400">{contentTypeLabel(type)} ({stats.count})</div>
+                    <div className="w-28 text-xs text-stone-600 dark:text-stone-400">{contentTypeLabel(type)} ({stats.count})</div>
                     <div className="flex-1">
-                      <div className="w-full h-5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden relative">
+                      <div className="w-full h-5 bg-stone-100 dark:bg-stone-700 rounded-full overflow-hidden relative">
                         <div className={`h-full rounded-full ${barColor(pct)}`} style={{ width: `${pct}%` }} />
-                        <span className="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-slate-700 dark:text-slate-300">
+                        <span className="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-stone-700 dark:text-stone-300">
                           {stats.submitted}/{stats.total} ({pct}%)
                         </span>
                       </div>
@@ -524,11 +547,11 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                     {/* Average score badge */}
                     <div className="flex-shrink-0 w-24 text-right">
                       {avgScore !== null ? (
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${avgScore >= 80 ? "bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400" : avgScore >= 50 ? "bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400" : "bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400"}`}>
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${avgScore >= 80 ? "bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400" : avgScore >= 50 ? "bg-sky-50 text-brand dark:bg-sky-900/30 dark:text-sky-400" : "bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400"}`}>
                           TB: {avgScore}%
                         </span>
                       ) : (
-                        <span className="text-xs text-slate-400">Chưa chấm</span>
+                        <span className="text-xs text-stone-400">Chưa chấm</span>
                       )}
                     </div>
                   </div>
@@ -540,31 +563,31 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
 
         {/* ── Student Ranking ── */}
         {ranking.length > 0 && (
-          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2">
+          <div className="bg-white dark:bg-stone-800 rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden">
+            <div className="px-4 py-3 border-b border-stone-200 dark:border-stone-700 flex items-center gap-2">
               <Trophy className="w-4 h-4 text-amber-500" />
-              <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Bảng xếp hạng tổng hợp</h3>
-              <span className="text-xs text-slate-400 ml-auto">{ranking.length} học sinh</span>
+              <h3 className="text-sm font-semibold text-stone-800 dark:text-white">Bảng xếp hạng tổng hợp</h3>
+              <span className="text-xs text-stone-400 ml-auto">{ranking.length} học sinh</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/30">
-                    <th className="text-center py-2.5 px-2 font-medium text-slate-500 dark:text-slate-400 w-10">#</th>
-                    <th className="text-left py-2.5 px-2 font-medium text-slate-500 dark:text-slate-400">Mã HS</th>
-                    <th className="text-left py-2.5 px-2 font-medium text-slate-500 dark:text-slate-400">Họ tên</th>
-                    <th className="text-center py-2.5 px-2 font-medium text-slate-500 dark:text-slate-400">Bài nộp</th>
+                  <tr className="border-b border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-700/30">
+                    <th className="text-center py-2.5 px-2 font-medium text-stone-500 dark:text-stone-400 w-10">#</th>
+                    <th className="text-left py-2.5 px-2 font-medium text-stone-500 dark:text-stone-400">Mã HS</th>
+                    <th className="text-left py-2.5 px-2 font-medium text-stone-500 dark:text-stone-400">Họ tên</th>
+                    <th className="text-center py-2.5 px-2 font-medium text-stone-500 dark:text-stone-400">Bài nộp</th>
                     <th className="text-center py-2.5 px-2 font-medium text-purple-500">
                       <span className="inline-flex items-center gap-0.5"><HelpCircle className="w-3 h-3" /> Quiz</span>
                     </th>
                     <th className="text-center py-2.5 px-2 font-medium text-green-500">
                       <span className="inline-flex items-center gap-0.5"><Code2 className="w-3 h-3" /> Code</span>
                     </th>
-                    <th className="text-center py-2.5 px-2 font-medium text-blue-500">
+                    <th className="text-center py-2.5 px-2 font-medium text-brand">
                       <span className="inline-flex items-center gap-0.5"><FileText className="w-3 h-3" /> PBT</span>
                     </th>
-                    <th className="text-center py-2.5 px-2 font-medium text-slate-500 dark:text-slate-400">TB chung</th>
-                    <th className="text-left py-2.5 px-2 font-medium text-slate-500 dark:text-slate-400 w-24">Tiến độ</th>
+                    <th className="text-center py-2.5 px-2 font-medium text-stone-500 dark:text-stone-400">TB chung</th>
+                    <th className="text-left py-2.5 px-2 font-medium text-stone-500 dark:text-stone-400 w-24">Tiến độ</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -573,39 +596,39 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                     const quizPct = fmtPct(r.quiz_score, r.quiz_max);
                     const codePct = fmtPct(r.code_score, r.code_max);
                     return (
-                      <tr key={r.student_id} className="border-b border-slate-50 dark:border-slate-700/30 last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-700/20">
+                      <tr key={r.student_id} className="border-b border-stone-50 dark:border-stone-700/30 last:border-b-0 hover:bg-stone-50 dark:hover:bg-stone-700/20">
                         <td className="py-2 px-2 text-center">
                           {r.rank <= 3 ? (
-                            <span className={r.rank === 1 ? "text-amber-500" : r.rank === 2 ? "text-slate-400" : "text-amber-700"}>
+                            <span className={r.rank === 1 ? "text-amber-500" : r.rank === 2 ? "text-stone-400" : "text-amber-700"}>
                               {r.rank === 1 ? <Award className="w-4 h-4 inline" /> : <span className="font-bold">{r.rank}</span>}
                             </span>
-                          ) : <span className="text-slate-400">{r.rank}</span>}
+                          ) : <span className="text-stone-400">{r.rank}</span>}
                         </td>
-                        <td className="py-2 px-2 text-slate-500 dark:text-slate-400 font-mono">{r.student_code || "-"}</td>
-                        <td className="py-2 px-2 font-medium text-slate-800 dark:text-white">{r.student_name}</td>
-                        <td className="py-2 px-2 text-center text-slate-600 dark:text-slate-400">{r.assignments_submitted}</td>
+                        <td className="py-2 px-2 text-stone-500 dark:text-stone-400 font-mono">{r.student_code || "-"}</td>
+                        <td className="py-2 px-2 font-medium text-stone-800 dark:text-white">{r.student_name}</td>
+                        <td className="py-2 px-2 text-center text-stone-600 dark:text-stone-400">{r.assignments_submitted}</td>
                         <td className="py-2 px-2 text-center">
                           {r.quiz_count > 0
                             ? <span className={`font-medium ${pctColor(quizPct)}`}>{quizPct}%</span>
-                            : <span className="text-slate-300 dark:text-slate-600">-</span>}
+                            : <span className="text-stone-300 dark:text-stone-600">-</span>}
                         </td>
                         <td className="py-2 px-2 text-center">
                           {r.code_count > 0
                             ? <span className={`font-medium ${pctColor(codePct)}`}>{codePct}%</span>
-                            : <span className="text-slate-300 dark:text-slate-600">-</span>}
+                            : <span className="text-stone-300 dark:text-stone-600">-</span>}
                         </td>
                         <td className="py-2 px-2 text-center">
                           {r.worksheet_count > 0
                             ? (r.worksheet_max > 0
                               ? <span className={`font-medium ${pctColor(fmtPct(r.worksheet_score, r.worksheet_max))}`}>{fmtPct(r.worksheet_score, r.worksheet_max)}%</span>
-                              : <span className="font-medium text-blue-600 dark:text-blue-400">{r.worksheet_count}</span>)
-                            : <span className="text-slate-300 dark:text-slate-600">-</span>}
+                              : <span className="font-medium text-brand dark:text-sky-400">{r.worksheet_count}</span>)
+                            : <span className="text-stone-300 dark:text-stone-600">-</span>}
                         </td>
                         <td className="py-2 px-2 text-center">
                           <span className={`font-bold ${pctColor(overallPct)}`}>{overallPct}%</span>
                         </td>
                         <td className="py-2 px-2">
-                          <div className="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                          <div className="w-full h-2 bg-stone-100 dark:bg-stone-700 rounded-full overflow-hidden">
                             <div className={`h-full rounded-full ${barColor(overallPct)}`} style={{ width: `${overallPct}%` }} />
                           </div>
                         </td>
@@ -628,17 +651,17 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
     <div className="space-y-4">
       {/* Filter bar */}
       <div className="flex items-center gap-2">
-        <span className="text-xs text-slate-500 dark:text-slate-400">Lọc:</span>
+        <span className="text-xs text-stone-500 dark:text-stone-400">Lọc:</span>
         {(["all", "individual", "group"] as const).map((f) => (
           <button key={f} onClick={() => setFilter(f)}
             className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${filter === f
-              ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800"
-              : "text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50"
+              ? "bg-sky-50 dark:bg-sky-900/30 text-brand dark:text-sky-400 border-sky-200 dark:border-sky-800"
+              : "text-stone-500 dark:text-stone-400 border-stone-200 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-700/50"
             }`}>
             {f === "all" ? "Tất cả" : f === "individual" ? "Cá nhân" : "Nhóm"}
           </button>
         ))}
-        <span className="ml-auto text-xs text-slate-400 dark:text-slate-500">{data.total_students} học sinh</span>
+        <span className="ml-auto text-xs text-stone-400 dark:text-stone-500">{data.total_students} học sinh</span>
       </div>
 
       {/* Lessons */}
@@ -650,54 +673,54 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
         const totalPossible = filtered.reduce((s, a) => s + a.total_students, 0);
 
         return (
-          <div key={lesson.lesson_name} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+          <div key={lesson.lesson_name} className="bg-white dark:bg-stone-800 rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden">
             <button onClick={() => toggleLesson(lesson.lesson_name)}
-              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors text-left">
-              {isExpanded ? <ChevronDown className="w-4 h-4 text-blue-500 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />}
-              <BarChart3 className="w-4 h-4 text-blue-500 flex-shrink-0" />
+              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-stone-50 dark:hover:bg-stone-700/30 transition-colors text-left">
+              {isExpanded ? <ChevronDown className="w-4 h-4 text-brand flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-stone-400 flex-shrink-0" />}
+              <BarChart3 className="w-4 h-4 text-brand flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <span className="font-semibold text-sm text-slate-800 dark:text-white truncate block">{lesson.lesson_name}</span>
-                <span className="text-xs text-slate-500 dark:text-slate-400">{filtered.length} bài · {totalSubmitted}/{totalPossible} đã nộp</span>
+                <span className="font-semibold text-sm text-stone-800 dark:text-white truncate block">{lesson.lesson_name}</span>
+                <span className="text-xs text-stone-500 dark:text-stone-400">{filtered.length} bài · {totalSubmitted}/{totalPossible} đã nộp</span>
               </div>
             </button>
 
             {isExpanded && (
-              <div className="border-t border-slate-100 dark:border-slate-700/50">
+              <div className="border-t border-stone-100 dark:border-stone-700/50">
                 {filtered.map((a) => {
                   const isExp = expandedAssignments.has(a.id);
                   const submitPct = fmtPct(a.submitted_count, a.total_students);
                   const { avg, ranking: assignRanking } = getAssignmentAvgAndRanking(a);
 
                   return (
-                    <div key={a.id} className="border-b border-slate-50 dark:border-slate-700/30 last:border-b-0">
+                    <div key={a.id} className="border-b border-stone-50 dark:border-stone-700/30 last:border-b-0">
                       {/* Assignment header */}
                       <button onClick={() => toggleAssignment(a.id)}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 pl-11 hover:bg-slate-50 dark:hover:bg-slate-700/20 transition-colors text-left">
-                        {isExp ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
-                        <div className={`flex-shrink-0 ${a.content_type === "quiz" ? "text-purple-500" : a.content_type === "code_exercise" ? "text-green-500" : "text-blue-500"}`}>
+                        className="w-full flex items-center gap-3 px-4 py-2.5 pl-11 hover:bg-stone-50 dark:hover:bg-stone-700/20 transition-colors text-left">
+                        {isExp ? <ChevronDown className="w-3.5 h-3.5 text-stone-400" /> : <ChevronRight className="w-3.5 h-3.5 text-stone-400" />}
+                        <div className={`flex-shrink-0 ${a.content_type === "quiz" ? "text-purple-500" : a.content_type === "code_exercise" ? "text-green-500" : "text-brand"}`}>
                           {contentTypeIcon(a.content_type)}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm text-slate-800 dark:text-white truncate">{a.title}</span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500">{contentTypeLabel(a.content_type)}</span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500">
+                            <span className="text-sm text-stone-800 dark:text-white truncate">{a.title}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-stone-100 dark:bg-stone-700 text-stone-500">{contentTypeLabel(a.content_type)}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-stone-100 dark:bg-stone-700 text-stone-500">
                               {a.work_type === "group"
                                 ? <span className="inline-flex items-center gap-0.5"><Users className="w-2.5 h-2.5" /> Nhóm</span>
                                 : <span className="inline-flex items-center gap-0.5"><User className="w-2.5 h-2.5" /> Cá nhân</span>}
                             </span>
                             {avg !== null && (
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${avg >= 80 ? "bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400" : avg >= 50 ? "bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400" : "bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400"}`}>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${avg >= 80 ? "bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400" : avg >= 50 ? "bg-sky-50 text-brand dark:bg-sky-900/30 dark:text-sky-400" : "bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400"}`}>
                                 TB: {avg}%
                               </span>
                             )}
                           </div>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          <div className="w-20 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                          <div className="w-20 h-1.5 bg-stone-100 dark:bg-stone-700 rounded-full overflow-hidden">
                             <div className={`h-full rounded-full ${barColor(submitPct)}`} style={{ width: `${submitPct}%` }} />
                           </div>
-                          <span className="text-xs text-slate-500 w-14 text-right">{a.submitted_count}/{a.total_students}</span>
+                          <span className="text-xs text-stone-500 w-14 text-right">{a.submitted_count}/{a.total_students}</span>
                         </div>
                       </button>
 
@@ -707,14 +730,14 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                           {/* Action buttons */}
                           <div className="flex items-center gap-2">
                             <button onClick={() => viewSubmissions(a.id, a.title, a.content_type)}
-                              className="flex items-center gap-1 px-2.5 py-1 text-xs border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-600 dark:text-slate-400">
+                              className="flex items-center gap-1 px-2.5 py-1 text-xs border border-stone-200 dark:border-stone-700 rounded-lg hover:bg-stone-50 dark:hover:bg-stone-700/50 text-stone-600 dark:text-stone-400">
                               <Eye className="w-3 h-3" /> Xem bài nộp
                             </button>
                             {/* Peer review only for worksheet */}
                             {a.content_type === "worksheet" && (
                               <button onClick={() => loadPeerReviews(a.id)}
                                 disabled={peerReviewLoading.has(a.id)}
-                                className="flex items-center gap-1 px-2.5 py-1 text-xs border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-600 dark:text-slate-400 disabled:opacity-50">
+                                className="flex items-center gap-1 px-2.5 py-1 text-xs border border-stone-200 dark:border-stone-700 rounded-lg hover:bg-stone-50 dark:hover:bg-stone-700/50 text-stone-600 dark:text-stone-400 disabled:opacity-50">
                                 {peerReviewLoading.has(a.id) ? <Loader2 className="w-3 h-3 animate-spin" /> : <MessageSquare className="w-3 h-3" />}
                                 Đánh giá chéo
                               </button>
@@ -732,32 +755,32 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                               ) : (
                                 <div className="space-y-2 max-h-80 overflow-y-auto">
                                   {peerReviews[a.id].map((pr) => (
-                                    <div key={pr.id} className="bg-white dark:bg-slate-800 rounded p-3 text-xs border border-violet-100 dark:border-violet-900/50">
+                                    <div key={pr.id} className="bg-white dark:bg-stone-800 rounded p-3 text-xs border border-violet-100 dark:border-violet-900/50">
                                       {/* Reviewer -> Reviewee header */}
                                       <div className="flex items-center justify-between mb-2 pb-2 border-b border-violet-100 dark:border-violet-900/50">
                                         <div className="flex items-center gap-2">
                                           {pr.reviewer_type === "group" ? (
                                             <div className="flex items-center gap-1.5">
-                                              <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded font-medium">
+                                              <span className="px-2 py-1 bg-sky-100 dark:bg-sky-900/30 text-brand-dark dark:text-sky-300 rounded font-medium">
                                                 {pr.reviewer_group_name || `Nhóm #${pr.reviewer_id}`}
                                               </span>
-                                              <span className="text-slate-400">→</span>
+                                              <span className="text-stone-400">→</span>
                                               <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded font-medium">
                                                 {pr.reviewee_group_name || `Nhóm #${pr.reviewee_id}`}
                                               </span>
                                             </div>
                                           ) : (
-                                            <span className="font-medium text-slate-700 dark:text-slate-300">
+                                            <span className="font-medium text-stone-700 dark:text-stone-300">
                                               {pr.reviewer_user_name || `#${pr.reviewer_id}`}
                                             </span>
                                           )}
                                         </div>
                                         <div className="flex items-center gap-2">
                                           {pr.score != null && (
-                                            <span className={`font-bold px-2 py-0.5 rounded ${pr.score >= 8 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : pr.score >= 5 ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" : "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"}`}>{pr.score}/10</span>
+                                            <span className={`font-bold px-2 py-0.5 rounded ${pr.score >= 8 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : pr.score >= 5 ? "bg-sky-100 text-brand-dark dark:bg-sky-900/30 dark:text-sky-400" : "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"}`}>{pr.score}/10</span>
                                           )}
                                           {pr.submitted_at ? (
-                                            <span className="text-slate-400">{new Date(pr.submitted_at).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+                                            <span className="text-stone-400">{new Date(pr.submitted_at).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
                                           ) : (
                                             <span className="text-amber-500 italic">Chưa nộp</span>
                                           )}
@@ -765,22 +788,22 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                                       </div>
                                       {/* Reviewer user name (for group reviews) */}
                                       {pr.reviewer_type === "group" && pr.reviewer_user_name && (
-                                        <p className="text-slate-500 mb-2 flex items-center gap-1">
+                                        <p className="text-stone-500 mb-2 flex items-center gap-1">
                                           <User className="w-3 h-3" /> Người đánh giá: {pr.reviewer_user_name}
                                         </p>
                                       )}
                                       {/* Comments */}
                                       {Object.entries(pr.comments).length > 0 ? (
-                                        <div className="space-y-1.5 bg-slate-50 dark:bg-slate-700/50 rounded p-2">
+                                        <div className="space-y-1.5 bg-stone-50 dark:bg-stone-700/50 rounded p-2">
                                           {Object.entries(pr.comments).map(([key, val]) => (
-                                            <div key={key} className="text-slate-600 dark:text-slate-400">
-                                              <span className="text-slate-500 font-medium">{key === "general" ? "Nhận xét chung" : `Câu ${key}`}: </span>
-                                              <span className="text-slate-700 dark:text-slate-300">{val}</span>
+                                            <div key={key} className="text-stone-600 dark:text-stone-400">
+                                              <span className="text-stone-500 font-medium">{key === "general" ? "Nhận xét chung" : `Câu ${key}`}: </span>
+                                              <span className="text-stone-700 dark:text-stone-300">{val}</span>
                                             </div>
                                           ))}
                                         </div>
                                       ) : (
-                                        <p className="text-slate-400 italic">Không có nhận xét</p>
+                                        <p className="text-stone-400 italic">Không có nhận xét</p>
                                       )}
                                     </div>
                                   ))}
@@ -794,17 +817,17 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                             a.group_stats.length > 0 ? (
                               <div className="space-y-3">
                                 {a.group_stats.map((gs) => (
-                                  <div key={gs.group_id} className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                                  <div key={gs.group_id} className="border border-stone-200 dark:border-stone-700 rounded-lg overflow-hidden">
                                     {/* Group header */}
-                                    <div className="bg-slate-50 dark:bg-slate-700/30 px-3 py-2 flex items-center justify-between">
+                                    <div className="bg-stone-50 dark:bg-stone-700/30 px-3 py-2 flex items-center justify-between">
                                       <div className="flex items-center gap-2">
-                                        <Users className="w-4 h-4 text-blue-500" />
-                                        <span className="text-sm font-medium text-slate-800 dark:text-white">{gs.group_name}</span>
+                                        <Users className="w-4 h-4 text-brand" />
+                                        <span className="text-sm font-medium text-stone-800 dark:text-white">{gs.group_name}</span>
                                         {gs.status === "submitted"
                                           ? <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400"><CheckCircle2 className="w-3 h-3" /> Đã nộp</span>
-                                          : <span className="inline-flex items-center gap-1 text-xs text-slate-400"><Clock className="w-3 h-3" /> {gs.status === "in_progress" ? "Đang làm" : "Chưa làm"}</span>}
+                                          : <span className="inline-flex items-center gap-1 text-xs text-stone-400"><Clock className="w-3 h-3" /> {gs.status === "in_progress" ? "Đang làm" : "Chưa làm"}</span>}
                                       </div>
-                                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                                      <div className="flex items-center gap-2 text-xs text-stone-500">
                                         {gs.submitted_at && (
                                           <span>Nộp: {new Date(gs.submitted_at).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
                                         )}
@@ -819,28 +842,28 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                                     {/* Members table - chỉ hiển thị điểm, không có nút chấm */}
                                     <table className="w-full text-xs">
                                       <thead>
-                                        <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-700/20">
-                                          <th className="text-left py-2 px-3 text-slate-500 font-medium">Mã HS</th>
-                                          <th className="text-left py-2 px-3 text-slate-500 font-medium">Họ tên</th>
-                                          <th className="text-center py-2 px-3 text-slate-500 font-medium">Điểm</th>
+                                        <tr className="border-b border-stone-200 dark:border-stone-700 bg-stone-50/50 dark:bg-stone-700/20">
+                                          <th className="text-left py-2 px-3 text-stone-500 font-medium">Mã HS</th>
+                                          <th className="text-left py-2 px-3 text-stone-500 font-medium">Họ tên</th>
+                                          <th className="text-center py-2 px-3 text-stone-500 font-medium">Điểm</th>
                                         </tr>
                                       </thead>
                                       <tbody>
                                         {gs.members.map((member) => {
                                           const memberGrade = gs.member_grades?.[String(member.student_id)];
                                           return (
-                                            <tr key={member.student_id} className="border-b border-slate-50 dark:border-slate-700/30 last:border-b-0">
-                                              <td className="py-2 px-3 text-slate-500 font-mono">{member.student_code || "-"}</td>
-                                              <td className="py-2 px-3 font-medium text-slate-800 dark:text-white">{member.full_name}</td>
+                                            <tr key={member.student_id} className="border-b border-stone-50 dark:border-stone-700/30 last:border-b-0">
+                                              <td className="py-2 px-3 text-stone-500 font-mono">{member.student_code || "-"}</td>
+                                              <td className="py-2 px-3 font-medium text-stone-800 dark:text-white">{member.full_name}</td>
                                               <td className="py-2 px-3 text-center">
                                                 {memberGrade ? (
                                                   <span className={`font-medium ${pctColor(fmtPct(memberGrade.score, 10))}`}>{memberGrade.score}/10</span>
                                                 ) : member.teacher_score != null ? (
                                                   <span className={`font-medium ${pctColor(fmtPct(member.teacher_score, 10))}`}>{member.teacher_score}/10</span>
                                                 ) : gs.status === "submitted" ? (
-                                                  <span className="text-slate-400 italic">Chưa chấm</span>
+                                                  <span className="text-stone-400 italic">Chưa chấm</span>
                                                 ) : (
-                                                  <span className="text-slate-300">-</span>
+                                                  <span className="text-stone-300">-</span>
                                                 )}
                                               </td>
                                             </tr>
@@ -850,8 +873,8 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                                     </table>
                                     {/* Code exercise test results */}
                                     {a.content_type === "code_exercise" && gs.score && (
-                                      <div className="px-3 py-2 border-t border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-700/10">
-                                        <span className="text-xs text-slate-500">Kết quả test: </span>
+                                      <div className="px-3 py-2 border-t border-stone-100 dark:border-stone-700/50 bg-stone-50/50 dark:bg-stone-700/10">
+                                        <span className="text-xs text-stone-500">Kết quả test: </span>
                                         <span className={`text-xs font-medium ${pctColor(fmtPct(gs.score.passed_tests || 0, gs.score.total_tests || 0))}`}>
                                           {gs.score.passed_tests}/{gs.score.total_tests} tests
                                         </span>
@@ -861,7 +884,7 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                                 ))}
                               </div>
                             ) : (
-                              <p className="text-xs text-slate-400 py-2">Chưa có nhóm nào làm bài</p>
+                              <p className="text-xs text-stone-400 py-2">Chưa có nhóm nào làm bài</p>
                             )
                           ) : (
                             /* ── Individual stats - chỉ xem, chấm điểm trong modal "Xem bài nộp" ── */
@@ -870,13 +893,13 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                                 <div className="overflow-x-auto">
                                   <table className="w-full text-xs">
                                     <thead>
-                                      <tr className="border-b border-slate-200 dark:border-slate-700">
-                                        {assignRanking.length > 0 && <th className="text-center py-2 pr-2 text-slate-500 font-medium w-8">#</th>}
-                                        <th className="text-left py-2 pr-3 text-slate-500 font-medium">Mã HS</th>
-                                        <th className="text-left py-2 pr-3 text-slate-500 font-medium">Họ tên</th>
-                                        <th className="text-center py-2 pr-3 text-slate-500 font-medium">Trạng thái</th>
-                                        <th className="text-center py-2 pr-3 text-slate-500 font-medium">Điểm</th>
-                                        <th className="text-right py-2 text-slate-500 font-medium">Nộp lúc</th>
+                                      <tr className="border-b border-stone-200 dark:border-stone-700">
+                                        {assignRanking.length > 0 && <th className="text-center py-2 pr-2 text-stone-500 font-medium w-8">#</th>}
+                                        <th className="text-left py-2 pr-3 text-stone-500 font-medium">Mã HS</th>
+                                        <th className="text-left py-2 pr-3 text-stone-500 font-medium">Họ tên</th>
+                                        <th className="text-center py-2 pr-3 text-stone-500 font-medium">Trạng thái</th>
+                                        <th className="text-center py-2 pr-3 text-stone-500 font-medium">Điểm</th>
+                                        <th className="text-right py-2 text-stone-500 font-medium">Nộp lúc</th>
                                       </tr>
                                     </thead>
                                     <tbody>
@@ -892,27 +915,27 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                                           ]
                                         : a.student_stats.map((ss) => ({ ...ss, _rank: 0 }))
                                       ).map((ss) => (
-                                        <tr key={ss.student_id} className="border-b border-slate-50 dark:border-slate-700/30 last:border-b-0">
+                                        <tr key={ss.student_id} className="border-b border-stone-50 dark:border-stone-700/30 last:border-b-0">
                                           {assignRanking.length > 0 && (
                                             <td className="py-2 pr-2 text-center">
                                               {ss._rank > 0 ? (
                                                 ss._rank <= 3 ? (
-                                                  <span className={ss._rank === 1 ? "text-amber-500 font-bold" : ss._rank === 2 ? "text-slate-400 font-bold" : "text-amber-700 font-bold"}>
+                                                  <span className={ss._rank === 1 ? "text-amber-500 font-bold" : ss._rank === 2 ? "text-stone-400 font-bold" : "text-amber-700 font-bold"}>
                                                     {ss._rank}
                                                   </span>
-                                                ) : <span className="text-slate-400">{ss._rank}</span>
-                                              ) : <span className="text-slate-300">-</span>}
+                                                ) : <span className="text-stone-400">{ss._rank}</span>
+                                              ) : <span className="text-stone-300">-</span>}
                                             </td>
                                           )}
-                                          <td className="py-2 pr-3 text-slate-500 font-mono">{ss.student_code || "-"}</td>
-                                          <td className="py-2 pr-3 font-medium text-slate-800 dark:text-white">{ss.student_name}</td>
+                                          <td className="py-2 pr-3 text-stone-500 font-mono">{ss.student_code || "-"}</td>
+                                          <td className="py-2 pr-3 font-medium text-stone-800 dark:text-white">{ss.student_name}</td>
                                           <td className="py-2 pr-3 text-center">
                                             {ss.status === "submitted"
                                               ? <span className="inline-flex items-center gap-1 text-green-600 dark:text-green-400"><CheckCircle2 className="w-3 h-3" /> Đã nộp</span>
-                                              : <span className="inline-flex items-center gap-1 text-slate-400"><Clock className="w-3 h-3" /> {ss.status === "in_progress" ? "Đang làm" : "Chưa làm"}</span>}
+                                              : <span className="inline-flex items-center gap-1 text-stone-400"><Clock className="w-3 h-3" /> {ss.status === "in_progress" ? "Đang làm" : "Chưa làm"}</span>}
                                           </td>
                                           <td className="py-2 pr-3 text-center">{renderScore(ss)}</td>
-                                          <td className="py-2 text-right text-slate-400">
+                                          <td className="py-2 text-right text-stone-400">
                                             {ss.submitted_at ? new Date(ss.submitted_at).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "-"}
                                           </td>
                                         </tr>
@@ -922,7 +945,7 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                                 </div>
                               </div>
                             ) : (
-                              <p className="text-xs text-slate-400 py-2">Chưa có học sinh nào làm bài</p>
+                              <p className="text-xs text-stone-400 py-2">Chưa có học sinh nào làm bài</p>
                             )
                           )}
                         </div>
@@ -968,11 +991,11 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
         return (
           <div className="mb-4">
             {/* Blue header - giống student view */}
-            <div className="bg-blue-600 px-6 py-4 rounded-t-lg">
+            <div className="bg-brand px-6 py-4 rounded-t-lg">
               <h3 className="text-white font-bold text-xl">{title}</h3>
             </div>
             {/* Content area with blue border */}
-            <div className="p-6 bg-white dark:bg-slate-800 border-2 border-blue-600 border-t-0 rounded-b-lg shadow-sm">
+            <div className="p-6 bg-white dark:bg-stone-800 border-2 border-brand border-t-0 rounded-b-lg shadow-sm">
               {worksheetBlocks.map((block, blockIdx) => {
                 if (block.type === "markdown") {
                   return (
@@ -1001,7 +1024,7 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                     <div className="mt-1 mb-6 ml-2">
                       <div className="space-y-0">
                         {[...Array(lineCount)].map((_, lineIndex) => (
-                          <div key={`${answerKey}-line-${lineIndex}`} className="w-full border-b border-gray-400">
+                          <div key={`${answerKey}-line-${lineIndex}`} className="w-full border-b border-stone-400">
                             <div className="px-1 py-2 text-base text-black dark:text-white" style={{ lineHeight: "1.8" }}>
                               {answerLines[lineIndex] || "\u00A0"}
                             </div>
@@ -1021,10 +1044,10 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
       if (content?.questions && content.questions.length > 0) {
         return (
           <div className="mb-4">
-            <div className="bg-blue-600 px-6 py-4 rounded-t-lg">
+            <div className="bg-brand px-6 py-4 rounded-t-lg">
               <h3 className="text-white font-bold text-xl">{title}</h3>
             </div>
-            <div className="p-6 bg-white dark:bg-slate-800 border-2 border-blue-600 border-t-0 rounded-b-lg shadow-sm">
+            <div className="p-6 bg-white dark:bg-stone-800 border-2 border-brand border-t-0 rounded-b-lg shadow-sm">
               {content.questions.map((q: any, idx: number) => {
                 const qId = q.id || String(idx + 1);
                 const answer = safeAnswers[qId] || safeAnswers[`q_${idx + 1}`] || safeAnswers[String(idx + 1)] || "";
@@ -1042,7 +1065,7 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                     <div className="mt-1 mb-6 ml-2">
                       <div className="space-y-0">
                         {[...Array(lineCount)].map((_, lineIndex) => (
-                          <div key={`${qId}-line-${lineIndex}`} className="w-full border-b border-gray-400">
+                          <div key={`${qId}-line-${lineIndex}`} className="w-full border-b border-stone-400">
                             <div className="px-1 py-2 text-base text-black dark:text-white" style={{ lineHeight: "1.8" }}>
                               {answerLines[lineIndex] || "\u00A0"}
                             </div>
@@ -1063,11 +1086,11 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
       if (!hasAnswers) {
         return (
           <div className="mb-4">
-            <div className="bg-blue-600 px-6 py-4 rounded-t-lg">
+            <div className="bg-brand px-6 py-4 rounded-t-lg">
               <h3 className="text-white font-bold text-xl">{fallbackTitle || "Phiếu học tập"}</h3>
             </div>
-            <div className="p-6 bg-white dark:bg-slate-800 border-2 border-blue-600 border-t-0 rounded-b-lg">
-              <p className="text-sm text-slate-400 italic text-center">Chưa có câu trả lời</p>
+            <div className="p-6 bg-white dark:bg-stone-800 border-2 border-brand border-t-0 rounded-b-lg">
+              <p className="text-sm text-stone-400 italic text-center">Chưa có câu trả lời</p>
             </div>
           </div>
         );
@@ -1076,10 +1099,10 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
       // Fallback: raw answers with blue header style
       return (
         <div className="mb-4">
-          <div className="bg-blue-600 px-6 py-4 rounded-t-lg">
+          <div className="bg-brand px-6 py-4 rounded-t-lg">
             <h3 className="text-white font-bold text-xl">{fallbackTitle || "Phiếu học tập"}</h3>
           </div>
-          <div className="p-6 bg-white dark:bg-slate-800 border-2 border-blue-600 border-t-0 rounded-b-lg">
+          <div className="p-6 bg-white dark:bg-stone-800 border-2 border-brand border-t-0 rounded-b-lg">
             {Object.entries(safeAnswers).map(([key, val], idx) => {
               const answerText = typeof val === "string" ? val : JSON.stringify(val);
               const answerLines = answerText.split("\n");
@@ -1094,7 +1117,7 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                   <div className="mt-1 mb-6 ml-2">
                     <div className="space-y-0">
                       {[...Array(lineCount)].map((_, lineIndex) => (
-                        <div key={`${key}-line-${lineIndex}`} className="w-full border-b border-gray-400">
+                        <div key={`${key}-line-${lineIndex}`} className="w-full border-b border-stone-400">
                           <div className="px-1 py-2 text-base text-black dark:text-white" style={{ lineHeight: "1.8" }}>
                             {answerLines[lineIndex] || "\u00A0"}
                           </div>
@@ -1102,6 +1125,112 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                       ))}
                     </div>
                   </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    };
+
+    // Render quiz answers - hiển thị câu hỏi trắc nghiệm đầy đủ với đáp án
+    const renderQuizAnswers = (answers: Record<string, any>, fallbackTitle?: string) => {
+      const safeAnswers = answers || {};
+      const questions = content?.questions || [];
+      const title = fallbackTitle || content?.title || "Trắc nghiệm";
+
+      if (questions.length === 0) {
+        return renderWorksheetAnswers(answers, fallbackTitle);
+      }
+
+      // Count correct answers
+      let correctCount = 0;
+      questions.forEach((q: any) => {
+        const qId = q.id || String(questions.indexOf(q) + 1);
+        const studentAnswer = safeAnswers[qId] || safeAnswers[`q_${questions.indexOf(q) + 1}`] || "";
+        if (q.correct_answer && studentAnswer === q.correct_answer) correctCount++;
+      });
+
+      return (
+        <div className="mb-4">
+          {/* Header */}
+          <div className="bg-brand px-6 py-4 rounded-t-lg flex items-center justify-between">
+            <h3 className="text-white font-bold text-xl">{title}</h3>
+            <span className="text-white/90 text-sm font-medium bg-white/20 px-3 py-1 rounded-full">
+              {correctCount}/{questions.length} đúng
+            </span>
+          </div>
+          {/* Questions */}
+          <div className="p-6 bg-white dark:bg-stone-800 border-2 border-brand border-t-0 rounded-b-lg shadow-sm space-y-6">
+            {questions.map((q: any, idx: number) => {
+              const qId = q.id || String(idx + 1);
+              const studentAnswer = safeAnswers[qId] || safeAnswers[`q_${idx + 1}`] || safeAnswers[String(idx + 1)] || "";
+              const correctAnswer = q.correct_answer || "";
+              const isCorrect = studentAnswer === correctAnswer;
+              const questionText = q.question || q.text || q.title || `Câu hỏi ${idx + 1}`;
+              const options = q.options || {};
+
+              return (
+                <div key={qId}>
+                  {/* Question text */}
+                  <div className="flex items-start gap-2 mb-3">
+                    <span className="font-bold text-stone-700 dark:text-stone-300 shrink-0">Câu {idx + 1}.</span>
+                    <span className="text-stone-800 dark:text-stone-200">{questionText}</span>
+                  </div>
+                  {/* Options */}
+                  <div className="space-y-2 ml-1">
+                    {Object.entries(options).map(([key, value]) => {
+                      const isStudentChoice = studentAnswer === key;
+                      const isCorrectOption = correctAnswer === key;
+                      let borderClass = "border-stone-200 dark:border-stone-600 bg-white dark:bg-stone-700/50";
+                      let textClass = "text-stone-700 dark:text-stone-300";
+                      let badgeClass = "bg-stone-100 dark:bg-stone-600 text-stone-500 dark:text-stone-400";
+
+                      if (isStudentChoice && isCorrectOption) {
+                        // Student chose correctly
+                        borderClass = "border-green-400 bg-green-50 dark:bg-green-900/30 dark:border-green-700";
+                        textClass = "text-green-800 dark:text-green-200";
+                        badgeClass = "bg-green-500 text-white";
+                      } else if (isStudentChoice && !isCorrectOption) {
+                        // Student chose wrong
+                        borderClass = "border-red-400 bg-red-50 dark:bg-red-900/30 dark:border-red-700";
+                        textClass = "text-red-800 dark:text-red-200";
+                        badgeClass = "bg-red-500 text-white";
+                      } else if (isCorrectOption) {
+                        // The correct answer (not chosen by student)
+                        borderClass = "border-green-300 bg-green-50/50 dark:bg-green-900/20 dark:border-green-800";
+                        textClass = "text-green-700 dark:text-green-300";
+                        badgeClass = "bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400";
+                      }
+
+                      return (
+                        <div
+                          key={key}
+                          className={`flex items-center gap-3 p-3 rounded-lg border-2 ${borderClass} transition-all`}
+                        >
+                          <span className={`w-7 h-7 flex items-center justify-center rounded-full text-xs font-bold shrink-0 ${badgeClass}`}>
+                            {key}
+                          </span>
+                          <span className={`text-sm ${textClass}`}>{String(value)}</span>
+                          {isStudentChoice && isCorrectOption && (
+                            <CheckCircle2 className="w-4 h-4 text-green-500 ml-auto shrink-0" />
+                          )}
+                          {isStudentChoice && !isCorrectOption && (
+                            <X className="w-4 h-4 text-red-500 ml-auto shrink-0" />
+                          )}
+                          {!isStudentChoice && isCorrectOption && studentAnswer && (
+                            <CheckCircle2 className="w-4 h-4 text-green-400 ml-auto shrink-0" />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* Result indicator */}
+                  {studentAnswer && (
+                    <div className={`mt-2 text-xs font-medium ml-1 ${isCorrect ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}>
+                      {isCorrect ? "✓ Đúng" : `✗ Sai — Đáp án đúng: ${correctAnswer}`}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1165,35 +1294,35 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
 
     return (
       <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setViewingSubmission(null)}>
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl max-w-4xl w-full max-h-[85vh] overflow-hidden flex flex-col"
+        <div className="bg-white dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 shadow-xl max-w-4xl w-full max-h-[85vh] overflow-hidden flex flex-col"
           onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-700 dark:to-slate-700">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-stone-200 dark:border-stone-700 bg-sky-50 dark:bg-stone-700">
             <div>
-              <h3 className="text-sm font-semibold text-slate-800 dark:text-white">{assignmentTitle}</h3>
-              <p className="text-xs text-slate-500">{subs.length} bài nộp · {contentTypeLabel(contentType)}</p>
+              <h3 className="text-sm font-semibold text-stone-800 dark:text-white">{assignmentTitle}</h3>
+              <p className="text-xs text-stone-500">{subs.length} bài nộp · {contentTypeLabel(contentType)}</p>
             </div>
-            <button onClick={() => setViewingSubmission(null)} className="p-1.5 hover:bg-white/50 dark:hover:bg-slate-600 rounded-lg">
-              <X className="w-5 h-5 text-slate-500" />
+            <button onClick={() => setViewingSubmission(null)} className="p-1.5 hover:bg-white/50 dark:hover:bg-stone-600 rounded-lg">
+              <X className="w-5 h-5 text-stone-500" />
             </button>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {subs.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-12">Chưa có bài nộp nào</p>
+              <p className="text-sm text-stone-400 text-center py-12">Chưa có bài nộp nào</p>
             ) : subs.map((sub: any, idx: number) => (
-              <div key={sub.id || idx} className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+              <div key={sub.id || idx} className="border border-stone-200 dark:border-stone-700 rounded-xl overflow-hidden">
                 {/* Header */}
-                <div className="bg-slate-50 dark:bg-slate-700/50 px-4 py-3 flex items-center justify-between">
+                <div className="bg-stone-50 dark:bg-stone-700/50 px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">
-                      {subData.work_type === "group" ? <Users className="w-4 h-4 text-blue-600" /> : <User className="w-4 h-4 text-blue-600" />}
+                    <div className="w-8 h-8 rounded-full bg-sky-100 dark:bg-sky-900/50 flex items-center justify-center">
+                      {subData.work_type === "group" ? <Users className="w-4 h-4 text-brand" /> : <User className="w-4 h-4 text-brand" />}
                     </div>
                     <div>
-                      <span className="font-medium text-slate-800 dark:text-white">
+                      <span className="font-medium text-stone-800 dark:text-white">
                         {subData.work_type === "group" ? sub.group_name : sub.student_name}
                       </span>
                       {sub.submitted_at && (
-                        <p className="text-xs text-slate-400">Nộp: {new Date(sub.submitted_at).toLocaleString("vi-VN")}</p>
+                        <p className="text-xs text-stone-400">Nộp: {new Date(sub.submitted_at).toLocaleString("vi-VN")}</p>
                       )}
                     </div>
                   </div>
@@ -1202,7 +1331,7 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                       <CheckCircle2 className="w-3 h-3" /> Đã nộp
                     </span>
                   ) : (
-                    <span className="text-slate-400 text-xs">{sub.status === "in_progress" ? "Đang làm" : sub.status}</span>
+                    <span className="text-stone-400 text-xs">{sub.status === "in_progress" ? "Đang làm" : sub.status}</span>
                   )}
                 </div>
 
@@ -1210,31 +1339,34 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                 <div className="p-4">
                   {contentType === "code_exercise" && sub.answers?.code ? (
                     <div>
-                      <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-100 dark:border-slate-700">
+                      <div className="flex items-center gap-2 mb-3 pb-2 border-b border-stone-100 dark:border-stone-700">
                         <Code2 className="w-4 h-4 text-green-500" />
-                        <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Code đã nộp</h4>
+                        <h4 className="text-sm font-semibold text-stone-700 dark:text-stone-200">Code đã nộp</h4>
                       </div>
-                      <pre className="bg-slate-900 text-green-400 text-xs p-4 rounded-lg overflow-x-auto max-h-64 whitespace-pre-wrap">{sub.answers.code}</pre>
+                      <pre className="bg-stone-900 text-green-400 text-xs p-4 rounded-lg overflow-x-auto max-h-64 whitespace-pre-wrap">{sub.answers.code}</pre>
                       {sub.answers.test_result && (
                         <div className="mt-3 flex items-center gap-3 text-sm">
                           <span className={`font-medium ${sub.answers.test_result.status === "passed" ? "text-green-600" : "text-red-500"}`}>
                             {sub.answers.test_result.status === "passed" ? "✓ Passed" : "✗ Failed"}
                           </span>
-                          <span className="text-slate-500">
+                          <span className="text-stone-500">
                             {sub.answers.test_result.passed_tests}/{sub.answers.test_result.total_tests} tests
                           </span>
                         </div>
                       )}
                     </div>
+                  ) : contentType === "quiz" ? (
+                    /* Quiz - hiển thị câu hỏi trắc nghiệm đầy đủ */
+                    renderQuizAnswers(sub.answers, assignmentTitle)
                   ) : (
-                    /* Worksheet/Quiz - render với style giống học sinh */
+                    /* Worksheet - render với style giống học sinh */
                     renderWorksheetAnswers(sub.answers, assignmentTitle)
                   )}
                 </div>
 
                 {/* Grading section - ONLY in modal */}
                 {sub.status === "submitted" && (
-                  <div className="border-t border-slate-200 dark:border-slate-700 bg-amber-50/50 dark:bg-amber-900/10 p-4">
+                  <div className="border-t border-stone-200 dark:border-stone-700 bg-amber-50/50 dark:bg-amber-900/10 p-4">
                     <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-3 flex items-center gap-1">
                       <Pencil className="w-3 h-3" /> Chấm điểm
                     </p>
@@ -1258,12 +1390,12 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                             console.log(`[DISPLAY] Member ${member.full_name} (student_id=${member.student_id}): grade lookup key="${String(member.student_id)}", found grade=`, memberGrade);
                             return (
                               <tr key={member.student_id} className="border-b border-amber-100 dark:border-amber-900/30 last:border-b-0">
-                                <td className="py-2.5 px-2 font-medium text-slate-800 dark:text-white">{member.full_name}</td>
+                                <td className="py-2.5 px-2 font-medium text-stone-800 dark:text-white">{member.full_name}</td>
                                 <td className="py-2.5 px-2 text-center">
                                   {memberGrade?.score != null ? (
                                     <span className={`font-bold ${pctColor(fmtPct(memberGrade.score, 10))}`}>{memberGrade.score}/10</span>
                                   ) : (
-                                    <span className="text-slate-400 italic text-xs">Chưa chấm</span>
+                                    <span className="text-stone-400 italic text-xs">Chưa chấm</span>
                                   )}
                                 </td>
                                 <td className="py-2.5 px-2 text-center">
@@ -1271,20 +1403,20 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                                     <div className="flex items-center gap-1 justify-center">
                                       <input type="number" min="0" max="10" step="0.5" value={gradingScore}
                                         onChange={(e) => setGradingScore(e.target.value)}
-                                        className="w-16 px-2 py-1 text-sm border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-slate-700 text-center"
+                                        className="w-16 px-2 py-1 text-sm border border-sky-300 dark:border-sky-700 rounded bg-white dark:bg-stone-700 text-center"
                                         placeholder="0-10" autoFocus
                                       />
                                       <button onClick={handleSaveGrade} disabled={gradingSaving}
                                         className="p-1 text-green-600 hover:bg-green-100 dark:hover:bg-green-900/30 rounded disabled:opacity-50">
                                         {gradingSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                                       </button>
-                                      <button onClick={() => setGradingKey(null)} className="p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded">
+                                      <button onClick={() => setGradingKey(null)} className="p-1 text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-700 rounded">
                                         <X className="w-4 h-4" />
                                       </button>
                                     </div>
                                   ) : (
                                     <button onClick={() => startGrading(assignmentId, sub.id, "group_member", memberGrade?.score, memberGrade?.comment, member.student_id)}
-                                      className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium border border-blue-300 dark:border-blue-700 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                                      className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium border border-sky-300 dark:border-sky-700 rounded-lg hover:bg-sky-50 dark:hover:bg-sky-900/30 text-brand dark:text-sky-400">
                                       <Pencil className="w-3 h-3" /> {memberGrade?.score != null ? "Sửa" : "Chấm điểm"}
                                     </button>
                                   )}
@@ -1297,14 +1429,38 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                     ) : (
                       // Individual: grade the submission
                       <div className="flex items-center gap-3 flex-wrap">
-                        <span className="text-sm text-slate-600 dark:text-slate-400">Điểm GV:</span>
+                        {/* Auto-score info for quiz/code */}
+                        {contentType === "quiz" && sub.answers && content?.questions && (
+                          <span className="text-sm text-stone-500 dark:text-stone-400">
+                            Tự chấm: {(() => {
+                              let c = 0;
+                              const qs = content.questions || [];
+                              qs.forEach((q: any) => {
+                                const qId = q.id || String(qs.indexOf(q) + 1);
+                                const sa = sub.answers?.[qId] || sub.answers?.[`q_${qs.indexOf(q) + 1}`] || "";
+                                if (q.correct_answer && sa === q.correct_answer) c++;
+                              });
+                              return `${c}/${qs.length} đúng`;
+                            })()}
+                          </span>
+                        )}
+                        {contentType === "code_exercise" && sub.answers?.test_result && (
+                          <span className="text-sm text-stone-500 dark:text-stone-400">
+                            Tự chấm: {sub.answers.test_result.passed_tests}/{sub.answers.test_result.total_tests} tests
+                            {sub.answers.test_result.status === "passed" ? " ✓" : " ✗"}
+                          </span>
+                        )}
+                        {(contentType === "quiz" || contentType === "code_exercise") && (
+                          <span className="text-stone-300 dark:text-stone-600">|</span>
+                        )}
+                        <span className="text-sm text-stone-600 dark:text-stone-400">Điểm GV:</span>
                         {sub.teacher_score != null ? (
                           <span className={`text-lg font-bold ${pctColor(fmtPct(sub.teacher_score, 10))}`}>{sub.teacher_score}/10</span>
                         ) : (
-                          <span className="text-sm text-slate-400 italic">Chưa chấm</span>
+                          <span className="text-sm text-stone-400 italic">Chưa chấm</span>
                         )}
                         {sub.teacher_comment && (
-                          <span className="text-sm text-slate-500 italic">"{sub.teacher_comment}"</span>
+                          <span className="text-sm text-stone-500 italic">"{sub.teacher_comment}"</span>
                         )}
                         {(() => {
                           const gKey = `${assignmentId}-individual-${sub.id}`;
@@ -1313,12 +1469,12 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                             <div className="flex items-center gap-2 ml-auto">
                               <input type="number" min="0" max="10" step="0.5" value={gradingScore}
                                 onChange={(e) => setGradingScore(e.target.value)}
-                                className="w-20 px-2 py-1.5 text-sm border border-blue-300 dark:border-blue-700 rounded-lg bg-white dark:bg-slate-700"
+                                className="w-20 px-2 py-1.5 text-sm border border-sky-300 dark:border-sky-700 rounded-lg bg-white dark:bg-stone-700"
                                 placeholder="0-10" autoFocus
                               />
                               <input type="text" value={gradingComment}
                                 onChange={(e) => setGradingComment(e.target.value)}
-                                className="flex-1 min-w-[150px] px-2 py-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-700"
+                                className="flex-1 min-w-[150px] px-2 py-1.5 text-sm border border-stone-200 dark:border-stone-700 rounded-lg bg-white dark:bg-stone-700"
                                 placeholder="Nhận xét..."
                               />
                               <button onClick={handleSaveGrade} disabled={gradingSaving}
@@ -1327,13 +1483,13 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                                 Lưu
                               </button>
                               <button onClick={() => setGradingKey(null)}
-                                className="px-3 py-1.5 text-sm text-slate-500 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">
+                                className="px-3 py-1.5 text-sm text-stone-500 border border-stone-200 dark:border-stone-700 rounded-lg hover:bg-stone-50 dark:hover:bg-stone-700">
                                 Hủy
                               </button>
                             </div>
                           ) : (
                             <button onClick={() => startGrading(assignmentId, sub.id, "individual", sub.teacher_score, sub.teacher_comment)}
-                              className="ml-auto flex items-center gap-1 px-3 py-1.5 text-sm font-medium border border-blue-300 dark:border-blue-700 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                              className="ml-auto flex items-center gap-1 px-3 py-1.5 text-sm font-medium border border-sky-300 dark:border-sky-700 rounded-lg hover:bg-sky-50 dark:hover:bg-sky-900/30 text-brand dark:text-sky-400">
                               <Pencil className="w-4 h-4" /> {sub.teacher_score != null ? "Sửa điểm" : "Chấm điểm"}
                             </button>
                           );
@@ -1356,7 +1512,7 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
   return (
     <div className="space-y-4">
       {/* Tab navigation - 2 tabs */}
-      <div className="flex items-center gap-1 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-1">
+      <div className="flex items-center gap-1 bg-white dark:bg-stone-800 rounded-lg border border-stone-200 dark:border-stone-700 p-1">
         {([
           { key: "overview" as const, label: "Tổng quan", icon: TrendingUp },
           { key: "details" as const, label: "Chi tiết", icon: BarChart3 },
@@ -1364,8 +1520,8 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
           <button key={key} onClick={() => setActiveTab(key)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors flex-1 justify-center ${
               activeTab === key
-                ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium"
-                : "text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                ? "bg-sky-50 dark:bg-sky-900/30 text-brand dark:text-sky-400 font-medium"
+                : "text-stone-500 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-700/50"
             }`}>
             <Icon className="w-3.5 h-3.5" />
             {label}
@@ -1382,15 +1538,15 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
       {/* Member evaluation viewer modal */}
       {viewingEvaluations && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setViewingEvaluations(null)}>
-          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl max-w-lg w-full max-h-[70vh] overflow-hidden flex flex-col"
+          <div className="bg-white dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 shadow-xl max-w-lg w-full max-h-[70vh] overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-amber-50 dark:bg-amber-900/20">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-stone-200 dark:border-stone-700 bg-amber-50 dark:bg-amber-900/20">
               <div className="flex items-center gap-2">
                 <Star className="w-4 h-4 text-amber-500" />
-                <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Đánh giá thành viên: {viewingEvaluations.groupName}</h3>
+                <h3 className="text-sm font-semibold text-stone-800 dark:text-white">Đánh giá thành viên: {viewingEvaluations.groupName}</h3>
               </div>
               <button onClick={() => setViewingEvaluations(null)} className="p-1 hover:bg-amber-100 dark:hover:bg-amber-900/30 rounded">
-                <X className="w-4 h-4 text-slate-400" />
+                <X className="w-4 h-4 text-stone-400" />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -1406,18 +1562,18 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                         const target = viewingEvaluations.members.find((m) => m.student_id === ev.student_id);
                         const isSelfEval = ev.student_id === Number(evaluatorId);
                         return (
-                          <div key={idx} className={`flex items-start gap-2 rounded p-2 ${isSelfEval ? 'bg-purple-50 dark:bg-purple-900/20' : 'bg-white dark:bg-slate-700/50'}`}>
+                          <div key={idx} className={`flex items-start gap-2 rounded p-2 ${isSelfEval ? 'bg-purple-50 dark:bg-purple-900/20' : 'bg-white dark:bg-stone-700/50'}`}>
                             <div className="flex-1">
                               <div className="flex items-center gap-2">
-                                <span className={`text-sm font-medium ${isSelfEval ? 'text-purple-700 dark:text-purple-300' : 'text-slate-700 dark:text-slate-300'}`}>
+                                <span className={`text-sm font-medium ${isSelfEval ? 'text-purple-700 dark:text-purple-300' : 'text-stone-700 dark:text-stone-300'}`}>
                                   {target?.full_name || `#${ev.student_id}`}
                                 </span>
                                 {isSelfEval && <span className="text-[10px] px-1 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded">Tự đánh giá</span>}
                                 <span className="text-amber-500 text-sm">{"★".repeat(ev.rating)}{"☆".repeat(5 - ev.rating)}</span>
-                                <span className="text-xs text-slate-400">({ev.rating}/5)</span>
+                                <span className="text-xs text-stone-400">({ev.rating}/5)</span>
                               </div>
                               {ev.comment && (
-                                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 italic">"{ev.comment}"</p>
+                                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400 italic">"{ev.comment}"</p>
                               )}
                             </div>
                           </div>
@@ -1428,7 +1584,7 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                 );
               })}
               {Object.keys(viewingEvaluations.evaluations).length === 0 && (
-                <p className="text-sm text-slate-400 text-center py-8">Chưa có đánh giá nào</p>
+                <p className="text-sm text-stone-400 text-center py-8">Chưa có đánh giá nào</p>
               )}
             </div>
           </div>
@@ -1438,9 +1594,9 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
       {/* Loading overlay for submission fetch */}
       {submissionLoading && (
         <div className="fixed inset-0 z-50 bg-black/20 flex items-center justify-center">
-          <div className="bg-white dark:bg-slate-800 rounded-lg p-4 flex items-center gap-3 shadow-lg">
-            <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
-            <span className="text-sm text-slate-600 dark:text-slate-400">Đang tải bài nộp...</span>
+          <div className="bg-white dark:bg-stone-800 rounded-lg p-4 flex items-center gap-3 shadow-lg">
+            <Loader2 className="w-5 h-5 animate-spin text-brand" />
+            <span className="text-sm text-stone-600 dark:text-stone-400">Đang tải bài nộp...</span>
           </div>
         </div>
       )}

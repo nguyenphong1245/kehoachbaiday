@@ -5,6 +5,21 @@ import { LogOut, BookOpen, Settings } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { User as UserType } from '@/types/auth'
 
+const ROLE_PRIORITY: Record<string, { order: number; label: string }> = {
+  admin: { order: 0, label: "Admin" },
+  teacher: { order: 1, label: "Giáo viên" },
+  user: { order: 1, label: "Giáo viên" },
+  student: { order: 2, label: "Học sinh" },
+};
+
+const getHighestRole = (roles: { name: string }[]): string => {
+  if (!roles.length) return "";
+  const sorted = [...roles].sort(
+    (a, b) => (ROLE_PRIORITY[a.name]?.order ?? 99) - (ROLE_PRIORITY[b.name]?.order ?? 99)
+  );
+  return ROLE_PRIORITY[sorted[0].name]?.label ?? sorted[0].name;
+};
+
 const User: React.FC = () => {
   const [open, setOpen] = useState(false)
   const [user, setUser] = useState<UserType | null>(null)
@@ -43,7 +58,7 @@ const User: React.FC = () => {
   }
 
   if (!user) {
-    return <Link to="/login" className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-brand">Đăng nhập</Link>
+    return <Link to="/login" className="text-sm font-medium text-stone-700 dark:text-stone-300 hover:text-brand">Đăng nhập</Link>
   }
 
   const displayEmail = user.email || 'Chưa có email'
@@ -59,7 +74,7 @@ const User: React.FC = () => {
       {/* Avatar Button */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center justify-center w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 font-medium text-sm hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+        className="flex items-center justify-center w-9 h-9 rounded-full bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 font-medium text-sm hover:bg-stone-200 dark:hover:bg-stone-700 transition-colors"
         aria-label="Menu người dùng"
       >
         {getInitials(displayEmail)}
@@ -75,20 +90,20 @@ const User: React.FC = () => {
 
       {/* Sidebar Panel - Slide in from right */}
       <div
-        className={`fixed top-0 right-0 h-screen w-72 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 shadow-lg z-50 transform transition-all duration-300 ease-out flex flex-col overflow-hidden ${
+        className={`fixed top-0 right-0 h-screen w-72 bg-white dark:bg-stone-900 border-l border-stone-200 dark:border-stone-700 shadow-lg z-50 transform transition-all duration-300 ease-out flex flex-col overflow-hidden ${
           open ? 'translate-x-0 opacity-100 visible' : 'translate-x-full opacity-0 invisible'
         }`}
       >
         {/* Header với avatar và info */}
-        <div className="flex-shrink-0 px-5 py-5 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
+        <div className="flex-shrink-0 px-5 py-5 border-b border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800/50">
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-semibold text-base">
+            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-stone-200 dark:bg-stone-700 text-stone-600 dark:text-stone-300 font-semibold text-base">
               {getInitials(displayEmail)}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{displayEmail}</p>
+              <p className="text-sm font-medium text-stone-800 dark:text-stone-200 truncate">{displayEmail}</p>
               {user.roles && user.roles.length > 0 && (
-                <p className="text-xs text-gray-500 dark:text-gray-400">{user.roles.map(r => r.name).join(', ')}</p>
+                <p className="text-xs text-stone-500 dark:text-stone-400">{getHighestRole(user.roles)}</p>
               )}
             </div>
           </div>
@@ -97,22 +112,22 @@ const User: React.FC = () => {
         {/* Menu Items */}
         <div className="flex-1 overflow-y-auto py-2">
           <button
-            className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            className="w-full flex items-center gap-3 px-5 py-3 text-sm text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors"
             onClick={() => { setOpen(false); navigate('/lesson-builder'); }}
           >
-            <BookOpen className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+            <BookOpen className="w-4 h-4 text-stone-500 dark:text-stone-400" />
             <span>Soạn KHBD</span>
           </button>
 
           <button
-            className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            className="w-full flex items-center gap-3 px-5 py-3 text-sm text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors"
             onClick={() => { setOpen(false); navigate('/account'); }}
           >
-            <Settings className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+            <Settings className="w-4 h-4 text-stone-500 dark:text-stone-400" />
             <span>Cài đặt tài khoản</span>
           </button>
 
-          <div className="my-2 mx-5 border-t border-gray-100 dark:border-gray-800"></div>
+          <div className="my-2 mx-5 border-t border-stone-100 dark:border-stone-800"></div>
 
           <button
             className="w-full flex items-center gap-3 px-5 py-3 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"

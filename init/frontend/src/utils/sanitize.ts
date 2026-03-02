@@ -24,7 +24,7 @@ export function sanitizeHTML(dirty: string): string {
     ],
     ALLOWED_ATTR: [
       "href", "target", "rel", "src", "alt", "width", "height",
-      "style", "class", "colspan", "rowspan",
+      "style", "class", "colspan", "rowspan", "start",
       "contenteditable", "data-*",
       // SVG attributes for inline mindmap rendering
       "viewBox", "xmlns", "xmlns:xlink", "fill", "stroke", "stroke-width",

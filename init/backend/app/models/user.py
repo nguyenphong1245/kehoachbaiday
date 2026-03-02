@@ -44,11 +44,6 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
-    chat_conversations = relationship(
-        "ChatConversation",
-        back_populates="user",
-        cascade="all, delete-orphan",
-    )
     saved_lesson_plans = relationship(
         "SavedLessonPlan",
         back_populates="user",

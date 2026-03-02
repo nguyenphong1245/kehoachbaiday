@@ -8,10 +8,18 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          DEFAULT: "#0ea5e9", // sky-500
-          dark: "#0284c7", // sky-600
-          light: "#38bdf8", // sky-400
+          DEFAULT: "#0284c7", // sky-600 — xanh nước biển vừa
+          dark: "#0369a1",    // sky-700
+          light: "#0ea5e9",   // sky-500
         },
+      },
+      borderRadius: {
+        '2xl': '1rem',
+        '3xl': '1.5rem',
+      },
+      boxShadow: {
+        'soft': '0 2px 15px -3px rgba(0,0,0,0.07), 0 10px 20px -2px rgba(0,0,0,0.04)',
+        'soft-lg': '0 4px 25px -5px rgba(0,0,0,0.1), 0 10px 30px -5px rgba(0,0,0,0.05)',
       },
       typography: {
         DEFAULT: {

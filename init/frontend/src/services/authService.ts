@@ -64,7 +64,26 @@ function processQueue(error: unknown) {
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean; _csrfRetry?: boolean };
+
+    // Handle 403 CSRF errors - refresh CSRF token and retry
+    if (
+      error.response?.status === 403 &&
+      originalRequest &&
+      !originalRequest._csrfRetry &&
+      (error.response?.data as { detail?: string })?.detail?.includes("CSRF")
+    ) {
+      originalRequest._csrfRetry = true;
+      try {
+        // Get a new CSRF token
+        await api.get("/auth/csrf-token");
+        // Retry the original request with new CSRF token
+        return api(originalRequest);
+      } catch {
+        // CSRF refresh failed, continue with original error
+        return Promise.reject(error);
+      }
+    }
 
     // Only attempt refresh for 401 errors (not on auth endpoints themselves)
     if (

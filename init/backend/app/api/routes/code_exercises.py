@@ -33,12 +33,9 @@ from app.schemas.code_exercise import (
     ExtractCodeExercisesRequest,
     ExtractedExerciseItem,
     ExtractCodeExercisesResponse,
-    HintRequest,
-    HintResponse,
 )
 from app.services.piston_service import execute_code, run_test_cases
 from app.services.code_extraction_service import get_code_extraction_service
-from app.services.hint_service import get_hint_service
 from app.core.config import get_settings
 
 router = APIRouter(prefix="/code-exercises", tags=["Code Exercises"])
@@ -201,6 +198,16 @@ async def delete_exercise(
     exercise = result.scalar_one_or_none()
     if not exercise:
         raise HTTPException(status_code=404, detail="Bài tập không tồn tại")
+
+    # Cascade: xóa học liệu tham chiếu trong các lớp học
+    from app.models.classroom_material import ClassroomMaterial
+    from sqlalchemy import delete as sql_delete
+    await db.execute(
+        sql_delete(ClassroomMaterial).where(
+            ClassroomMaterial.content_type == "code_exercise",
+            ClassroomMaterial.content_id == exercise_id,
+        )
+    )
 
     await db.delete(exercise)
     await db.commit()
@@ -466,6 +473,8 @@ async def update_exercise_by_share_code(
         exercise.starter_code = request.starter_code
     if request.test_cases is not None:
         exercise.test_cases = [tc.dict() for tc in request.test_cases]
+    if request.problem_statement is not None:
+        exercise.problem_statement = request.problem_statement
 
     await db.commit()
     return {"message": "Đã cập nhật bài tập"}
@@ -702,35 +711,3 @@ async def submit_code(
         test_results=visible_results,
         execution_time_ms=grading_result["execution_time_ms"],
     )
-
-
-@router.post("/public/{share_code}/hint", response_model=HintResponse)
-@limiter.limit("10/minute")
-async def get_hint(
-    request: Request,
-    share_code: str,
-    body: HintRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    """Phân tích lỗi tổng hợp cho các test case sai (public, không cần auth)"""
-    result = await db.execute(
-        select(CodeExercise).where(CodeExercise.share_code == share_code)
-    )
-    exercise = result.scalar_one_or_none()
-
-    if not exercise:
-        raise HTTPException(status_code=404, detail="Bài tập không tồn tại")
-    if not exercise.is_active:
-        raise HTTPException(status_code=403, detail="Bài tập đã bị tắt")
-    if exercise.expires_at and exercise.expires_at < datetime.utcnow():
-        raise HTTPException(status_code=410, detail="Bài tập đã hết hạn")
-
-    hint_service = get_hint_service()
-    hint_text = await hint_service.generate_hint(
-        problem_statement=exercise.problem_statement,
-        language=exercise.language,
-        student_code=body.code,
-        failed_tests=[t.model_dump() for t in body.failed_tests],
-    )
-
-    return HintResponse(hint=hint_text)

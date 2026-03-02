@@ -1,5 +1,5 @@
 import React, { useRef, useCallback, useEffect, useState } from "react";
-import { ArrowLeft, ListTree, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, ListTree, ChevronLeft, ChevronRight, AlignLeft, AlignCenter, AlignRight } from "lucide-react";
 import {
   TOOLBAR,
   FONT_SIZES,
@@ -61,6 +61,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const [isEditingInCell, setIsEditingInCell] = useState(false);
   const [focusedCell, setFocusedCell] = useState<HTMLTableCellElement | null>(null);
   const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(null);
+
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
   // Image resize state
   const imageResizeState = useRef<{
@@ -1107,6 +1109,27 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     handleInput();
   }, [selectedImage, handleInput]);
 
+  // Image alignment handler
+  const handleImageAlign = useCallback((align: 'left' | 'center' | 'right') => {
+    if (!selectedImage) return;
+    if (align === 'center') {
+      selectedImage.style.marginLeft = 'auto';
+      selectedImage.style.marginRight = 'auto';
+    } else if (align === 'left') {
+      selectedImage.style.marginLeft = '0';
+      selectedImage.style.marginRight = 'auto';
+    } else {
+      selectedImage.style.marginLeft = 'auto';
+      selectedImage.style.marginRight = '0';
+    }
+    selectedImage.style.display = 'block';
+    selectedImage.style.float = '';
+    handleInput();
+    const img = selectedImage;
+    setSelectedImage(null);
+    setTimeout(() => setSelectedImage(img), 50);
+  }, [selectedImage, handleInput]);
+
   // Cleanup image resize listeners
   useEffect(() => {
     return () => {
@@ -1262,11 +1285,11 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       <div ref={headerRef} className="sticky top-0 z-40 rounded-t-lg">
         {/* Title bar */}
         {lessonTitle && (
-          <div className="bg-blue-600 dark:bg-blue-700 px-4 py-2.5 rounded-t-lg flex items-center gap-3">
+          <div className="bg-brand dark:bg-brand-dark px-4 py-2.5 rounded-t-lg flex items-center gap-3">
             {onBack && (
               <button
                 onClick={onBack}
-                className="p-1.5 rounded-lg hover:bg-blue-500 text-white/80 hover:text-white transition-colors flex-shrink-0"
+                className="p-1.5 rounded-lg hover:bg-brand text-white/80 hover:text-white transition-colors flex-shrink-0"
                 title="Quay lại cấu hình"
               >
                 <ArrowLeft className="w-5 h-5" />
@@ -1275,21 +1298,21 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             <div className="flex-1 min-w-0">
               <h2 className="text-base font-bold text-white leading-tight truncate">{lessonTitle}</h2>
               {lessonSubtitle && (
-                <p className="text-blue-100 text-xs mt-0.5">{lessonSubtitle}</p>
+                <p className="text-sky-100 text-xs mt-0.5">{lessonSubtitle}</p>
               )}
             </div>
           </div>
         )}
 
         {/* Toolbar - directly below title, no gap */}
-        <div className={`bg-gray-50 dark:bg-gray-900 border-b border-x border-gray-200 dark:border-gray-700 shadow-sm ${!lessonTitle ? 'border-t rounded-t-lg' : ''}`}>
+        <div className={`bg-stone-50 dark:bg-stone-900 border-b border-x border-stone-200 dark:border-stone-700 shadow-sm ${!lessonTitle ? 'border-t rounded-t-lg' : ''}`}>
           <div className="flex items-center justify-between px-3 py-1.5">
             {/* Left: formatting tools */}
             <div className="flex flex-wrap items-center gap-0.5">
               {/* Font size selector - shows current size */}
               <select
                 ref={fontSizeRef}
-                className="h-7 w-16 px-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 mr-1 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-400"
+                className="h-7 w-16 px-1.5 text-xs border border-stone-200 dark:border-stone-600 rounded bg-white dark:bg-stone-700 text-stone-700 dark:text-stone-300 mr-1 cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand"
                 defaultValue=""
                 onMouseDown={() => {
                   // Save selection before dropdown opens
@@ -1328,7 +1351,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                   return (
                     <div
                       key={`sep-${idx}`}
-                      className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-0.5"
+                      className="w-px h-5 bg-stone-200 dark:bg-stone-700 mx-0.5"
                     />
                   );
                 }
@@ -1345,7 +1368,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                           savedSelectionRef.current = saveSelection();
                           setShowTablePicker(prev => !prev);
                         }}
-                        className="p-1.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                        className="p-1.5 rounded hover:bg-sky-50 dark:hover:bg-sky-900/30 text-stone-600 dark:text-stone-400 hover:text-brand dark:hover:text-sky-400 transition-colors"
                         title={item.label}
                       >
                         <Icon className="w-4 h-4" />
@@ -1372,7 +1395,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                           setShowTextColorPicker(prev => !prev);
                           setShowHighlightPicker(false);
                         }}
-                        className="p-1.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                        className="p-1.5 rounded hover:bg-sky-50 dark:hover:bg-sky-900/30 text-stone-600 dark:text-stone-400 hover:text-brand dark:hover:text-sky-400 transition-colors"
                         title={item.label}
                       >
                         <Icon className="w-4 h-4" />
@@ -1402,7 +1425,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                           setShowHighlightPicker(prev => !prev);
                           setShowTextColorPicker(false);
                         }}
-                        className="p-1.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                        className="p-1.5 rounded hover:bg-sky-50 dark:hover:bg-sky-900/30 text-stone-600 dark:text-stone-400 hover:text-brand dark:hover:text-sky-400 transition-colors"
                         title={item.label}
                       >
                         <Icon className="w-4 h-4" />
@@ -1431,7 +1454,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                         savedSelectionRef.current = saveSelection();
                         imageInputRef.current?.click();
                       }}
-                      className="p-1.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                      className="p-1.5 rounded hover:bg-sky-50 dark:hover:bg-sky-900/30 text-stone-600 dark:text-stone-400 hover:text-brand dark:hover:text-sky-400 transition-colors"
                       title={item.label}
                     >
                       <Icon className="w-4 h-4" />
@@ -1447,7 +1470,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                       e.preventDefault();
                       execCommand(item.command, item.commandArg);
                     }}
-                    className="p-1.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                    className="p-1.5 rounded hover:bg-sky-50 dark:hover:bg-sky-900/30 text-stone-600 dark:text-stone-400 hover:text-brand dark:hover:text-sky-400 transition-colors"
                     title={item.label}
                   >
                     <Icon className="w-4 h-4" />
@@ -1476,7 +1499,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       />
 
       {/* A4 page area with outline sidebar */}
-      <div className="flex bg-gray-100 dark:bg-gray-950 border-x border-b border-gray-200 dark:border-gray-700 rounded-b-lg">
+      <div className="flex bg-stone-200 dark:bg-stone-800 border-x border-b border-stone-200 dark:border-stone-700 rounded-b-lg">
         {/* Sidebar + Toggle: MỘT phần tử sticky duy nhất, self-start để không stretch bằng A4 */}
         <div
           className="flex-shrink-0 self-start sticky z-20 flex"
@@ -1485,11 +1508,11 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           {showOutline && (
             <div className="w-56 overflow-y-auto py-4 pl-3 pr-1 scrollbar-thin">
               <div className="flex items-center gap-1.5 mb-3 px-1">
-                <ListTree className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Mục lục</span>
+                <ListTree className="w-4 h-4 text-stone-400 dark:text-stone-500 flex-shrink-0" />
+                <span className="text-xs font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wider">Mục lục</span>
               </div>
               {outlineHeadings.length === 0 ? (
-                <p className="text-xs text-gray-400 dark:text-gray-500 px-1 italic">Chưa có tiêu đề nào</p>
+                <p className="text-xs text-stone-400 dark:text-stone-500 px-1 italic">Chưa có tiêu đề nào</p>
               ) : (
                 <nav className="space-y-0.5">
                   {outlineHeadings.map((h, i) => (
@@ -1501,7 +1524,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                         h.element.style.backgroundColor = '#dbeafe';
                         setTimeout(() => { h.element.style.backgroundColor = ''; }, 1200);
                       }}
-                      className="w-full text-left text-xs py-1 px-2 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors truncate block"
+                      className="w-full text-left text-xs py-1 px-2 rounded hover:bg-sky-50 dark:hover:bg-sky-900/20 text-stone-600 dark:text-stone-400 hover:text-brand dark:hover:text-sky-400 transition-colors truncate block"
                       style={{ paddingLeft: `${(h.level - 1) * 12 + 8}px` }}
                       title={h.text}
                     >
@@ -1514,17 +1537,18 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           )}
           <button
             onClick={() => setShowOutline(prev => !prev)}
-            className="self-start mt-4 p-1 rounded-r bg-white dark:bg-gray-800 border border-l-0 border-gray-200 dark:border-gray-600 text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 transition-colors shadow-sm"
+            className="self-start mt-4 p-1 rounded-r bg-white dark:bg-stone-800 border border-l-0 border-stone-200 dark:border-stone-600 text-stone-400 hover:text-brand dark:text-stone-500 dark:hover:text-sky-400 transition-colors shadow-sm"
             title={showOutline ? 'Ẩn mục lục' : 'Hiện mục lục'}
           >
             {showOutline ? <ChevronLeft className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
           </button>
         </div>
 
-        {/* A4 page area - content with Word-like margins */}
+        {/* Editor area */}
         <div className="flex-1 flex justify-center py-6 px-4">
           <div
-            className="w-full bg-white dark:bg-gray-900 shadow-lg dark:shadow-gray-950/50 relative"
+            ref={wrapperRef}
+            className="w-full bg-white dark:bg-stone-900 shadow-lg dark:shadow-stone-950/50 relative"
             style={{ maxWidth: "950px", padding: "48px 60px" }}
           >
             <div
@@ -1539,7 +1563,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
               onMouseDown={handleEditorMouseDown}
               onClick={handleEditorClick}
               data-placeholder={placeholder}
-              className="rich-editor-content outline-none leading-relaxed text-gray-800 dark:text-gray-200"
+              className="rich-editor-content outline-none leading-relaxed text-stone-800 dark:text-stone-200"
               style={{ minHeight, fontSize: '13pt', lineHeight: '1.5' }}
             />
 
@@ -1562,11 +1586,11 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             )}
 
             {/* Image resize overlay */}
-            {selectedImage && editorRef.current && (() => {
+            {selectedImage && wrapperRef.current && (() => {
               const imgRect = selectedImage.getBoundingClientRect();
-              const editorRect = editorRef.current.getBoundingClientRect();
-              const top = imgRect.top - editorRect.top + editorRef.current.scrollTop;
-              const left = imgRect.left - editorRect.left + editorRef.current.scrollLeft;
+              const paperRect = wrapperRef.current!.getBoundingClientRect();
+              const top = imgRect.top - paperRect.top;
+              const left = imgRect.left - paperRect.left;
               return (
                 <div
                   className="absolute pointer-events-none"
@@ -1590,15 +1614,39 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                     return (
                       <div
                         key={corner}
-                        className="absolute w-3 h-3 bg-white border-2 border-blue-500 rounded-sm pointer-events-auto"
+                        className="absolute w-3 h-3 bg-white border-2 border-brand rounded-sm pointer-events-auto"
                         style={positions[corner]}
                         onMouseDown={(e) => handleImageResizeStart(e, corner)}
                       />
                     );
                   })}
+                  {/* Image alignment buttons */}
+                  <div className="absolute -top-9 left-0 flex gap-1 pointer-events-auto">
+                    <button
+                      className="p-1 bg-stone-700 hover:bg-stone-600 text-white rounded shadow"
+                      onClick={() => handleImageAlign('left')}
+                      title="Căn trái"
+                    >
+                      <AlignLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      className="p-1 bg-stone-700 hover:bg-stone-600 text-white rounded shadow"
+                      onClick={() => handleImageAlign('center')}
+                      title="Căn giữa"
+                    >
+                      <AlignCenter className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      className="p-1 bg-stone-700 hover:bg-stone-600 text-white rounded shadow"
+                      onClick={() => handleImageAlign('right')}
+                      title="Căn phải"
+                    >
+                      <AlignRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                   {/* Delete button */}
                   <button
-                    className="absolute -top-8 right-0 px-2 py-1 bg-red-500 hover:bg-red-600 text-white text-xs rounded shadow pointer-events-auto"
+                    className="absolute -top-9 right-0 px-2 py-1 bg-red-500 hover:bg-red-600 text-white text-xs rounded shadow pointer-events-auto"
                     onClick={handleDeleteImage}
                     title="Xóa ảnh"
                   >
@@ -1606,15 +1654,17 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                   </button>
                   {/* Size indicator */}
                   <div
-                    className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 px-2 py-0.5 bg-gray-800 text-white text-xs rounded whitespace-nowrap"
+                    className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 px-2 py-0.5 bg-stone-800 text-white text-xs rounded whitespace-nowrap"
                   >
                     {Math.round(imgRect.width)} × {Math.round(imgRect.height)}
                   </div>
                 </div>
               );
             })()}
+
           </div>
         </div>
+
       </div>
 
       {/* Table right-click context menu */}

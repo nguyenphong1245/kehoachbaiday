@@ -1,13 +1,19 @@
+import hmac
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
-import secrets 
+import secrets
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 from .config import get_settings
+from .logging import logger
 
-pwd_context = CryptContext(schemes=["bcrypt", "pbkdf2_sha256"], deprecated="auto")
+pwd_context = CryptContext(
+    schemes=["bcrypt", "pbkdf2_sha256"],
+    deprecated=["pbkdf2_sha256"],
+    bcrypt__rounds=12,
+)
 
 
 def create_access_token(subject: str, expires_delta: timedelta | None = None) -> str:
@@ -32,18 +38,23 @@ def get_password_hash(password: str) -> str:
     pw_bytes = password.encode("utf-8")
     if len(pw_bytes) > 72:
         raise ValueError("Mật khẩu quá dài (tối đa 72 bytes)")
+    return pwd_context.hash(password)
 
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
-        return pwd_context.hash(password)
-    except Exception:
-        return pwd_context.hash(password, scheme="pbkdf2_sha256")
-
-
-def verify_password(plain_password: str, password: str) -> bool:
-    try:
-        return pwd_context.verify(plain_password, password)
+        return pwd_context.verify(plain_password, hashed_password)
     except Exception:
         return False
+
+
+def verify_and_upgrade_password(plain_password: str, hashed_password: str) -> tuple[bool, str | None]:
+    """Verify password and return upgraded hash if the current hash uses a deprecated scheme."""
+    try:
+        ok, new_hash = pwd_context.verify_and_update(plain_password, hashed_password)
+        return ok, new_hash
+    except Exception:
+        return False, None
 
 def create_refresh_token() -> str:
     """Generate a cryptographically random refresh token."""
@@ -54,6 +65,11 @@ def hash_refresh_token(token: str) -> str:
     """Hash a refresh token for storage (SHA-256)."""
     import hashlib
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+def constant_time_compare(a: str, b: str) -> bool:
+    """Constant-time string comparison to prevent timing attacks."""
+    return hmac.compare_digest(a.encode(), b.encode())
 
 
 def generate_secure_token(length: int = 32) -> str:

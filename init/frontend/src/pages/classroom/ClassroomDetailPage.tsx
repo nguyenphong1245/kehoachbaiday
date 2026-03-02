@@ -190,7 +190,6 @@ const ClassroomDetailPage: React.FC = () => {
     try {
       await addStudent(classroomId, {
         full_name: addName.trim(),
-        student_code: addCode.trim() || undefined,
         date_of_birth: addDob.trim() || undefined,
       });
       setAddName("");
@@ -281,37 +280,37 @@ const ClassroomDetailPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      <div className="min-h-screen bg-stone-50 dark:bg-stone-900 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-brand" />
       </div>
     );
   }
 
   if (!classroom) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-8 text-center text-slate-500">
+      <div className="min-h-screen bg-stone-50 dark:bg-stone-900 p-8 text-center text-stone-500">
         Không tìm thấy lớp học
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen bg-stone-50 dark:bg-stone-900 p-4 sm:p-6 lg:p-8">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
           <button
             onClick={() => navigate("/classes")}
-            className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            className="p-2 rounded-lg hover:bg-stone-200 dark:hover:bg-stone-700 transition-colors"
             title="Quay lại"
           >
-            <ArrowLeft className="w-5 h-5 text-slate-600 dark:text-slate-300" />
+            <ArrowLeft className="w-5 h-5 text-stone-600 dark:text-stone-300" />
           </button>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+            <h1 className="text-2xl font-bold text-stone-900 dark:text-white">
               Lớp {classroom.name}
             </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
+            <p className="text-sm text-stone-500 dark:text-stone-400">
               {classroom.grade && `Khối ${classroom.grade}`}
               {classroom.school_year && ` - Năm học ${classroom.school_year}`}
               {` - ${classroom.students.length} học sinh - ${classroom.groups.length} nhóm`}
@@ -332,7 +331,7 @@ const ClassroomDetailPage: React.FC = () => {
           </div>
         )}
         {uploadResult && (
-          <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 px-4 py-3 rounded-lg mb-4">
+          <div className="bg-sky-50 dark:bg-sky-900/20 text-brand-dark dark:text-sky-400 px-4 py-3 rounded-lg mb-4">
             <p>Đã tạo: {uploadResult.created} | Bỏ qua: {uploadResult.skipped}</p>
             {uploadResult.details.length > 0 && (
               <ul className="mt-2 text-sm list-disc pl-5">
@@ -344,13 +343,13 @@ const ClassroomDetailPage: React.FC = () => {
         )}
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-6 border-b border-slate-200 dark:border-slate-700">
+        <div className="flex gap-2 mb-6 border-b border-stone-200 dark:border-stone-700">
           <button
             onClick={() => setActiveTab("students")}
             className={`px-4 py-2 font-medium border-b-2 transition-colors ${
               activeTab === "students"
-                ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400"
+                ? "border-brand text-brand dark:text-sky-400"
+                : "border-transparent text-stone-500 hover:text-stone-700 dark:text-stone-400"
             }`}
           >
             <Users className="w-4 h-4 inline mr-2" />
@@ -360,8 +359,8 @@ const ClassroomDetailPage: React.FC = () => {
             onClick={() => setActiveTab("groups")}
             className={`px-4 py-2 font-medium border-b-2 transition-colors ${
               activeTab === "groups"
-                ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400"
+                ? "border-brand text-brand dark:text-sky-400"
+                : "border-transparent text-stone-500 hover:text-stone-700 dark:text-stone-400"
             }`}
           >
             <Shuffle className="w-4 h-4 inline mr-2" />
@@ -371,8 +370,8 @@ const ClassroomDetailPage: React.FC = () => {
             onClick={() => setActiveTab("assignments")}
             className={`px-4 py-2 font-medium border-b-2 transition-colors ${
               activeTab === "assignments"
-                ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400"
+                ? "border-brand text-brand dark:text-sky-400"
+                : "border-transparent text-stone-500 hover:text-stone-700 dark:text-stone-400"
             }`}
           >
             <BookOpen className="w-4 h-4 inline mr-2" />
@@ -388,7 +387,7 @@ const ClassroomDetailPage: React.FC = () => {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm"
+                className="flex items-center gap-2 px-4 py-2 bg-brand text-white rounded-lg hover:bg-brand-dark disabled:opacity-50 text-sm"
               >
                 {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                 Upload danh sách
@@ -411,7 +410,7 @@ const ClassroomDetailPage: React.FC = () => {
 
             {/* Add student form */}
             {showAddForm && (
-              <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 mb-4">
+              <div className="bg-white dark:bg-stone-800 rounded-lg border border-stone-200 dark:border-stone-700 p-4 mb-4">
                 <form onSubmit={handleAddStudent} className="flex flex-col sm:flex-row gap-3">
                   <input
                     type="text"
@@ -419,21 +418,21 @@ const ClassroomDetailPage: React.FC = () => {
                     value={addName}
                     onChange={(e) => setAddName(e.target.value)}
                     required
-                    className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
+                    className="flex-1 px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-700 text-stone-900 dark:text-white text-sm"
                   />
                   <input
                     type="text"
                     placeholder="Mã HS"
                     value={addCode}
                     onChange={(e) => setAddCode(e.target.value)}
-                    className="w-32 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
+                    className="w-32 px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-700 text-stone-900 dark:text-white text-sm"
                   />
                   <input
                     type="text"
                     placeholder="Ngày sinh (DD/MM/YYYY)"
                     value={addDob}
                     onChange={(e) => setAddDob(e.target.value)}
-                    className="w-44 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
+                    className="w-44 px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-700 text-stone-900 dark:text-white text-sm"
                   />
                   <button
                     type="submit"
@@ -446,7 +445,7 @@ const ClassroomDetailPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowAddForm(false)}
-                    className="px-3 py-2 text-slate-500 hover:text-slate-700 text-sm"
+                    className="px-3 py-2 text-stone-500 hover:text-stone-700 text-sm"
                   >
                     Hủy
                   </button>
@@ -456,31 +455,31 @@ const ClassroomDetailPage: React.FC = () => {
 
             {/* Student table */}
             {classroom.students.length === 0 ? (
-              <div className="text-center py-8 text-slate-500 dark:text-slate-400">
+              <div className="text-center py-8 text-stone-500 dark:text-stone-400">
                 <Users className="w-10 h-10 mx-auto mb-2 opacity-50" />
                 <p>Chưa có học sinh. Upload file Excel/CSV hoặc thêm thủ công.</p>
               </div>
             ) : (
-              <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <div className="bg-white dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead className="bg-slate-50 dark:bg-slate-700/50">
+                    <thead className="bg-stone-50 dark:bg-stone-700/50">
                       <tr>
-                        <th className="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-300">STT</th>
-                        <th className="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-300">Họ tên</th>
-                        <th className="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-300">Mã HS</th>
-                        <th className="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-300">Ngày sinh</th>
-                        <th className="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-300">Tài khoản</th>
-                        <th className="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-300"></th>
+                        <th className="px-4 py-3 text-left font-medium text-stone-600 dark:text-stone-300">STT</th>
+                        <th className="px-4 py-3 text-left font-medium text-stone-600 dark:text-stone-300">Họ tên</th>
+                        <th className="px-4 py-3 text-left font-medium text-stone-600 dark:text-stone-300">Mã HS</th>
+                        <th className="px-4 py-3 text-left font-medium text-stone-600 dark:text-stone-300">Ngày sinh</th>
+                        <th className="px-4 py-3 text-left font-medium text-stone-600 dark:text-stone-300">Tài khoản</th>
+                        <th className="px-4 py-3 text-right font-medium text-stone-600 dark:text-stone-300"></th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                    <tbody className="divide-y divide-stone-100 dark:divide-stone-700">
                       {classroom.students.map((student, idx) => (
-                        <tr key={student.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30">
-                          <td className="px-4 py-3 text-slate-500">{idx + 1}</td>
-                          <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">{student.full_name}</td>
-                          <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{student.student_code || "-"}</td>
-                          <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
+                        <tr key={student.id} className="hover:bg-stone-50 dark:hover:bg-stone-700/30">
+                          <td className="px-4 py-3 text-stone-500">{idx + 1}</td>
+                          <td className="px-4 py-3 font-medium text-stone-900 dark:text-white">{student.full_name}</td>
+                          <td className="px-4 py-3 text-stone-600 dark:text-stone-400">{student.student_code || "-"}</td>
+                          <td className="px-4 py-3 text-stone-600 dark:text-stone-400">
                             {student.date_of_birth
                               ? new Date(student.date_of_birth).toLocaleDateString("vi-VN")
                               : "-"}
@@ -488,7 +487,7 @@ const ClassroomDetailPage: React.FC = () => {
                           <td className="px-4 py-3">
                             <button
                               onClick={() => copyCredentials(student)}
-                              className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                              className="flex items-center gap-1 text-xs text-brand dark:text-sky-400 hover:underline"
                               title="Copy tài khoản đăng nhập"
                             >
                               {copiedId === student.id ? (
@@ -501,7 +500,7 @@ const ClassroomDetailPage: React.FC = () => {
                           <td className="px-4 py-3 text-right">
                             <button
                               onClick={() => handleRemove(student.id)}
-                              className="p-1 text-slate-400 hover:text-red-500 rounded"
+                              className="p-1 text-stone-400 hover:text-red-500 rounded"
                               title="Xóa khỏi lớp"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -523,7 +522,7 @@ const ClassroomDetailPage: React.FC = () => {
             <div className="flex flex-wrap gap-3 mb-4">
               <Link
                 to={`/classes/${classroomId}/assign`}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                className="flex items-center gap-2 px-4 py-2 bg-brand text-white rounded-lg hover:bg-brand-dark text-sm"
               >
                 <Plus className="w-4 h-4" />
                 Giao bài mới
@@ -532,10 +531,10 @@ const ClassroomDetailPage: React.FC = () => {
 
             {loadingAssignments ? (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                <Loader2 className="w-6 h-6 animate-spin text-brand" />
               </div>
             ) : assignments.length === 0 ? (
-              <div className="text-center py-8 text-slate-500 dark:text-slate-400">
+              <div className="text-center py-8 text-stone-500 dark:text-stone-400">
                 <BookOpen className="w-10 h-10 mx-auto mb-2 opacity-50" />
                 <p>Chưa có bài nào được giao cho lớp này.</p>
               </div>
@@ -544,25 +543,25 @@ const ClassroomDetailPage: React.FC = () => {
                 {assignments.map((a) => (
                   <div
                     key={a.id}
-                    className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 flex items-start gap-4"
+                    className="bg-white dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 p-4 flex items-start gap-4"
                   >
-                    <div className="flex-shrink-0 mt-1 p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
+                    <div className="flex-shrink-0 mt-1 p-2 rounded-lg bg-sky-50 dark:bg-sky-900/20 text-brand dark:text-sky-400">
                       {contentTypeIcon(a.content_type)}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold text-slate-900 dark:text-white truncate">{a.title}</h3>
+                        <h3 className="font-semibold text-stone-900 dark:text-white truncate">{a.title}</h3>
                         {!a.is_active && (
-                          <span className="px-2 py-0.5 bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300 text-xs rounded-full">
+                          <span className="px-2 py-0.5 bg-stone-200 dark:bg-stone-600 text-stone-600 dark:text-stone-300 text-xs rounded-full">
                             Tắt
                           </span>
                         )}
                       </div>
-                      <div className="flex flex-wrap gap-2 text-xs text-slate-500 dark:text-slate-400">
-                        <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 rounded">
+                      <div className="flex flex-wrap gap-2 text-xs text-stone-500 dark:text-stone-400">
+                        <span className="px-2 py-0.5 bg-stone-100 dark:bg-stone-700 rounded">
                           {contentTypeLabel(a.content_type)}
                         </span>
-                        <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 rounded">
+                        <span className="px-2 py-0.5 bg-stone-100 dark:bg-stone-700 rounded">
                           {a.work_type === "group" ? "Nhóm" : "Cá nhân"}
                         </span>
                         {a.lesson_info?.lesson_name && (
@@ -577,9 +576,9 @@ const ClassroomDetailPage: React.FC = () => {
                         )}
                       </div>
                       {a.description && (
-                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">{a.description}</p>
+                        <p className="text-sm text-stone-500 dark:text-stone-400 mt-1 line-clamp-2">{a.description}</p>
                       )}
-                      <div className="flex items-center gap-4 mt-2 text-xs text-slate-400">
+                      <div className="flex items-center gap-4 mt-2 text-xs text-stone-400">
                         <span>Nộp: {a.submission_count}/{a.total_students}</span>
                         <span>Tạo: {new Date(a.created_at).toLocaleDateString("vi-VN")}</span>
                       </div>
@@ -606,7 +605,7 @@ const ClassroomDetailPage: React.FC = () => {
                       )}
                       <button
                         onClick={() => handleDeleteAssignment(a.id)}
-                        className="p-1 text-slate-400 hover:text-red-500 rounded self-center"
+                        className="p-1 text-stone-400 hover:text-red-500 rounded self-center"
                         title="Xóa bài giao"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -642,26 +641,26 @@ const ClassroomDetailPage: React.FC = () => {
 
             {/* Auto divide form */}
             {showAutoDiv && (
-              <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 mb-4">
-                <h3 className="font-medium text-slate-900 dark:text-white mb-3">Chia nhóm tự động</h3>
+              <div className="bg-white dark:bg-stone-800 rounded-lg border border-stone-200 dark:border-stone-700 p-4 mb-4">
+                <h3 className="font-medium text-stone-900 dark:text-white mb-3">Chia nhóm tự động</h3>
                 <div className="flex flex-col sm:flex-row gap-3">
                   <div>
-                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Số nhóm</label>
+                    <label className="block text-xs text-stone-500 dark:text-stone-400 mb-1">Số nhóm</label>
                     <input
                       type="number"
                       min={1}
                       max={classroom.students.length}
                       value={numGroups}
                       onChange={(e) => setNumGroups(Number(e.target.value))}
-                      className="w-24 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
+                      className="w-24 px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-700 text-stone-900 dark:text-white text-sm"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Cách chia</label>
+                    <label className="block text-xs text-stone-500 dark:text-stone-400 mb-1">Cách chia</label>
                     <select
                       value={divMethod}
                       onChange={(e) => setDivMethod(e.target.value)}
-                      className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
+                      className="px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-700 text-stone-900 dark:text-white text-sm"
                     >
                       <option value="sequential">Theo thứ tự</option>
                       <option value="random">Ngẫu nhiên</option>
@@ -678,7 +677,7 @@ const ClassroomDetailPage: React.FC = () => {
                     </button>
                     <button
                       onClick={() => setShowAutoDiv(false)}
-                      className="px-3 py-2 text-slate-500 hover:text-slate-700 text-sm"
+                      className="px-3 py-2 text-stone-500 hover:text-stone-700 text-sm"
                     >
                       Hủy
                     </button>
@@ -692,8 +691,8 @@ const ClassroomDetailPage: React.FC = () => {
 
             {/* Manual create group form */}
             {showCreateGroup && (
-              <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 mb-4">
-                <h3 className="font-medium text-slate-900 dark:text-white mb-3">Tạo nhóm mới</h3>
+              <div className="bg-white dark:bg-stone-800 rounded-lg border border-stone-200 dark:border-stone-700 p-4 mb-4">
+                <h3 className="font-medium text-stone-900 dark:text-white mb-3">Tạo nhóm mới</h3>
                 <form onSubmit={handleCreateGroup}>
                   <input
                     type="text"
@@ -701,20 +700,20 @@ const ClassroomDetailPage: React.FC = () => {
                     value={newGroupName}
                     onChange={(e) => setNewGroupName(e.target.value)}
                     required
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm mb-3"
+                    className="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-700 text-stone-900 dark:text-white text-sm mb-3"
                   />
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Chọn thành viên:</p>
+                  <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">Chọn thành viên:</p>
                   <div className="max-h-40 overflow-y-auto space-y-1 mb-3">
                     {classroom.students.map((s) => (
-                      <label key={s.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer text-sm">
+                      <label key={s.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-stone-50 dark:hover:bg-stone-700/50 cursor-pointer text-sm">
                         <input
                           type="checkbox"
                           checked={selectedStudentIds.includes(s.id)}
                           onChange={() => toggleStudentSelection(s.id)}
-                          className="rounded border-slate-300"
+                          className="rounded border-stone-300"
                         />
-                        <span className="text-slate-900 dark:text-white">{s.full_name}</span>
-                        <span className="text-slate-400 text-xs">{s.student_code}</span>
+                        <span className="text-stone-900 dark:text-white">{s.full_name}</span>
+                        <span className="text-stone-400 text-xs">{s.student_code}</span>
                       </label>
                     ))}
                   </div>
@@ -730,7 +729,7 @@ const ClassroomDetailPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => { setShowCreateGroup(false); setSelectedStudentIds([]); }}
-                      className="px-3 py-2 text-slate-500 hover:text-slate-700 text-sm"
+                      className="px-3 py-2 text-stone-500 hover:text-stone-700 text-sm"
                     >
                       Hủy
                     </button>
@@ -741,7 +740,7 @@ const ClassroomDetailPage: React.FC = () => {
 
             {/* Groups list */}
             {classroom.groups.length === 0 ? (
-              <div className="text-center py-8 text-slate-500 dark:text-slate-400">
+              <div className="text-center py-8 text-stone-500 dark:text-stone-400">
                 <Shuffle className="w-10 h-10 mx-auto mb-2 opacity-50" />
                 <p>Chưa có nhóm nào. Dùng "Chia nhóm tự động" hoặc tạo thủ công.</p>
               </div>
@@ -750,14 +749,14 @@ const ClassroomDetailPage: React.FC = () => {
                 {classroom.groups.map((group) => (
                   <div
                     key={group.id}
-                    className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4"
+                    className="bg-white dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 p-4"
                   >
                     <div className="flex items-center justify-between mb-3">
-                      <h3 className="font-semibold text-slate-900 dark:text-white">{group.name}</h3>
+                      <h3 className="font-semibold text-stone-900 dark:text-white">{group.name}</h3>
                       <div className="flex gap-1">
                         <button
                           onClick={() => handleDeleteGroup(group.id)}
-                          className="p-1 text-slate-400 hover:text-red-500 rounded"
+                          className="p-1 text-stone-400 hover:text-red-500 rounded"
                           title="Xóa nhóm"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -766,23 +765,23 @@ const ClassroomDetailPage: React.FC = () => {
                     </div>
                     <div className="space-y-1">
                       {group.members.length === 0 ? (
-                        <p className="text-xs text-slate-400">Chưa có thành viên</p>
+                        <p className="text-xs text-stone-400">Chưa có thành viên</p>
                       ) : (
                         group.members.map((m) => (
                           <div
                             key={m.id}
-                            className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 px-2 py-1 rounded bg-slate-50 dark:bg-slate-700/30"
+                            className="flex items-center gap-2 text-sm text-stone-700 dark:text-stone-300 px-2 py-1 rounded bg-stone-50 dark:bg-stone-700/30"
                           >
-                            <Users className="w-3 h-3 text-slate-400" />
+                            <Users className="w-3 h-3 text-stone-400" />
                             <span>{m.full_name}</span>
                             {m.student_code && (
-                              <span className="text-xs text-slate-400">({m.student_code})</span>
+                              <span className="text-xs text-stone-400">({m.student_code})</span>
                             )}
                           </div>
                         ))
                       )}
                     </div>
-                    <p className="text-xs text-slate-400 mt-2">{group.members.length} thành viên</p>
+                    <p className="text-xs text-stone-400 mt-2">{group.members.length} thành viên</p>
                   </div>
                 ))}
               </div>

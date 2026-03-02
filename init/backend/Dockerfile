@@ -20,6 +20,7 @@ RUN chmod +x entrypoint.sh
 
 # Create non-root user
 RUN adduser --disabled-password --gecos "" appuser && chown -R appuser:appuser /app
+
 USER appuser
 
 EXPOSE 8000

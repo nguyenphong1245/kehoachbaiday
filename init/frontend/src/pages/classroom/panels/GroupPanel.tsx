@@ -104,7 +104,7 @@ const GroupPanel: React.FC<GroupPanelProps> = ({
             setShowAutoDiv(!showAutoDiv);
             setShowCreateGroup(false); // Đóng form thủ công
           }}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-stone-200 dark:border-stone-600 rounded-lg text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700 transition-colors"
         >
           <Shuffle className="w-3.5 h-3.5" />
           Chia nhóm tự động
@@ -114,7 +114,7 @@ const GroupPanel: React.FC<GroupPanelProps> = ({
             setShowCreateGroup(!showCreateGroup);
             setShowAutoDiv(false); // Đóng form tự động
           }}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-stone-200 dark:border-stone-600 rounded-lg text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700 transition-colors"
         >
           <Plus className="w-3.5 h-3.5" />
           Tạo nhóm thủ công
@@ -123,33 +123,33 @@ const GroupPanel: React.FC<GroupPanelProps> = ({
 
       {/* Auto divide form */}
       {showAutoDiv && (
-        <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 mb-4 bg-white dark:bg-slate-800">
-          <h3 className="text-sm font-medium text-slate-900 dark:text-white mb-3">Chia nhóm tự động</h3>
+        <div className="border border-stone-200 dark:border-stone-700 rounded-lg p-4 mb-4 bg-white dark:bg-stone-800">
+          <h3 className="text-sm font-medium text-stone-900 dark:text-white mb-3">Chia nhóm tự động</h3>
           <div className="flex flex-col sm:flex-row gap-3">
             <div>
-              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Số nhóm</label>
+              <label className="block text-xs text-stone-500 dark:text-stone-400 mb-1">Số nhóm</label>
               <input
                 type="number" min={1} max={classroom.students.length || 1}
                 value={numGroups} onChange={(e) => setNumGroups(Number(e.target.value))}
-                className="w-20 px-3 py-1.5 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                className="w-20 px-3 py-1.5 border border-stone-200 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-700 text-stone-900 dark:text-white text-sm focus:outline-none focus:ring-1 focus:ring-brand"
               />
             </div>
             <div>
-              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Cách chia</label>
+              <label className="block text-xs text-stone-500 dark:text-stone-400 mb-1">Cách chia</label>
               <select value={divMethod} onChange={(e) => setDivMethod(e.target.value)}
-                className="px-3 py-1.5 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm">
+                className="px-3 py-1.5 border border-stone-200 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-700 text-stone-900 dark:text-white text-sm">
                 <option value="sequential">Theo thứ tự</option>
                 <option value="random">Ngẫu nhiên</option>
               </select>
             </div>
             <div className="flex items-end gap-2">
               <button onClick={handleAutoDivide} disabled={dividing}
-                className="px-3.5 py-1.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-1.5">
+                className="px-3.5 py-1.5 bg-stone-900 dark:bg-white text-white dark:text-stone-900 rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-1.5">
                 {dividing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 Chia nhóm
               </button>
               <button onClick={() => setShowAutoDiv(false)}
-                className="px-3 py-1.5 text-slate-400 hover:text-slate-600 text-sm">
+                className="px-3 py-1.5 text-stone-400 hover:text-stone-600 text-sm">
                 Hủy
               </button>
             </div>
@@ -162,16 +162,16 @@ const GroupPanel: React.FC<GroupPanelProps> = ({
 
       {/* Manual create group form */}
       {showCreateGroup && (
-        <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 mb-4 bg-white dark:bg-slate-800">
-          <h3 className="text-sm font-medium text-slate-900 dark:text-white mb-3">Tạo nhóm mới</h3>
+        <div className="border border-stone-200 dark:border-stone-700 rounded-lg p-4 mb-4 bg-white dark:bg-stone-800">
+          <h3 className="text-sm font-medium text-stone-900 dark:text-white mb-3">Tạo nhóm mới</h3>
           <form onSubmit={handleCreateGroup}>
             <div className="mb-3">
-              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Chọn tên nhóm</label>
+              <label className="block text-xs text-stone-500 dark:text-stone-400 mb-1">Chọn tên nhóm</label>
               <select
                 value={newGroupName}
                 onChange={(e) => setNewGroupName(e.target.value)}
                 required
-                className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                className="w-full px-3 py-2 border border-stone-200 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-700 text-stone-900 dark:text-white text-sm focus:outline-none focus:ring-1 focus:ring-brand"
               >
                 <option value="">-- Chọn nhóm --</option>
                 {[...Array(10)].map((_, i) => {
@@ -187,35 +187,35 @@ const GroupPanel: React.FC<GroupPanelProps> = ({
                 })}
               </select>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Chọn thành viên:</p>
+            <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">Chọn thành viên:</p>
             <div className="max-h-40 overflow-y-auto space-y-0.5 mb-3">
               {classroom.students.map((s) => (
                 <label
                   key={s.id}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer text-sm"
+                  className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-stone-50 dark:hover:bg-stone-700/50 cursor-pointer text-sm"
                 >
                   <input
                     type="checkbox"
                     checked={selectedStudentIds.includes(s.id)}
                     onChange={() => toggleStudentSelection(s.id)}
-                    className="rounded border-slate-300"
+                    className="rounded border-stone-300"
                   />
-                  <span className="text-slate-900 dark:text-white">{s.full_name}</span>
+                  <span className="text-stone-900 dark:text-white">{s.full_name}</span>
                   {s.student_code && (
-                    <span className="text-slate-400 text-xs">{s.student_code}</span>
+                    <span className="text-stone-400 text-xs">{s.student_code}</span>
                   )}
                 </label>
               ))}
             </div>
             <div className="flex gap-2">
               <button type="submit" disabled={creatingGroup}
-                className="px-3.5 py-1.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-1.5">
+                className="px-3.5 py-1.5 bg-stone-900 dark:bg-white text-white dark:text-stone-900 rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-1.5">
                 {creatingGroup && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 Tạo nhóm
               </button>
               <button type="button"
                 onClick={() => { setShowCreateGroup(false); setSelectedStudentIds([]); }}
-                className="px-3 py-1.5 text-slate-400 hover:text-slate-600 text-sm">
+                className="px-3 py-1.5 text-stone-400 hover:text-stone-600 text-sm">
                 Hủy
               </button>
             </div>
@@ -226,7 +226,7 @@ const GroupPanel: React.FC<GroupPanelProps> = ({
       {/* Groups list */}
       {classroom.groups.length === 0 ? (
         <div className="text-center py-8">
-          <p className="text-sm text-slate-400 dark:text-slate-500">
+          <p className="text-sm text-stone-400 dark:text-stone-500">
             Chưa có nhóm nào. Dùng "Chia nhóm tự động" hoặc tạo thủ công.
           </p>
         </div>
@@ -235,15 +235,15 @@ const GroupPanel: React.FC<GroupPanelProps> = ({
           {classroom.groups.map((group) => (
             <div
               key={group.id}
-              className="border border-slate-200 dark:border-slate-700 rounded-lg p-3.5 bg-white dark:bg-slate-800"
+              className="border border-stone-200 dark:border-stone-700 rounded-lg p-3.5 bg-white dark:bg-stone-800"
             >
               <div className="flex items-center justify-between mb-2">
-                <h3 className="font-medium text-sm text-slate-900 dark:text-white">{group.name}</h3>
+                <h3 className="font-medium text-sm text-stone-900 dark:text-white">{group.name}</h3>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-400">{group.members.length} TV</span>
+                  <span className="text-xs text-stone-400">{group.members.length} TV</span>
                   <button
                     onClick={() => handleDeleteGroup(group.id)}
-                    className="p-0.5 text-slate-300 hover:text-red-500 transition-colors"
+                    className="p-0.5 text-stone-300 hover:text-red-500 transition-colors"
                     title="Xóa nhóm"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -252,16 +252,16 @@ const GroupPanel: React.FC<GroupPanelProps> = ({
               </div>
               <div className="space-y-0.5">
                 {group.members.length === 0 ? (
-                  <p className="text-xs text-slate-400">Chưa có thành viên</p>
+                  <p className="text-xs text-stone-400">Chưa có thành viên</p>
                 ) : (
                   group.members.map((m) => (
                     <div
                       key={m.id}
-                      className="text-sm text-slate-700 dark:text-slate-300 py-0.5"
+                      className="text-sm text-stone-700 dark:text-stone-300 py-0.5"
                     >
                       {m.full_name}
                       {m.student_code && (
-                        <span className="text-xs text-slate-400 ml-1.5">{m.student_code}</span>
+                        <span className="text-xs text-stone-400 ml-1.5">{m.student_code}</span>
                       )}
                     </div>
                   ))

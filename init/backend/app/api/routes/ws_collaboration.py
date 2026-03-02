@@ -203,9 +203,6 @@ async def authenticate_ws(websocket: WebSocket) -> Optional[int]:
     )
 
     if not token:
-        # Try query parameter fallback
-        token = websocket.query_params.get("token")
-    if not token:
         return None
 
     subject = verify_token(token)

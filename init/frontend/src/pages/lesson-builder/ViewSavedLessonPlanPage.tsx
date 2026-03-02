@@ -123,22 +123,22 @@ const ViewSavedLessonPlanPage: React.FC = () => {
   } : null;
 
   return (
-    <div className="h-screen flex flex-col bg-slate-50 dark:bg-slate-900">
+    <div className="h-screen flex flex-col bg-stone-50 dark:bg-stone-900">
       {/* Header - đồng nhất với LessonPlanBuilderPage */}
-      <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+      <header className="bg-white dark:bg-stone-800 border-b border-stone-200 dark:border-stone-700 shadow-sm flex-shrink-0">
         <div className="px-6 py-3 flex items-center justify-between">
           {/* Breadcrumb */}
           <div className="flex items-center gap-2 text-sm">
             <button
               onClick={() => navigate("/lesson-builder/saved")}
-              className="text-slate-600 dark:text-slate-300 font-medium hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+              className="text-stone-600 dark:text-stone-300 font-medium hover:text-brand dark:hover:text-sky-400 transition-colors"
             >
               Kế hoạch đã lưu
             </button>
             {lessonInfo && (
               <>
-                <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-500" />
-                <span className="text-blue-600 dark:text-blue-400 font-semibold truncate max-w-[350px]">
+                <ChevronRight className="w-4 h-4 text-stone-400 dark:text-stone-500" />
+                <span className="text-brand dark:text-sky-400 font-semibold truncate max-w-[350px]">
                   {lessonInfo.lesson_name}
                 </span>
               </>
@@ -148,7 +148,7 @@ const ViewSavedLessonPlanPage: React.FC = () => {
           {/* Actions */}
           <div className="flex items-center gap-3">
             {lessonInfo && (
-              <div className="hidden md:flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
+              <div className="hidden md:flex items-center gap-4 text-xs text-stone-500 dark:text-stone-400">
                 <span className="flex items-center gap-1.5">
                   <BookOpen className="w-3.5 h-3.5" />
                   {lessonInfo.book_type || "N/A"}
@@ -189,7 +189,7 @@ const ViewSavedLessonPlanPage: React.FC = () => {
       </header>
 
       {/* Content Area - đồng nhất layout với LessonPlanBuilderPage */}
-      <main className="flex-1 overflow-y-auto bg-slate-100 dark:bg-slate-900 p-0">
+      <main className="flex-1 overflow-y-auto bg-stone-100 dark:bg-stone-900 p-0">
         {/* Loading */}
         {isLoading && (
           <div className="flex items-center justify-center py-20">

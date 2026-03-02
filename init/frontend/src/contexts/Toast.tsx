@@ -53,9 +53,9 @@ export const ToastProvider: React.FC<{ children?: React.ReactNode }> = ({ childr
           const typeClasses: Record<string, string> = {
             success: 'bg-green-50 border border-green-200 dark:bg-green-900/30 dark:border-green-700',
             error: 'bg-red-50 border border-red-200 dark:bg-red-900/30 dark:border-red-700',
-            info: 'bg-blue-50 border border-blue-200 dark:bg-blue-900/30 dark:border-blue-700',
+            info: 'bg-sky-50 border border-sky-200 dark:bg-sky-900/30 dark:border-sky-700',
             warning: 'bg-amber-50 border border-amber-200 dark:bg-amber-900/30 dark:border-amber-700',
-            default: 'bg-white border dark:bg-gray-800 dark:border-gray-700',
+            default: 'bg-white border dark:bg-stone-800 dark:border-stone-700',
           }
 
           const key = t.type ?? 'default'
@@ -70,7 +70,7 @@ export const ToastProvider: React.FC<{ children?: React.ReactNode }> = ({ childr
                 return <AlertTriangle className="h-6 w-6 text-amber-600 dark:text-amber-400" />
               case 'info':
               default:
-                return <Info className="h-6 w-6 text-sky-500 dark:text-sky-400" />
+                return <Info className="h-6 w-6 text-brand dark:text-sky-400" />
             }
           })()
 
@@ -80,8 +80,8 @@ export const ToastProvider: React.FC<{ children?: React.ReactNode }> = ({ childr
                 <div className="flex items-center gap-3 flex-1">
                   <div className="mt-0.5">{icon}</div>
                   <div>
-                    {t.title && <div className="font-semibold dark:text-gray-100">{t.title}</div>}
-                    {t.description && <div className="text-sm text-gray-700 dark:text-gray-300">{t.description}</div>}
+                    {t.title && <div className="font-semibold dark:text-stone-100">{t.title}</div>}
+                    {t.description && <div className="text-sm text-stone-700 dark:text-stone-300">{t.description}</div>}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -97,7 +97,7 @@ export const ToastProvider: React.FC<{ children?: React.ReactNode }> = ({ childr
                       {a.label}
                     </button>
                   ))}
-                  <button onClick={() => remove(t.id)} className="text-sm text-gray-500 dark:text-gray-400">✕</button>
+                  <button onClick={() => remove(t.id)} className="text-sm text-stone-500 dark:text-stone-400">✕</button>
                 </div>
               </div>
             </div>

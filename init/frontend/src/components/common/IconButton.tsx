@@ -13,7 +13,7 @@ const sizes: Record<string, string> = {
 }
 
 export const IconButton: React.FC<IconButtonProps> = ({ size = 'md', className = '', children, icon: Icon, ...rest }) => {
-  const cls = ['inline-flex items-center justify-center rounded-md text-gray-600 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-brand dark:text-gray-300 dark:hover:bg-white/5 dark:focus:ring-brand', sizes[size], className].join(' ')
+  const cls = ['inline-flex items-center justify-center rounded-md text-stone-600 hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-brand dark:text-stone-300 dark:hover:bg-white/5 dark:focus:ring-brand', sizes[size], className].join(' ')
   return (
     <button className={cls} {...rest}>
       {Icon ? <Icon className="h-5 w-5" /> : children}

@@ -9,7 +9,7 @@ const UnauthorizedPage = () => {
         title="Access denied"
         description="You don’t have permission to view this page."
       >
-        <div className="flex flex-col gap-3 text-sm text-slate-600">
+        <div className="flex flex-col gap-3 text-sm text-stone-600">
           <p>
             If you believe this is an error, contact an administrator to update your roles or try a
             different page.

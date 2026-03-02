@@ -19,7 +19,6 @@ export const GRADES = [
 
 export const TEACHING_METHODS = [
   { value: "Dạy học hợp tác", label: "Dạy học hợp tác" },
-  { value: "Dạy học theo dự án", label: "Dạy học theo dự án" },
   { value: "Giải quyết vấn đề", label: "Giải quyết vấn đề" },
   { value: "Dạy học khám phá", label: "Dạy học khám phá" },
   { value: "Dạy học qua trò chơi", label: "Dạy học qua trò chơi" },
@@ -49,13 +48,6 @@ export const LESSON_LOCATIONS = [
   { value: "phong_may", label: "Phòng máy" },
 ] as const;
 
-// Hình thức kiểm tra/đánh giá cho từng hoạt động
-export const ACTIVITY_FORMATS = [
-  { value: "trac_nghiem", label: "Trắc nghiệm" },
-  { value: "phieu_hoc_tap", label: "Phiếu học tập" },
-  { value: "bai_tap_code", label: "Bài tập code" },
-] as const;
-
 // ============== INTERFACES ==============
 
 export interface LessonBasicInfo {
@@ -83,6 +75,27 @@ export interface LessonDetail {
   orientation?: string;
 }
 
+// ============== NLS (Năng lực số) INTERFACES ==============
+
+export interface NLSChiBao {
+  ma: string;
+  noi_dung: string;
+}
+
+export interface NLSNangLucThanhPhan {
+  name: string;
+}
+
+export interface NLSMienNangLuc {
+  name: string;
+}
+
+export interface NLSSelectionItem {
+  mien_nang_luc: string;
+  ma: string;
+  noi_dung: string;
+}
+
 export interface ActivityConfig {
   activity_name: string;
   activity_type: "khoi_dong" | "hinh_thanh_kien_thuc" | "luyen_tap" | "van_dung";
@@ -92,12 +105,12 @@ export interface ActivityConfig {
   // Lưu nội dung cách tổ chức của phương pháp/kỹ thuật đã chọn
   methods_content?: { [key: string]: string };
   techniques_content?: { [key: string]: string };
-  // Hình thức kiểm tra/đánh giá: trắc nghiệm, phiếu học tập, bài tập code
-  activity_format?: "trac_nghiem" | "phieu_hoc_tap" | "bai_tap_code";
   // Yêu cầu bổ sung từ người dùng
   custom_request?: string;
   // Vị trí dạy học: lớp học hoặc phòng máy
   location?: "lop_hoc" | "phong_may";
+  // NLS (Năng lực số) - Chỉ báo năng lực số đã chọn
+  nls_selections?: NLSSelectionItem[];
 }
 
 export interface QuizQuestionItem {
@@ -155,6 +168,7 @@ export interface LessonPlanSection {
   content: string;
   questions?: QuizQuestionItem[]; // Chỉ cho section trac_nghiem
   mindmap_data?: string | null; // Dữ liệu sơ đồ tư duy (Markdown headings)
+  mindmap_activity_name?: string | null; // Tên hoạt động gắn với sơ đồ tư duy
   worksheet_data?: WorksheetData | null; // Dữ liệu phiếu học tập JSON
   editable: boolean;
 }

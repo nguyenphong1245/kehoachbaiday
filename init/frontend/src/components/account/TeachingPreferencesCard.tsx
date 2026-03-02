@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Wrench, X, Plus, Check } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Settings, X, Plus, Check, Save, Loader2 } from "lucide-react";
 
 import type { UserSettings, UserSettingsUpdatePayload } from "@/types/auth";
 import { DEFAULT_TEACHING_TOOLS } from "@/constants/teachingTools";
@@ -14,15 +14,16 @@ const TeachingPreferencesCard = ({ settings, onSave }: Props) => {
   const [customTools, setCustomTools] = useState<string[]>([]);
   const [newTool, setNewTool] = useState("");
   const [teachingStyle, setTeachingStyle] = useState("");
+  const [originalStyle, setOriginalStyle] = useState("");
   const [saving, setSaving] = useState(false);
-
-  const styleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [savingStyle, setSavingStyle] = useState(false);
 
   useEffect(() => {
     if (!settings) return;
     setSelectedTools(settings.teaching_tools ?? []);
     setCustomTools(settings.custom_tools ?? []);
     setTeachingStyle(settings.teaching_style ?? "");
+    setOriginalStyle(settings.teaching_style ?? "");
   }, [settings]);
 
   const persist = useCallback(
@@ -72,43 +73,43 @@ const TeachingPreferencesCard = ({ settings, onSave }: Props) => {
     persist({ custom_tools: nextCustom, teaching_tools: nextSelected });
   };
 
-  const handleStyleChange = (value: string) => {
-    setTeachingStyle(value);
-    if (styleTimerRef.current) clearTimeout(styleTimerRef.current);
-    styleTimerRef.current = setTimeout(() => {
-      persist({ teaching_style: value || null });
-    }, 800);
+  const handleSaveStyle = async () => {
+    setSavingStyle(true);
+    try {
+      await onSave({ teaching_style: teachingStyle || null });
+      setOriginalStyle(teachingStyle);
+    } catch {
+      // useAccount already sets error
+    } finally {
+      setSavingStyle(false);
+    }
   };
 
-  useEffect(() => {
-    return () => {
-      if (styleTimerRef.current) clearTimeout(styleTimerRef.current);
-    };
-  }, []);
+  const hasStyleChanged = teachingStyle !== originalStyle;
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+    <div className="bg-white dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 shadow-sm overflow-hidden">
       {/* Header */}
-      <div className="px-5 py-4 bg-gradient-to-r from-orange-50 to-amber-50 dark:from-slate-700/50 dark:to-slate-700/30 border-b border-slate-200 dark:border-slate-700">
+      <div className="px-5 py-4 bg-sky-50 dark:bg-stone-700/50 border-b border-stone-200 dark:border-stone-700">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
-            <Wrench className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+          <div className="w-8 h-8 rounded-lg bg-sky-100 dark:bg-sky-900/30 flex items-center justify-center">
+            <Settings className="w-4 h-4 text-brand dark:text-sky-400" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wide">
+            <h2 className="text-sm font-bold text-stone-800 dark:text-white uppercase tracking-wide">
               Cài đặt dạy học
             </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-stone-500 dark:text-stone-400">
               Áp dụng tự động khi sinh kế hoạch bài dạy
             </p>
           </div>
         </div>
       </div>
 
-      <div className="p-5 space-y-5">
+      <div className="p-5 space-y-6">
         {/* Teaching tools */}
         <div>
-          <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide mb-3">
+          <label className="block text-xs font-semibold text-stone-600 dark:text-stone-300 uppercase tracking-wide mb-3">
             Công cụ dạy học
           </label>
 
@@ -123,8 +124,8 @@ const TeachingPreferencesCard = ({ settings, onSave }: Props) => {
                   onClick={() => toggleTool(tool)}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all duration-200 ${
                     isSelected
-                      ? "bg-sky-50 dark:bg-sky-900/25 text-sky-700 dark:text-sky-300 border-sky-300 dark:border-sky-700 shadow-sm"
-                      : "bg-slate-50 dark:bg-slate-700/60 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500"
+                      ? "bg-sky-50 dark:bg-sky-900/25 text-brand-dark dark:text-sky-300 border-sky-300 dark:border-sky-700 shadow-sm"
+                      : "bg-stone-50 dark:bg-stone-700/60 text-stone-500 dark:text-stone-400 border-stone-200 dark:border-stone-600 hover:border-sky-300 dark:hover:border-brand hover:text-brand dark:hover:text-sky-400"
                   }`}
                 >
                   {isSelected && <Check className="w-3 h-3" />}
@@ -166,43 +167,70 @@ const TeachingPreferencesCard = ({ settings, onSave }: Props) => {
                 }
               }}
               placeholder="Thêm công cụ mới..."
-              className="flex-1 px-3 py-2 text-sm bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-800 dark:text-white focus:ring-2 focus:ring-sky-500 focus:border-sky-500 hover:border-sky-400 dark:hover:border-sky-500 transition-colors"
+              className="flex-1 px-3 py-2 text-sm bg-stone-50 dark:bg-stone-700 border border-stone-200 dark:border-stone-600 rounded-lg text-stone-800 dark:text-white placeholder-stone-400 focus:ring-2 focus:ring-brand focus:border-brand hover:border-brand-light dark:hover:border-brand transition-colors"
               maxLength={100}
             />
             <button
               type="button"
               onClick={addCustomTool}
               disabled={!newTool.trim()}
-              className="inline-flex items-center gap-1 px-3.5 py-2 text-sm font-medium bg-sky-600 hover:bg-sky-700 text-white rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-brand hover:bg-brand-dark text-white rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
             >
               <Plus className="w-4 h-4" />
               Thêm
             </button>
           </div>
+
+          {saving && (
+            <p className="text-xs text-brand mt-2 flex items-center gap-1">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Đang lưu...
+            </p>
+          )}
         </div>
 
         {/* Divider */}
-        <div className="border-t border-slate-200 dark:border-slate-700" />
+        <div className="border-t border-stone-200 dark:border-stone-700" />
 
         {/* Teaching style */}
         <div>
-          <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide mb-3">
+          <label className="block text-xs font-semibold text-stone-600 dark:text-stone-300 uppercase tracking-wide mb-3">
             Phong cách dạy học
           </label>
           <textarea
             value={teachingStyle}
-            onChange={(e) => handleStyleChange(e.target.value)}
-            rows={3}
+            onChange={(e) => setTeachingStyle(e.target.value)}
+            rows={4}
             maxLength={2000}
-            className="w-full px-3 py-2.5 text-sm bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-800 dark:text-white focus:ring-2 focus:ring-sky-500 focus:border-sky-500 hover:border-sky-400 dark:hover:border-sky-500 resize-none transition-colors"
+            placeholder="Mô tả phong cách dạy học của bạn để AI tạo kế hoạch bài dạy phù hợp hơn..."
+            className="w-full px-3 py-2.5 text-sm bg-stone-50 dark:bg-stone-700 border border-stone-200 dark:border-stone-600 rounded-lg text-stone-800 dark:text-white placeholder-stone-400 focus:ring-2 focus:ring-brand focus:border-brand hover:border-brand-light dark:hover:border-brand resize-none transition-colors"
           />
-          <div className="flex items-center justify-between mt-1.5">
-            <span className="text-xs text-slate-400 dark:text-slate-500">
+          <div className="flex items-center justify-between mt-2">
+            <span className="text-xs text-stone-400 dark:text-stone-500">
               {teachingStyle.length}/2000
             </span>
-            {saving && (
-              <span className="text-xs text-sky-500 animate-pulse">Đang lưu...</span>
-            )}
+            <button
+              type="button"
+              onClick={handleSaveStyle}
+              disabled={!hasStyleChanged || savingStyle}
+              className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-all shadow-sm ${
+                hasStyleChanged
+                  ? "bg-brand hover:bg-brand-dark text-white"
+                  : "bg-stone-100 dark:bg-stone-700 text-stone-400 dark:text-stone-500 cursor-not-allowed"
+              } disabled:opacity-50`}
+            >
+              {savingStyle ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Đang lưu...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Lưu thay đổi
+                </>
+              )}
+            </button>
           </div>
         </div>
       </div>

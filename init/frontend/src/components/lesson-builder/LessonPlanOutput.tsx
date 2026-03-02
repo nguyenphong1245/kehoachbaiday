@@ -385,8 +385,12 @@ const mmTransformer = new Transformer();
  * SVG <text> elements. foreignObject content doesn't render in print/iframe contexts,
  * but SVG <text> works universally.
  */
-const serializeSvgForPrint = (origSvg: Element): string => {
+const serializeSvgForPrint = (origSvg: Element, fixedWidth?: number): string => {
   const clone = origSvg.cloneNode(true) as SVGElement;
+
+  // Ensure proper SVG namespace
+  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
 
   // Read computed styles from original live DOM foreignObjects
   const origFOs = Array.from(origSvg.querySelectorAll('foreignObject'));
@@ -428,21 +432,28 @@ const serializeSvgForPrint = (origSvg: Element): string => {
     fo.parentNode?.replaceChild(svgText, fo);
   });
 
+  // Remove Markmap <style> blocks that may reference unsupported CSS in image context
+  clone.querySelectorAll('style').forEach(s => s.remove());
+
   // Set proper viewBox from the original SVG's rendered dimensions so it scales for print
   try {
     const bbox = (origSvg as SVGSVGElement).getBBox();
     const pad = 20;
+    const vbW = bbox.width + pad * 2;
+    const vbH = bbox.height + pad * 2;
     clone.setAttribute('viewBox',
-      `${bbox.x - pad} ${bbox.y - pad} ${bbox.width + pad * 2} ${bbox.height + pad * 2}`);
-    clone.setAttribute('width', '100%');
-    clone.setAttribute('height', String(Math.round(bbox.height + pad * 2)));
+      `${bbox.x - pad} ${bbox.y - pad} ${vbW} ${vbH}`);
+    const w = fixedWidth || Math.max(Math.round(vbW), 800);
+    const h = Math.round(w * vbH / vbW);
+    clone.setAttribute('width', String(w));
+    clone.setAttribute('height', String(h));
     clone.setAttribute('preserveAspectRatio', 'xMidYMid meet');
     // Remove CSS width/height that override the attributes
     clone.style.removeProperty('width');
     clone.style.removeProperty('height');
   } catch {
-    clone.setAttribute('width', '100%');
-    clone.setAttribute('height', '400');
+    clone.setAttribute('width', String(fixedWidth || 1200));
+    clone.setAttribute('height', '700');
   }
 
   return new XMLSerializer().serializeToString(clone);
@@ -690,14 +701,57 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
   const [activePHTIndex, setActivePHTIndex] = useState(0);
 
   // Insert mindmap placeholder before "d) Tổ chức thực hiện" in section content
-  const insertMindmapPlaceholder = (sectionContent: string, sectionId: string): string => {
+  const insertMindmapPlaceholder = (sectionContent: string, sectionId: string, activityName?: string | null): string => {
     const placeholder = `\n\n<div class="mindmap-inline" data-section-id="${sectionId}"></div>\n`;
-    // Look for "d)" or "**d)" at the start of a line
-    const match = sectionContent.match(/\n(\*{0,2})d[\)\.]\s/);
-    if (match && match.index !== undefined) {
-      return sectionContent.slice(0, match.index) + placeholder + sectionContent.slice(match.index);
+    // Regex: match c) at start of a line, optional bold: c), **c)**, **c)
+    const cRegex = /\n\*{0,2}c[\)\.]\*{0,2}\s/;
+    // Regex: match next section letter (d, e, ...) at start of a line
+    const nextLetterRegex = /\n\*{0,2}[d-z][\)\.]\*{0,2}\s/;
+
+    // If activityName provided, search ONLY within that activity's range
+    if (activityName) {
+      const activityKey = activityName.match(/Hoạt động\s*[\d.]+/)?.[0];
+      if (activityKey) {
+        const activityPos = sectionContent.indexOf(activityKey);
+        if (activityPos !== -1) {
+          // Bound: from this activity heading to the NEXT activity heading (must be at start of line)
+          const afterKey = sectionContent.slice(activityPos + activityKey.length);
+          const nextActivity = afterKey.match(/\n\*{0,2}Hoạt động\s*[\d.]+/);
+          const endBound = nextActivity && nextActivity.index !== undefined
+            ? activityPos + activityKey.length + nextActivity.index
+            : sectionContent.length;
+
+          const activityContent = sectionContent.slice(activityPos, endBound);
+
+          // Find c) Sản phẩm within this activity
+          const cMatch = activityContent.match(cRegex);
+          if (cMatch && cMatch.index !== undefined) {
+            // Find end of c) content: next section letter (d, e...) or end of activity
+            const afterC = activityContent.slice(cMatch.index + cMatch[0].length);
+            const nextMatch = afterC.match(nextLetterRegex);
+            const insertOffset = nextMatch && nextMatch.index !== undefined
+              ? cMatch.index + cMatch[0].length + nextMatch.index
+              : activityContent.length;
+            const insertPos = activityPos + insertOffset;
+            return sectionContent.slice(0, insertPos) + placeholder + sectionContent.slice(insertPos);
+          }
+
+          // No c) found → insert at end of activity
+          return sectionContent.slice(0, endBound) + placeholder + sectionContent.slice(endBound);
+        }
+      }
     }
-    // Fallback: append at end
+
+    // Fallback: find first c) in the entire content, insert after its content
+    const cMatch = sectionContent.match(cRegex);
+    if (cMatch && cMatch.index !== undefined) {
+      const afterC = sectionContent.slice(cMatch.index + cMatch[0].length);
+      const nextMatch = afterC.match(nextLetterRegex);
+      if (nextMatch && nextMatch.index !== undefined) {
+        const insertPos = cMatch.index + cMatch[0].length + nextMatch.index;
+        return sectionContent.slice(0, insertPos) + placeholder + sectionContent.slice(insertPos);
+      }
+    }
     return sectionContent + placeholder;
   };
 
@@ -711,8 +765,26 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
 
     let content = mainSections.map(s => {
       let sectionContent = s.content;
+      // Strip leaked markmap CSS + node text from previously broken saves
+      if (sectionContent.includes('.markmap{')) {
+        const paragraphs = sectionContent.split('\n\n');
+        const markmapIdx = paragraphs.findIndex(p => p.includes('.markmap{'));
+        if (markmapIdx !== -1) {
+          // Find next paragraph with markdown formatting (end of leaked text)
+          let endIdx = paragraphs.length;
+          for (let i = markmapIdx + 1; i < paragraphs.length; i++) {
+            const trimmed = paragraphs[i].trim();
+            if (/^(\*{1,2}|#{1,6}|-|\d+\.)/.test(trimmed) || /^[a-z]\)\s/.test(trimmed)) {
+              endIdx = i;
+              break;
+            }
+          }
+          paragraphs.splice(markmapIdx, endIdx - markmapIdx);
+          sectionContent = paragraphs.join('\n\n');
+        }
+      }
       if (s.mindmap_data?.trim()) {
-        sectionContent = insertMindmapPlaceholder(sectionContent, s.section_id);
+        sectionContent = insertMindmapPlaceholder(sectionContent, s.section_id, s.mindmap_activity_name);
       }
       return sectionContent;
     }).join("\n\n");
@@ -954,20 +1026,108 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
   };
 
   const handleDownloadMindmap = () => {
-    const svg = document.querySelector('.mindmap-modal-preview svg');
-    if (!svg) return;
-    const serializer = new XMLSerializer();
-    let svgString = serializer.serializeToString(svg);
-    svgString = '<?xml version="1.0" encoding="UTF-8"?>\n' + svgString;
-    const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `so_do_tu_duy_${result.lesson_info.lesson_name || 'mindmap'}.svg`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    const origSvg = document.querySelector('.mindmap-modal-preview svg') as SVGSVGElement | null;
+    if (!origSvg) return;
+
+    try {
+      const clone = origSvg.cloneNode(true) as SVGSVGElement;
+
+      // 1) Inline all computed styles on every element so the standalone SVG looks identical
+      const inlineStyles = (orig: Element, copy: Element) => {
+        const cs = window.getComputedStyle(orig);
+        (copy as HTMLElement).style.cssText = cs.cssText;
+        const origChildren = orig.children;
+        const copyChildren = copy.children;
+        for (let i = 0; i < origChildren.length; i++) {
+          if (copyChildren[i]) inlineStyles(origChildren[i], copyChildren[i]);
+        }
+      };
+      inlineStyles(origSvg, clone);
+
+      // 2) Replace <foreignObject> (HTML text) with native SVG <text>
+      const origFOs = Array.from(origSvg.querySelectorAll('foreignObject'));
+      const cloneFOs = Array.from(clone.querySelectorAll('foreignObject'));
+      cloneFOs.forEach((fo, idx) => {
+        const text = (fo.textContent || '').trim();
+        if (!text) { fo.remove(); return; }
+
+        const x = parseFloat(fo.getAttribute('x') || '0');
+        const y = parseFloat(fo.getAttribute('y') || '0');
+        const h = parseFloat(fo.getAttribute('height') || '20');
+
+        let fontSize = '14px', color = '#333';
+        const origDiv = origFOs[idx]?.querySelector('div, span');
+        if (origDiv) {
+          const cs = window.getComputedStyle(origDiv);
+          if (cs.fontSize) fontSize = cs.fontSize;
+          if (cs.color) color = cs.color;
+        }
+
+        const svgText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        svgText.setAttribute('x', String(x + 4));
+        svgText.setAttribute('y', String(y + h / 2));
+        svgText.setAttribute('font-size', fontSize);
+        svgText.setAttribute('font-family', 'Arial, sans-serif');
+        svgText.setAttribute('fill', color);
+        svgText.setAttribute('dominant-baseline', 'central');
+        svgText.textContent = text;
+        // Clear inherited cssText so it doesn't break SVG text rendering
+        svgText.removeAttribute('style');
+
+        fo.parentNode?.replaceChild(svgText, fo);
+      });
+
+      // 3) Set fixed pixel dimensions from the live SVG's bounding box
+      const bbox = origSvg.getBBox();
+      const pad = 30;
+      const vbW = bbox.width + pad * 2;
+      const vbH = bbox.height + pad * 2;
+      const exportW = 2400;
+      const exportH = Math.round(exportW * vbH / vbW);
+
+      clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      clone.setAttribute('viewBox', `${bbox.x - pad} ${bbox.y - pad} ${vbW} ${vbH}`);
+      clone.setAttribute('width', String(exportW));
+      clone.setAttribute('height', String(exportH));
+      clone.removeAttribute('style');
+
+      // 4) Serialize → Blob → Image → Canvas → PNG download
+      const svgStr = new XMLSerializer().serializeToString(clone);
+      const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+
+      const img = new Image();
+      img.onload = () => {
+        const scale = 2;
+        const canvas = document.createElement('canvas');
+        canvas.width = exportW * scale;
+        canvas.height = exportH * scale;
+        const ctx = canvas.getContext('2d')!;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.scale(scale, scale);
+        ctx.drawImage(img, 0, 0, exportW, exportH);
+        URL.revokeObjectURL(url);
+
+        canvas.toBlob((pngBlob) => {
+          if (!pngBlob) return;
+          const lessonName = result.lesson_info.lesson_name || "so-do-tu-duy";
+          const safeName = lessonName.replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g, '').trim().replace(/\s+/g, '_');
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(pngBlob);
+          a.download = `SoDoTuDuy_${safeName}.png`;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        }, 'image/png');
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        alert('Không thể tạo hình ảnh sơ đồ tư duy. Vui lòng thử lại.');
+      };
+      img.src = url;
+    } catch {
+      alert('Không thể tạo hình ảnh sơ đồ tư duy. Vui lòng thử lại.');
+    }
   };
 
   const handleInsertMindmap = () => {
@@ -991,7 +1151,7 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
       let content = mainSections.map(s => {
         let sc = s.content;
         if (s.mindmap_data?.trim()) {
-          sc = insertMindmapPlaceholder(sc, s.section_id);
+          sc = insertMindmapPlaceholder(sc, s.section_id, s.mindmap_activity_name);
         }
         return sc;
       }).join("\n\n");
@@ -1107,13 +1267,23 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
     setSaveMessage(null);
     try {
       const td = createTurndownService();
-      const markdown = td.turndown(editContent);
+
+      // Strip mindmap SVG containers before Turndown so CSS text doesn't leak into markdown
+      const tempDiv = document.createElement("div");
+      tempDiv.innerHTML = editContent;
+      tempDiv.querySelectorAll(".mindmap-inline-container").forEach(el => el.remove());
+      const markdown = td.turndown(tempDiv.innerHTML);
+
+      // Collect mindmap_data from original sections for re-rendering in saved view
+      const mindmapSection = sections.find(s => s.mindmap_data?.trim());
       const saveSections: LessonPlanSection[] = [{
         section_id: sections[0]?.section_id || "full_content",
         section_type: "full",
         title: "Kế hoạch bài dạy",
         content: markdown,
         editable: true,
+        mindmap_data: mindmapSection?.mindmap_data || undefined,
+        mindmap_activity_name: mindmapSection?.mindmap_activity_name || undefined,
       }];
 
       const fullContent = saveSections
@@ -1338,14 +1508,46 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
     const tempDiv = document.createElement("div");
     tempDiv.innerHTML = html;
     const blocks: WorksheetBlock[] = [];
-    for (const child of Array.from(tempDiv.children)) {
-      const el = child as HTMLElement;
-      if (el.classList?.contains("worksheet-line") ||
-          (el.tagName === "DIV" && !el.textContent?.trim() && el.querySelector('span[style*="border-bottom"]'))) {
-        blocks.push({ id: newBlockId(), type: 'dotted-line' });
-      } else {
+
+    // Detect standalone dotted lines (for student writing)
+    const isDottedLine = (el: HTMLElement): boolean => {
+      if (el.closest('table')) return false; // don't flatten table internals
+      if (el.classList?.contains("worksheet-line")) return true;
+      const style = el.getAttribute('style') || '';
+      const text = (el.textContent || '').trim();
+      // renderDottedLines output: div with border-bottom dotted, no text
+      if (el.tagName === 'DIV' && !text && /border-bottom.*dotted/.test(style)) return true;
+      // formatWorksheetDotLines output: div with dotted span, no text
+      if (el.tagName === 'DIV' && !text && el.querySelector('span[style*="border-bottom"]')) return true;
+      return false;
+    };
+
+    // Recursively process elements, flattening containers that mix content and dotted lines
+    const processElement = (el: HTMLElement) => {
+      // Tables / pre blocks are always single content blocks
+      if (el.tagName === 'TABLE' || el.tagName === 'PRE') {
         blocks.push({ id: newBlockId(), type: 'content', html: el.outerHTML });
+        return;
       }
+      if (isDottedLine(el)) {
+        blocks.push({ id: newBlockId(), type: 'dotted-line' });
+        return;
+      }
+      // Check if any descendant is a dotted line (isDottedLine already excludes table internals)
+      const hasDottedDescendant = Array.from(el.querySelectorAll('div')).some(d => isDottedLine(d as HTMLElement));
+      if (!hasDottedDescendant) {
+        // Leaf content block - no dotted lines inside
+        blocks.push({ id: newBlockId(), type: 'content', html: el.outerHTML });
+        return;
+      }
+      // Container with dotted lines inside → flatten by processing children
+      for (const child of Array.from(el.children)) {
+        processElement(child as HTMLElement);
+      }
+    };
+
+    for (const child of Array.from(tempDiv.children)) {
+      processElement(child as HTMLElement);
     }
     return blocks;
   };
@@ -1550,10 +1752,10 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
                   onClick={handleDownloadMindmap}
                   disabled={!mindmapEditorData.trim()}
                   className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  title="Tải về file SVG"
+                  title="Tải về PNG"
                 >
                   <Download className="w-4 h-4" />
-                  Tải về
+                  Tải sơ đồ tư duy
                 </button>
                 <button
                   onClick={handleInsertMindmap}
@@ -1657,39 +1859,17 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
                   lineHeight: '1.5',
                 }}
               >
-                {printWorksheetBlocks[activePHTIndex]?.map((block, blockIdx) => (
-                  <div key={block.id} className="relative group/block">
-                    {/* Add line button between blocks */}
-                    {blockIdx > 0 && (
-                      <div className="relative h-0 flex justify-center">
-                        <button
-                          onClick={() => handleAddDottedLine(activePHTIndex, blockIdx - 1)}
-                          className="absolute -top-2.5 z-10 w-5 h-5 bg-green-500 hover:bg-green-600 text-white rounded-full flex items-center justify-center text-xs font-bold opacity-0 group-hover/block:opacity-100 transition-opacity shadow"
-                          title="Thêm dòng chấm"
-                        >
-                          +
-                        </button>
-                      </div>
-                    )}
-
+                {printWorksheetBlocks[activePHTIndex]?.map((block) => (
+                  <div key={block.id}>
                     {block.type === 'dotted-line' ? (
-                      <div className="relative group/line">
-                        <div
-                          className="border-b border-dotted border-gray-800 dark:border-gray-400"
-                          style={{
-                            height: '1.5em',
-                            margin: '0.5em 0',
-                            width: '100%',
-                          }}
-                        />
-                        <button
-                          onClick={() => handleRemoveDottedLine(activePHTIndex, block.id)}
-                          className="absolute -right-3 top-0 w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-xs font-bold opacity-0 group-hover/line:opacity-100 transition-opacity shadow"
-                          title="Xóa dòng"
-                        >
-                          ×
-                        </button>
-                      </div>
+                      <div
+                        className="border-b border-dotted border-gray-800 dark:border-gray-400"
+                        style={{
+                          height: '1.5em',
+                          margin: '0.5em 0',
+                          width: '100%',
+                        }}
+                      />
                     ) : (
                       <div dangerouslySetInnerHTML={{ __html: block.html || '' }} />
                     )}

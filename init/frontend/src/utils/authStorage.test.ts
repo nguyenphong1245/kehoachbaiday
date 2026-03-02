@@ -17,9 +17,10 @@ describe("authStorage", () => {
       expect(getStoredAccessToken()).toBeNull();
     });
 
-    it("stores and retrieves a token", () => {
+    it("setStoredAccessToken is a no-op (token managed via httpOnly cookie)", () => {
       setStoredAccessToken("my-token");
-      expect(getStoredAccessToken()).toBe("my-token");
+      // Access token is now managed via httpOnly cookies, so getter always returns null
+      expect(getStoredAccessToken()).toBeNull();
     });
   });
 

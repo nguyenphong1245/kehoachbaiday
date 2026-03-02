@@ -47,7 +47,7 @@ const UserRoleTable = ({ users, roles, currentUserId, onChange, onDelete }: User
   };
 
   if (!users.length) {
-    return <p className="text-sm text-slate-500">Không tìm thấy người dùng nào.</p>;
+    return <p className="text-sm text-stone-500">Không tìm thấy người dùng nào.</p>;
   }
 
   return (
@@ -55,11 +55,11 @@ const UserRoleTable = ({ users, roles, currentUserId, onChange, onDelete }: User
       {/* Mobile: Card view */}
       <div className="block sm:hidden space-y-3 px-3">
         {users.map((user) => (
-          <div key={user.id} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+          <div key={user.id} className="p-4 bg-stone-50 dark:bg-stone-700/50 rounded-lg">
             <div className="flex items-start justify-between gap-2 mb-3">
               <div className="min-w-0">
-                <p className="font-medium text-gray-800 dark:text-gray-200 truncate">{user.email}</p>
-                <p className="text-xs text-gray-400 dark:text-gray-500">#{user.id}</p>
+                <p className="font-medium text-stone-800 dark:text-stone-200 truncate">{user.email}</p>
+                <p className="text-xs text-stone-400 dark:text-stone-500">#{user.id}</p>
               </div>
               {onDelete && currentUserId !== user.id && (
                 <button
@@ -76,15 +76,15 @@ const UserRoleTable = ({ users, roles, currentUserId, onChange, onDelete }: User
                 const checked = user.roles.some((item) => item.id === role.id);
                 const disabled = updatingUserId === user.id;
                 return (
-                  <label key={role.id} className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-gray-800 rounded-md cursor-pointer">
+                  <label key={role.id} className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-stone-800 rounded-md cursor-pointer">
                     <input
                       type="checkbox"
-                      className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-sky-500"
+                      className="h-4 w-4 rounded border-stone-300 dark:border-stone-600 text-sky-500"
                       checked={checked}
                       onChange={(event) => handleToggle(user, role, event.target.checked)}
                       disabled={disabled}
                     />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">{role.name}</span>
+                    <span className="text-sm text-stone-700 dark:text-stone-300">{role.name}</span>
                   </label>
                 );
               })}
@@ -94,27 +94,27 @@ const UserRoleTable = ({ users, roles, currentUserId, onChange, onDelete }: User
       </div>
 
       {/* Desktop: Table view */}
-      <table className="hidden sm:table min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-        <thead className="bg-gray-50 dark:bg-gray-900">
+      <table className="hidden sm:table min-w-full divide-y divide-stone-200 dark:divide-stone-700 text-sm">
+        <thead className="bg-stone-50 dark:bg-stone-900">
           <tr>
-            <th className="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-300">Người dùng</th>
+            <th className="px-4 py-3 text-left font-semibold text-stone-700 dark:text-stone-300">Người dùng</th>
             {roles.map((role) => (
-              <th key={role.id} className="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-300">
+              <th key={role.id} className="px-4 py-3 text-left font-semibold text-stone-700 dark:text-stone-300">
                 {role.name}
               </th>
             ))}
             {onDelete && (
-              <th className="px-4 py-3 text-center font-semibold text-gray-700 dark:text-gray-300">Thao tác</th>
+              <th className="px-4 py-3 text-center font-semibold text-stone-700 dark:text-stone-300">Thao tác</th>
             )}
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-800">
+        <tbody className="divide-y divide-stone-100 dark:divide-stone-700 bg-white dark:bg-stone-800">
           {users.map((user) => (
-            <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-              <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-200">
+            <tr key={user.id} className="hover:bg-stone-50 dark:hover:bg-stone-700/50">
+              <td className="px-4 py-3 font-medium text-stone-800 dark:text-stone-200">
                 <div className="flex flex-col">
                   <span>{user.email}</span>
-                  <span className="text-xs text-gray-400 dark:text-gray-500">#{user.id}</span>
+                  <span className="text-xs text-stone-400 dark:text-stone-500">#{user.id}</span>
                 </div>
               </td>
               {roles.map((role) => {
@@ -125,12 +125,12 @@ const UserRoleTable = ({ users, roles, currentUserId, onChange, onDelete }: User
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
-                        className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-sky-500 focus:ring-sky-500 dark:bg-gray-700"
+                        className="h-4 w-4 rounded border-stone-300 dark:border-stone-600 text-sky-500 focus:ring-sky-500 dark:bg-stone-700"
                         checked={checked}
                         onChange={(event) => handleToggle(user, role, event.target.checked)}
                         disabled={disabled}
                       />
-                      <span className="text-xs text-gray-500 dark:text-gray-400">{role.name}</span>
+                      <span className="text-xs text-stone-500 dark:text-stone-400">{role.name}</span>
                     </label>
                   </td>
                 );
@@ -148,7 +148,7 @@ const UserRoleTable = ({ users, roles, currentUserId, onChange, onDelete }: User
                       {deletingUserId === user.id ? "Đang xóa..." : "Xóa"}
                     </button>
                   ) : (
-                    <span className="text-xs text-gray-400 dark:text-gray-500 italic">Bạn</span>
+                    <span className="text-xs text-stone-400 dark:text-stone-500 italic">Bạn</span>
                   )}
                 </td>
               )}

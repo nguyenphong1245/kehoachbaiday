@@ -32,12 +32,7 @@ const ForgotPasswordPage = () => {
 
   return (
     <AuthCard
-      title="Quên mật khẩu?"
-      description={
-        <span>
-          Cần xác minh email? <Link to="/resend-verification">Gửi lại email xác minh</Link>
-        </span>
-      }
+      title="QUÊN MẬT KHẨU?"
     >
       <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
         {error ? <FormAlert>{error}</FormAlert> : null}
@@ -54,7 +49,7 @@ const ForgotPasswordPage = () => {
         />
         <SubmitButton label="Gửi liên kết đặt lại" isLoading={isSubmitting} />
       </form>
-      <p className="mt-4 text-center text-sm text-slate-500 dark:text-slate-400">
+      <p className="mt-4 text-center text-sm text-stone-500 dark:text-stone-400">
         Đã nhớ mật khẩu? <Link to="/login">Đăng nhập</Link>
       </p>
     </AuthCard>

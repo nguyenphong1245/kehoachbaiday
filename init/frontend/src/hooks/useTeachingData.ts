@@ -7,17 +7,12 @@ interface TeachingMethodFromAPI {
   value: string;
   label: string;
   cach_tien_hanh: string | null;
-  uu_diem: string | null;
-  nhuoc_diem: string | null;
 }
 
 interface TeachingTechniqueFromAPI {
   value: string;
   label: string;
   cach_tien_hanh: string | null;
-  uu_diem: string | null;
-  nhuoc_diem: string | null;
-  bo_sung: string | null;
 }
 
 interface StaticDataResponse {
@@ -32,9 +27,6 @@ export interface TeachingItem {
   label: string;
   content: string | null; // Nội dung cách tổ chức (kết hợp từ các trường)
   cach_tien_hanh?: string | null;
-  uu_diem?: string | null;
-  nhuoc_diem?: string | null;
-  bo_sung?: string | null;
 }
 
 export interface TeachingData {
@@ -50,20 +42,10 @@ export interface TeachingData {
 // Helper function để tạo content từ các trường
 function buildContent(item: TeachingMethodFromAPI | TeachingTechniqueFromAPI): string {
   const parts: string[] = [];
-  
+
   if (item.cach_tien_hanh) {
     parts.push(`**Cách tiến hành:**\n${item.cach_tien_hanh}`);
   }
-  if (item.uu_diem) {
-    parts.push(`**Ưu điểm:**\n${item.uu_diem}`);
-  }
-  if (item.nhuoc_diem) {
-    parts.push(`**Nhược điểm:**\n${item.nhuoc_diem}`);
-  }
-  if ('bo_sung' in item && item.bo_sung) {
-    parts.push(`**Bổ sung:**\n${item.bo_sung}`);
-  }
-  
   return parts.join('\n\n');
 }
 
@@ -90,7 +72,7 @@ export function useTeachingData(): TeachingData {
       try {
         setLoading(true);
         setError(null);
-        
+
         // Fetch từ Neo4j qua lesson-builder/static-data endpoint
         const baseUrl = import.meta.env.VITE_API_URL ?? '/api/v1';
         const response = await fetch(`${baseUrl}/lesson-builder/static-data`, {
@@ -111,8 +93,6 @@ export function useTeachingData(): TeachingData {
             label: m.label,
             content: buildContent(m),
             cach_tien_hanh: m.cach_tien_hanh,
-            uu_diem: m.uu_diem,
-            nhuoc_diem: m.nhuoc_diem,
           }))
         );
 
@@ -123,9 +103,6 @@ export function useTeachingData(): TeachingData {
             label: t.label,
             content: buildContent(t),
             cach_tien_hanh: t.cach_tien_hanh,
-            uu_diem: t.uu_diem,
-            nhuoc_diem: t.nhuoc_diem,
-            bo_sung: t.bo_sung,
           }))
         );
       } catch (err) {

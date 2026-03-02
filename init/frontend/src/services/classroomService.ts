@@ -62,7 +62,7 @@ export async function uploadStudents(
 
 export async function addStudent(
   classroomId: number,
-  data: { full_name: string; student_code?: string; date_of_birth?: string }
+  data: { full_name: string; date_of_birth?: string }
 ): Promise<ClassStudent> {
   const res = await api.post(`/classrooms/${classroomId}/students`, data);
   return res.data;

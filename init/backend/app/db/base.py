@@ -15,8 +15,6 @@ def load_all_models() -> None:
     import app.models.role  # noqa: F401
     import app.models.settings  # noqa: F401
     import app.models.user  # noqa: F401
-    import app.models.chat_conversation  # noqa: F401
-    import app.models.chat_message  # noqa: F401
     import app.models.shared_quiz  # noqa: F401
     import app.models.shared_worksheet  # noqa: F401
     import app.models.saved_lesson_plan  # noqa: F401
@@ -29,6 +27,7 @@ def load_all_models() -> None:
     import app.models.class_assignment  # noqa: F401
     import app.models.work_session  # noqa: F401
     import app.models.peer_review  # noqa: F401
+    import app.models.guide_card  # noqa: F401
 
 
 load_all_models()

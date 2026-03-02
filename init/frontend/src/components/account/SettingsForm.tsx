@@ -85,7 +85,7 @@ const SettingsForm = ({ settings, onSave }: SettingsFormProps) => {
         <option value="dark">Chế độ tối</option>
       </Select>
 
-      <div className="text-xs text-gray-500 dark:text-gray-400 italic">
+      <div className="text-xs text-stone-500 dark:text-stone-400 italic">
         Các thay đổi được lưu tự động
       </div>
     </div>

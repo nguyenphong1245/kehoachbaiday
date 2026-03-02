@@ -18,6 +18,7 @@ from app.core.security import (
     get_password_hash,
     hash_refresh_token,
     verify_password,
+    verify_and_upgrade_password,
 )
 from app.db.session import get_db
 from app.models.email_verification import EmailVerificationToken
@@ -51,8 +52,8 @@ MAX_TOKEN_ATTEMPTS = 5
 
 
 def _utcnow() -> datetime:
-    """Return current UTC time as naive datetime (no timezone info)."""
-    return datetime.utcnow()
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
 
 def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
@@ -111,7 +112,7 @@ async def register_user(request: Request, user_in: UserCreate,  background_tasks
     result = await session.execute(select(User).where(User.email == user_in.email))
     existing_user = result.scalar_one_or_none()
     if existing_user:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Không thể đăng ký với thông tin này")
 
     default_role = await ensure_role(session, "teacher", "Default teacher role")
 
@@ -157,6 +158,8 @@ async def login_user(
     # Check account lockout
     if user and user.locked_until:
         locked_until = user.locked_until
+        if locked_until.tzinfo is None:
+            locked_until = locked_until.replace(tzinfo=timezone.utc)
         if locked_until > _utcnow():
             remaining = int((locked_until - _utcnow()).total_seconds() / 60) + 1
             logger.warning("user.login_blocked_locked email=%s", login_in.email)
@@ -232,6 +235,8 @@ async def student_login(
     # Check account lockout
     if user and user.locked_until:
         locked_until = user.locked_until
+        if locked_until.tzinfo is None:
+            locked_until = locked_until.replace(tzinfo=timezone.utc)
         if locked_until > _utcnow():
             remaining = int((locked_until - _utcnow()).total_seconds() / 60) + 1
             logger.warning("student.login_blocked_locked username=%s", login_in.username)
@@ -243,7 +248,12 @@ async def student_login(
         user.failed_login_attempts = 0
         user.locked_until = None
 
-    if not user or not verify_password(login_in.password, user.hashed_password):
+    # Verify password and auto-upgrade deprecated hash (pbkdf2 → bcrypt)
+    pw_ok, new_hash = (False, None)
+    if user:
+        pw_ok, new_hash = verify_and_upgrade_password(login_in.password, user.hashed_password)
+
+    if not user or not pw_ok:
         # Increment failed attempts if user exists
         if user:
             user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
@@ -257,9 +267,12 @@ async def student_login(
             detail="Sai tài khoản hoặc mật khẩu",
         )
 
-    # Login success - reset failed attempts
+    # Login success - reset failed attempts and upgrade hash if needed
     user.failed_login_attempts = 0
     user.locked_until = None
+    if new_hash:
+        user.hashed_password = new_hash
+        logger.info("student.password_hash_upgraded username=%s", login_in.username)
 
     # Create tokens
     access_token = create_access_token(subject=str(user.id))
@@ -309,9 +322,9 @@ async def verify_email(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Quá nhiều lần thử sai. Vui lòng yêu cầu mã mới.")
 
     expires_at = token_row.expires_at
-    # Convert to naive datetime if it has timezone info for comparison
-    if expires_at.tzinfo is not None:
-        expires_at = expires_at.replace(tzinfo=None)
+    # Ensure timezone-aware comparison
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
     if expires_at < _utcnow():
         await session.delete(token_row)
         await session.commit()
@@ -402,9 +415,9 @@ async def reset_password(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Quá nhiều lần thử sai. Vui lòng yêu cầu mã mới.")
 
     expires_at = token_row.expires_at
-    # Convert to naive datetime if it has timezone info for comparison
-    if expires_at.tzinfo is not None:
-        expires_at = expires_at.replace(tzinfo=None)
+    # Ensure timezone-aware comparison
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
     if expires_at < _utcnow():
         await session.delete(token_row)
         await session.commit()
@@ -436,7 +449,11 @@ async def refresh_tokens(
     session: AsyncSession = Depends(get_db),
 ) -> AuthMessage:
     """Use refresh_token cookie to issue a new access_token (token rotation)."""
-    raw_refresh = request.cookies.get("refresh_token")
+    raw_refresh = (
+        request.cookies.get("teacher_refresh_token") or
+        request.cookies.get("student_refresh_token") or
+        request.cookies.get("refresh_token")
+    )
     if not raw_refresh:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No refresh token")
 
@@ -453,9 +470,9 @@ async def refresh_tokens(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
 
     expires_at = rt.expires_at
-    # Convert to naive datetime if it has timezone info for comparison
-    if expires_at.tzinfo is not None:
-        expires_at = expires_at.replace(tzinfo=None)
+    # Ensure timezone-aware comparison
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
     if expires_at < _utcnow():
         rt.revoked = True
         await session.commit()
@@ -483,12 +500,11 @@ async def refresh_tokens(
 
 @router.get("/ws-token")
 async def get_ws_token(request: Request) -> dict:
-    """Get a token for WebSocket authentication.
+    """Get a short-lived token for WebSocket authentication.
 
-    This endpoint validates the httpOnly cookie and returns the access token
-    for use in WebSocket connections (which may not receive cookies cross-origin).
+    Issues a dedicated short-lived token (60s) instead of exposing
+    the main access token, reducing the impact of token leakage.
     """
-    # Check both student and teacher cookies
     token = (
         request.cookies.get("student_access_token") or
         request.cookies.get("teacher_access_token") or
@@ -496,7 +512,34 @@ async def get_ws_token(request: Request) -> dict:
     )
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    return {"token": token}
+    # Verify the existing token and issue a short-lived WS token
+    from app.core.security import verify_token, create_access_token
+    subject = verify_token(token)
+    if not subject:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    ws_token = create_access_token(subject=subject, expires_delta=timedelta(seconds=60))
+    return {"token": ws_token}
+
+
+@router.get("/csrf-token")
+async def get_csrf_token(request: Request, response: Response) -> dict:
+    """Get a new CSRF token.
+
+    This endpoint is CSRF-exempt (added to csrf_exempt_paths in main.py)
+    and checks for valid auth cookies before issuing a new CSRF token.
+    """
+    # Check if user is authenticated via any auth cookie
+    token = (
+        request.cookies.get("student_access_token") or
+        request.cookies.get("teacher_access_token") or
+        request.cookies.get("access_token")
+    )
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    # Set new CSRF cookie
+    csrf_token = set_csrf_cookie(response)
+    return {"csrf_token": csrf_token}
 
 
 @router.post("/logout", response_model=AuthMessage)
@@ -506,7 +549,11 @@ async def logout(
     session: AsyncSession = Depends(get_db),
 ) -> AuthMessage:
     """Revoke refresh token and clear auth cookies."""
-    raw_refresh = request.cookies.get("refresh_token")
+    raw_refresh = (
+        request.cookies.get("teacher_refresh_token") or
+        request.cookies.get("student_refresh_token") or
+        request.cookies.get("refresh_token")
+    )
     if raw_refresh:
         token_hash = hash_refresh_token(raw_refresh)
         result = await session.execute(

@@ -13,11 +13,9 @@ const OtpInput = ({ length = 6, value, onChange, label, error }: OtpInputProps) 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const handleChange = (index: number, inputValue: string) => {
-    // Only allow digits
     const digit = inputValue.replace(/\D/g, "");
-    
+
     if (digit.length > 1) {
-      // Handle paste
       const digits = digit.split("").slice(0, length);
       const newOtp = [...otp];
       digits.forEach((d, i) => {
@@ -27,8 +25,7 @@ const OtpInput = ({ length = 6, value, onChange, label, error }: OtpInputProps) 
       });
       setOtp(newOtp);
       onChange(newOtp.join(""));
-      
-      // Focus last filled input or next empty
+
       const nextIndex = Math.min(index + digits.length, length - 1);
       inputRefs.current[nextIndex]?.focus();
       return;
@@ -39,7 +36,6 @@ const OtpInput = ({ length = 6, value, onChange, label, error }: OtpInputProps) 
     setOtp(newOtp);
     onChange(newOtp.join(""));
 
-    // Auto focus next input
     if (digit && index < length - 1) {
       inputRefs.current[index + 1]?.focus();
     }
@@ -65,8 +61,7 @@ const OtpInput = ({ length = 6, value, onChange, label, error }: OtpInputProps) 
     });
     setOtp(newOtp);
     onChange(newOtp.join(""));
-    
-    // Focus last input
+
     const lastIndex = Math.min(digits.length, length - 1);
     inputRefs.current[lastIndex]?.focus();
   };
@@ -75,35 +70,43 @@ const OtpInput = ({ length = 6, value, onChange, label, error }: OtpInputProps) 
     handleChange(index, e.target.value);
   };
 
+  // Split into two groups for visual grouping (e.g., 4-4 for 8 digits, 3-3 for 6)
+  const midpoint = Math.ceil(length / 2);
+
   return (
     <div className="flex flex-col gap-2">
       {label && (
-        <label className="text-left text-sm font-medium text-slate-700 dark:text-slate-300">
+        <label className="text-left text-sm font-medium text-stone-700 dark:text-stone-300">
           {label}
         </label>
       )}
-      <div className="flex gap-2 justify-center">
+      <div className="flex items-center justify-center gap-1.5">
         {otp.map((digit, index) => (
-          <input
-            key={index}
-            ref={(el) => (inputRefs.current[index] = el)}
-            type="text"
-            inputMode="numeric"
-            maxLength={1}
-            value={digit}
-            onChange={(e) => handleInputChange(index, e)}
-            onKeyDown={(e) => handleKeyDown(index, e)}
-            onPaste={handlePaste}
-            className={`w-12 h-14 text-center text-2xl font-semibold rounded-lg border ${
-              error
-                ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
-                : "border-slate-300 dark:border-slate-600 focus:border-brand focus:ring-brand/30"
-            } bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm transition focus:outline-none focus:ring-2`}
-            aria-label={`Chữ số ${index + 1}`}
-          />
+          <div key={index} className="flex items-center">
+            {index === midpoint && (
+              <span className="mx-1.5 text-stone-400 dark:text-stone-500 font-medium select-none">
+                —
+              </span>
+            )}
+            <input
+              ref={(el) => (inputRefs.current[index] = el)}
+              type="text"
+              inputMode="numeric"
+              maxLength={1}
+              value={digit}
+              onChange={(e) => handleInputChange(index, e)}
+              onKeyDown={(e) => handleKeyDown(index, e)}
+              onPaste={handlePaste}
+              className={`w-10 h-12 text-center text-lg font-semibold rounded-lg border ${
+                error
+                  ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
+                  : "border-stone-300 dark:border-stone-600 focus:border-brand focus:ring-brand/30"
+              } bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-sm transition focus:outline-none focus:ring-2`}
+              aria-label={`Chữ số ${index + 1}`}
+            />
+          </div>
         ))}
       </div>
-      {error && <span className="text-xs text-red-500 text-center">{error}</span>}
     </div>
   );
 };

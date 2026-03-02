@@ -62,36 +62,52 @@ def _parse_date(date_str: Optional[str]) -> Optional[datetime]:
     return None
 
 
-def _make_student_username(student_code: str, classroom_id: int) -> str:
-    """Generate username for student account (no email format)"""
-    safe_code = student_code.replace(" ", "").lower()
-    return f"hs_{safe_code}_{classroom_id}"
+def _make_student_code(date_of_birth, existing_codes: set) -> str:
+    """Generate student code from date of birth + 3 unique random digits.
 
-
-def _make_default_password(date_of_birth, student_code: str = "") -> str:
-    """Generate secure default password.
-
-    Format: hs{DDMM}_{4-random}_{student_code_suffix}
-    Example: hs1503_xK9m_hs001
-
-    This is much stronger than just DOB (36,500 combinations) - now has
-    approximately 14 million combinations per DOB.
+    Format: DDMMYYYY + 3 random digits
+    Example: 07012015123
     """
     import secrets
-    import string
-
-    # Generate 4 random alphanumeric characters
-    alphabet = string.ascii_letters + string.digits
-    random_part = ''.join(secrets.choice(alphabet) for _ in range(4))
-
-    # Get student code suffix (last 5 chars or full code if shorter)
-    code_suffix = student_code[-5:] if student_code else "user"
 
     if date_of_birth:
-        dob_part = date_of_birth.strftime('%d%m')
-        return f"hs{dob_part}_{random_part}_{code_suffix}"
+        dob_part = date_of_birth.strftime('%d%m%Y')  # DDMMYYYY
+    else:
+        # Default to 01012000 if no DOB
+        dob_part = "01012000"
 
-    return f"hs_{random_part}_{code_suffix}"
+    # Generate unique 3 random digits (000-999)
+    for _ in range(100):  # Max 100 attempts
+        random_part = f"{secrets.randbelow(1000):03d}"
+        student_code = f"{dob_part}{random_part}"
+        if student_code not in existing_codes:
+            return student_code
+
+    # Fallback: use timestamp
+    import time
+    return f"{dob_part}{int(time.time()) % 1000:03d}"
+
+
+def _make_student_username(student_code: str) -> str:
+    """Generate username for student account.
+
+    Format: HS + student_code
+    Example: HS07012015123
+    """
+    return f"HS{student_code}"
+
+
+def _make_default_password(date_of_birth) -> str:
+    """Generate default password from full date of birth.
+
+    Format: DDMMYYYY
+    Example: 07012015
+    """
+    if date_of_birth:
+        return date_of_birth.strftime('%d%m%Y')
+
+    # Default to 01012000 if no DOB
+    return "01012000"
 
 
 async def _verify_classroom_owner(classroom_id: int, user: User, db: AsyncSession) -> Classroom:
@@ -301,10 +317,30 @@ async def delete_classroom(
     current_user: User = Depends(require_teacher()),
     db: AsyncSession = Depends(get_db),
 ):
-    """Xóa lớp học"""
+    """Xóa lớp học và tất cả tài khoản học sinh trong lớp"""
     classroom = await _verify_classroom_owner(classroom_id, current_user, db)
+
+    # Get all student user_ids in this classroom
+    students_result = await db.execute(
+        select(ClassStudent.user_id).where(ClassStudent.classroom_id == classroom_id)
+    )
+    student_user_ids = [row[0] for row in students_result.fetchall() if row[0]]
+
+    # Delete user accounts for students in this classroom
+    if student_user_ids:
+        # Delete user_roles associations first
+        await db.execute(
+            delete(user_roles_table).where(user_roles_table.c.user_id.in_(student_user_ids))
+        )
+        # Delete users
+        await db.execute(
+            delete(User).where(User.id.in_(student_user_ids))
+        )
+
+    # Delete classroom (this will cascade delete ClassStudent, StudentGroup, etc.)
     await db.delete(classroom)
     await db.commit()
+    logger.info("classroom.deleted classroom_id=%s deleted_students=%d", classroom_id, len(student_user_ids))
 
 
 # ============== STUDENT MANAGEMENT ==============
@@ -335,6 +371,12 @@ async def upload_students(
 
     filename = file.filename or ""
 
+    def _sanitize_cell(value: str) -> str:
+        """Sanitize cell values to prevent formula injection."""
+        if value and value[0] in ('=', '+', '-', '@', '\t', '\r'):
+            return "'" + value
+        return value
+
     rows = []
     if filename.endswith(".xlsx"):
         try:
@@ -351,7 +393,8 @@ async def upload_students(
                 row_dict = {}
                 for i, val in enumerate(row):
                     if i < len(headers):
-                        row_dict[headers[i]] = str(val).strip() if val else ""
+                        cell_val = str(val).strip() if val else ""
+                        row_dict[headers[i]] = _sanitize_cell(cell_val)
                 rows.append(row_dict)
         except ImportError:
             raise HTTPException(status_code=400, detail="Server chưa cài openpyxl. Vui lòng upload file CSV.")
@@ -362,7 +405,7 @@ async def upload_students(
             text = content.decode("utf-8-sig")
             reader = csv.DictReader(io.StringIO(text))
             for row in reader:
-                cleaned = {k.strip().lower(): v.strip() for k, v in row.items() if k}
+                cleaned = {k.strip().lower(): _sanitize_cell(v.strip()) for k, v in row.items() if k}
                 rows.append(cleaned)
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Lỗi đọc file CSV: {str(e)}")
@@ -383,14 +426,40 @@ async def upload_students(
                 return row_dict[k]
         return None
 
+    def _has_column(rows_list, keys):
+        """Check if any of the keys exist as column headers in the data"""
+        if not rows_list:
+            return False
+        # Check headers from first row
+        first_row_keys = set(rows_list[0].keys())
+        return any(k in first_row_keys for k in keys)
+
+    # Validate required columns
+    if not _has_column(rows, name_keys):
+        raise HTTPException(
+            status_code=400,
+            detail="File thiếu cột 'Tên học sinh' hoặc 'Họ tên'. Vui lòng kiểm tra lại file."
+        )
+
+    if not _has_column(rows, dob_keys):
+        raise HTTPException(
+            status_code=400,
+            detail="File thiếu cột 'Năm sinh' hoặc 'Ngày sinh'. Cột này bắt buộc để tạo tài khoản học sinh. Vui lòng thêm cột năm sinh vào file."
+        )
+
     total_created = 0
     total_skipped = 0
     skipped_details = []
     created_students = []
 
+    # Get existing student codes in this classroom for uniqueness check
+    existing_codes_result = await db.execute(
+        select(ClassStudent.student_code).where(ClassStudent.classroom_id == classroom_id)
+    )
+    existing_codes = set(code[0] for code in existing_codes_result.fetchall() if code[0])
+
     for idx, row in enumerate(rows, start=1):
         full_name = _find_value(row, name_keys)
-        student_code = _find_value(row, code_keys)
         dob_str = _find_value(row, dob_keys)
 
         if not full_name:
@@ -398,34 +467,27 @@ async def upload_students(
             skipped_details.append(f"Dòng {idx}: Thiếu họ tên")
             continue
 
-        # Generate student_code if not provided
-        if not student_code:
-            student_code = f"hs{idx:03d}"
-
-        # Check if student_code already exists in this classroom
-        existing = await db.execute(
-            select(ClassStudent).where(
-                ClassStudent.classroom_id == classroom_id,
-                ClassStudent.student_code == student_code,
-            )
-        )
-        if existing.scalar_one_or_none():
+        if not dob_str:
             total_skipped += 1
-            skipped_details.append(f"Dòng {idx}: Mã HS '{student_code}' đã tồn tại trong lớp")
+            skipped_details.append(f"Dòng {idx}: Thiếu năm sinh cho '{full_name}'")
             continue
 
         # Parse DOB
         dob = _parse_date(dob_str)
 
-        # Create user account
-        email = _make_student_username(student_code, classroom_id)
+        # Always generate student_code from DOB + 3 random digits
+        student_code = _make_student_code(dob, existing_codes)
+        existing_codes.add(student_code)  # Add to set to ensure uniqueness for next iteration
+
+        # Create user account: HS + student_code
+        email = _make_student_username(student_code)
 
         # Check if user with this email already exists
         existing_user = await db.execute(select(User).where(User.email == email))
         user = existing_user.scalar_one_or_none()
 
         if not user:
-            password = _make_default_password(dob, student_code)
+            password = _make_default_password(dob)
             hashed_pw = get_password_hash(password)
             user = User(
                 email=email,
@@ -441,11 +503,7 @@ async def upload_students(
                 user_roles_table.insert().values(user_id=user.id, role_id=student_role.id)
             )
 
-            # Log the generated password for teacher to distribute
-            logger.info(
-                "Created student account: username=%s password=%s",
-                email, password
-            )
+            logger.info("Created student account: username=%s", email)
 
         # Create ClassStudent
         cs = ClassStudent(
@@ -490,38 +548,28 @@ async def add_student(
     db: AsyncSession = Depends(get_db),
 ):
     """Thêm 1 học sinh vào lớp"""
-    classroom = await _verify_classroom_owner(classroom_id, current_user, db)
+    await _verify_classroom_owner(classroom_id, current_user, db)
     student_role = await _get_student_role(db)
 
     # Parse DOB
     dob = _parse_date(data.date_of_birth)
 
-    # Generate student code if not provided
-    student_code = data.student_code
-    if not student_code:
-        count_result = await db.execute(
-            select(func.count(ClassStudent.id)).where(ClassStudent.classroom_id == classroom_id)
-        )
-        count = count_result.scalar() or 0
-        student_code = f"hs{count + 1:03d}"
-
-    # Check duplicate
-    existing = await db.execute(
-        select(ClassStudent).where(
-            ClassStudent.classroom_id == classroom_id,
-            ClassStudent.student_code == student_code,
-        )
+    # Get existing student codes in this classroom
+    existing_codes_result = await db.execute(
+        select(ClassStudent.student_code).where(ClassStudent.classroom_id == classroom_id)
     )
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail=f"Mã HS '{student_code}' đã tồn tại trong lớp")
+    existing_codes = set(code[0] for code in existing_codes_result.fetchall() if code[0])
 
-    # Create user account
-    email = _make_student_username(student_code, classroom_id)
+    # Always generate student code from DOB + 3 random digits
+    student_code = _make_student_code(dob, existing_codes)
+
+    # Create user account: HS + student_code
+    email = _make_student_username(student_code)
     existing_user = await db.execute(select(User).where(User.email == email))
     user = existing_user.scalar_one_or_none()
 
     if not user:
-        password = _make_default_password(dob, student_code)
+        password = _make_default_password(dob)
         hashed_pw = get_password_hash(password)
         user = User(
             email=email,

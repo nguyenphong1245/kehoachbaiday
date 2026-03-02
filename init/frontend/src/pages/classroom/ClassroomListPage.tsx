@@ -84,22 +84,22 @@ const ClassroomListPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen bg-stone-50 dark:bg-stone-900 p-4 sm:p-6 lg:p-8">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-stone-900 dark:text-white flex items-center gap-2">
               <School className="w-7 h-7" />
               Quản lý lớp học
             </h1>
-            <p className="text-slate-500 dark:text-slate-400 mt-1">
+            <p className="text-stone-500 dark:text-stone-400 mt-1">
               Tạo lớp, upload danh sách học sinh, chia nhóm
             </p>
           </div>
           <button
             onClick={() => setShowCreateForm(!showCreateForm)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-brand text-white rounded-lg hover:bg-brand-dark transition-colors"
           >
             <Plus className="w-4 h-4" />
             Tạo lớp mới
@@ -108,8 +108,8 @@ const ClassroomListPage: React.FC = () => {
 
         {/* Create Form */}
         {showCreateForm && (
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 mb-6">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+          <div className="bg-white dark:bg-stone-800 rounded-xl shadow-sm border border-stone-200 dark:border-stone-700 p-6 mb-6">
+            <h2 className="text-lg font-semibold text-stone-900 dark:text-white mb-4">
               Tạo lớp học mới
             </h2>
             <form onSubmit={handleCreate} className="flex flex-col sm:flex-row gap-4">
@@ -119,12 +119,12 @@ const ClassroomListPage: React.FC = () => {
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
                 required
-                className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="flex-1 px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-700 text-stone-900 dark:text-white focus:ring-2 focus:ring-brand focus:border-transparent"
               />
               <select
                 value={formGrade}
                 onChange={(e) => setFormGrade(e.target.value)}
-                className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                className="px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-700 text-stone-900 dark:text-white"
               >
                 <option value="">Khối</option>
                 <option value="10">Lớp 10</option>
@@ -136,7 +136,7 @@ const ClassroomListPage: React.FC = () => {
                 placeholder="Năm học (VD: 2025-2026)"
                 value={formSchoolYear}
                 onChange={(e) => setFormSchoolYear(e.target.value)}
-                className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                className="px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-700 text-stone-900 dark:text-white"
               />
               <button
                 type="submit"
@@ -160,10 +160,10 @@ const ClassroomListPage: React.FC = () => {
         {/* Loading */}
         {isLoading ? (
           <div className="flex justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+            <Loader2 className="w-8 h-8 animate-spin text-brand" />
           </div>
         ) : classrooms.length === 0 ? (
-          <div className="text-center py-12 text-slate-500 dark:text-slate-400">
+          <div className="text-center py-12 text-stone-500 dark:text-stone-400">
             <FolderOpen className="w-12 h-12 mx-auto mb-3 opacity-50" />
             <p className="text-lg">Chưa có lớp học nào</p>
             <p className="text-sm mt-1">Nhấn "Tạo lớp mới" để bắt đầu</p>
@@ -174,13 +174,13 @@ const ClassroomListPage: React.FC = () => {
             {classrooms.map((classroom) => (
               <div
                 key={classroom.id}
-                className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 hover:shadow-md transition-shadow cursor-pointer relative group"
+                className="bg-white dark:bg-stone-800 rounded-xl shadow-sm border border-stone-200 dark:border-stone-700 p-5 hover:shadow-md transition-shadow cursor-pointer relative group"
               >
                 <Link to={`/classes/${classroom.id}`} className="block">
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                  <h3 className="text-lg font-semibold text-stone-900 dark:text-white">
                     {classroom.name}
                   </h3>
-                  <div className="mt-3 space-y-1 text-sm text-slate-500 dark:text-slate-400">
+                  <div className="mt-3 space-y-1 text-sm text-stone-500 dark:text-stone-400">
                     {classroom.grade && (
                       <div className="flex items-center gap-2">
                         <School className="w-4 h-4" />
@@ -208,7 +208,7 @@ const ClassroomListPage: React.FC = () => {
                     handleDelete(classroom.id);
                   }}
                   disabled={deletingId === classroom.id}
-                  className="absolute top-3 right-3 p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition-all"
+                  className="absolute top-3 right-3 p-1.5 rounded-lg text-stone-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition-all"
                 >
                   {deletingId === classroom.id ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
