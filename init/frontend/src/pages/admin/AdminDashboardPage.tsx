@@ -16,6 +16,8 @@ import {
   UserCheck,
   Activity,
   FolderOpen,
+  TrendingUp,
+  Wallet,
 } from "lucide-react";
 import { getDashboardStats, type DashboardStats } from "@/services/adminService";
 import { api } from "@/services/authService";
@@ -77,6 +79,12 @@ const AdminDashboardPage = () => {
     }
   };
 
+  const formatTokens = (n: number) => n.toLocaleString("vi-VN");
+
+  const usagePercent = stats && stats.total_tokens_allocated > 0
+    ? Math.round((stats.total_tokens_used / stats.total_tokens_allocated) * 100)
+    : 0;
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -103,6 +111,60 @@ const AdminDashboardPage = () => {
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
           Thống kê hệ thống và theo dõi sử dụng token
         </p>
+      </div>
+
+      {/* Token summary cards */}
+      <div className="mb-6">
+        <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3 flex items-center gap-2">
+          <Coins className="w-4 h-4" />
+          Thống kê Token toàn hệ thống
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+            <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 mb-1">
+              <Wallet className="w-4 h-4" />
+              <span className="text-xs font-medium">Tổng đã cấp</span>
+            </div>
+            <p className="text-2xl font-bold text-slate-800 dark:text-white">
+              {formatTokens(stats.total_tokens_allocated)}
+            </p>
+          </div>
+          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 mb-1">
+              <TrendingUp className="w-4 h-4" />
+              <span className="text-xs font-medium">Tổng đã dùng</span>
+            </div>
+            <p className="text-2xl font-bold text-slate-800 dark:text-white">
+              {formatTokens(stats.total_tokens_used)}
+            </p>
+          </div>
+          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+            <div className="flex items-center gap-2 text-green-600 dark:text-green-400 mb-1">
+              <Coins className="w-4 h-4" />
+              <span className="text-xs font-medium">Tổng còn lại</span>
+            </div>
+            <p className="text-2xl font-bold text-slate-800 dark:text-white">
+              {formatTokens(stats.total_tokens_remaining)}
+            </p>
+          </div>
+        </div>
+        {/* Usage bar */}
+        {stats.total_tokens_allocated > 0 && (
+          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-2">
+              <span>Tỷ lệ sử dụng</span>
+              <span className="font-semibold text-slate-700 dark:text-slate-200">{usagePercent}%</span>
+            </div>
+            <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  usagePercent > 80 ? "bg-red-500" : usagePercent > 50 ? "bg-amber-500" : "bg-green-500"
+                }`}
+                style={{ width: `${Math.min(usagePercent, 100)}%` }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* User statistics */}
@@ -199,7 +261,7 @@ const AdminDashboardPage = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* Recent Teachers */}
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
           <div className="flex items-center gap-2 mb-4">
@@ -242,7 +304,7 @@ const AdminDashboardPage = () => {
           )}
         </div>
 
-        {/* Top Token Usage */}
+        {/* Top Token Usage - summary card */}
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
           <div className="flex items-center gap-2 mb-4">
             <Coins className="w-5 h-5 text-amber-500" />
@@ -254,7 +316,7 @@ const AdminDashboardPage = () => {
             <p className="text-sm text-slate-400">Chưa có dữ liệu</p>
           ) : (
             <div className="space-y-3">
-              {stats.top_teachers.map((teacher, idx) => (
+              {stats.top_teachers.slice(0, 5).map((teacher, idx) => (
                 <div key={teacher.id} className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${
@@ -269,13 +331,13 @@ const AdminDashboardPage = () => {
                         {teacher.email}
                       </p>
                       <p className="text-xs text-slate-400">
-                        Còn: {teacher.token_balance.toLocaleString("vi-VN")} token
+                        Còn: {formatTokens(teacher.token_balance)} token
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <span className="text-sm font-semibold px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">
-                      {teacher.tokens_used.toLocaleString("vi-VN")} đã dùng
+                      {formatTokens(teacher.tokens_used)} đã dùng
                     </span>
                   </div>
                 </div>
@@ -284,6 +346,73 @@ const AdminDashboardPage = () => {
           )}
         </div>
       </div>
+
+      {/* Full teacher token usage table */}
+      {stats.top_teachers.length > 0 && (
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center gap-2">
+            <Coins className="w-5 h-5 text-amber-500" />
+            <h2 className="text-base font-semibold text-slate-800 dark:text-white">
+              Chi tiết sử dụng token giáo viên
+            </h2>
+            <span className="text-xs text-slate-400 ml-auto">{stats.top_teachers.length} giáo viên</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 dark:bg-slate-900/50">
+                <tr className="text-left text-slate-500 dark:text-slate-400">
+                  <th className="px-5 py-3 font-medium">#</th>
+                  <th className="px-5 py-3 font-medium">Email</th>
+                  <th className="px-5 py-3 font-medium text-right">Đã dùng</th>
+                  <th className="px-5 py-3 font-medium text-right">Còn lại</th>
+                  <th className="px-5 py-3 font-medium text-right">Tổng cấp</th>
+                  <th className="px-5 py-3 font-medium text-center">Tỷ lệ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                {stats.top_teachers.map((teacher, idx) => {
+                  const total = teacher.tokens_used + teacher.token_balance;
+                  const pct = total > 0 ? Math.round((teacher.tokens_used / total) * 100) : 0;
+                  return (
+                    <tr key={teacher.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 text-slate-700 dark:text-slate-300">
+                      <td className="px-5 py-3 text-slate-400 font-mono text-xs">{idx + 1}</td>
+                      <td className="px-5 py-3">
+                        <span className="font-medium">{teacher.email}</span>
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <span className={`font-semibold ${teacher.tokens_used > 0 ? "text-amber-600 dark:text-amber-400" : "text-slate-400"}`}>
+                          {formatTokens(teacher.tokens_used)}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <span className={teacher.token_balance === 0 ? "text-red-500 font-semibold" : ""}>
+                          {formatTokens(teacher.token_balance)}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-right text-slate-500">
+                        {formatTokens(total)}
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-2 justify-center">
+                          <div className="w-16 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${
+                                pct > 80 ? "bg-red-500" : pct > 50 ? "bg-amber-500" : "bg-green-500"
+                              }`}
+                              style={{ width: `${Math.min(pct, 100)}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-slate-500 w-8 text-right">{pct}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </section>
   );
 };

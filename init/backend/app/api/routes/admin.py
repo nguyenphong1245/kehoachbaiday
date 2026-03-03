@@ -82,25 +82,28 @@ async def get_dashboard_stats(session: AsyncSession = Depends(get_db)):
             for u in recent_result.scalars().all()
         ]
 
-    # Top teachers (by tokens_used) - show all teachers sorted by usage
+    # All teachers sorted by token usage (no limit)
     top_teachers = []
+    total_tokens_allocated = 0
+    total_tokens_used = 0
+    total_tokens_remaining = 0
     if teacher_role:
         top_result = await session.execute(
             select(User)
             .join(user_roles_table, User.id == user_roles_table.c.user_id)
             .where(user_roles_table.c.role_id == teacher_role.id)
             .order_by(User.tokens_used.desc(), User.created_at.desc())
-            .limit(5)
         )
-        top_teachers = [
-            TopTeacher(
+        for u in top_result.scalars().all():
+            top_teachers.append(TopTeacher(
                 id=u.id,
                 email=u.email,
                 tokens_used=u.tokens_used,
                 token_balance=u.token_balance,
-            )
-            for u in top_result.scalars().all()
-        ]
+            ))
+            total_tokens_used += u.tokens_used
+            total_tokens_remaining += u.token_balance
+        total_tokens_allocated = total_tokens_used + total_tokens_remaining
 
     return DashboardStats(
         total_users=total_users,
@@ -115,6 +118,9 @@ async def get_dashboard_stats(session: AsyncSession = Depends(get_db)):
         total_code_submissions=total_code_submissions,
         recent_users=recent_users,
         top_teachers=top_teachers,
+        total_tokens_allocated=total_tokens_allocated,
+        total_tokens_used=total_tokens_used,
+        total_tokens_remaining=total_tokens_remaining,
     )
 
 

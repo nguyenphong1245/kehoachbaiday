@@ -46,8 +46,8 @@ const ICON_MAP: Record<string, React.FC<{ className?: string }>> = {
   Play,
 };
 
-/* ---------- Convert any YouTube URL to embed format ---------- */
-const toYouTubeEmbed = (url: string): string | null => {
+/* ---------- Extract YouTube video ID ---------- */
+const getYouTubeVideoId = (url: string): string | null => {
   try {
     const u = new URL(url);
     let videoId = "";
@@ -55,17 +55,25 @@ const toYouTubeEmbed = (url: string): string | null => {
       videoId = u.pathname.slice(1);
     } else if (u.hostname.includes("youtube.com")) {
       if (u.pathname.startsWith("/embed/")) {
-        videoId = u.pathname.replace("/embed/", "");
+        videoId = u.pathname.replace("/embed/", "").split("?")[0];
+      } else if (u.pathname.startsWith("/shorts/")) {
+        videoId = u.pathname.replace("/shorts/", "");
       } else {
         videoId = u.searchParams.get("v") || "";
       }
     }
-    // Reject placeholder or invalid video IDs
     if (!videoId || videoId === "VIDEO_ID" || videoId.length < 5) return null;
-    return `https://www.youtube.com/embed/${videoId}`;
+    return videoId;
   } catch {
     return null;
   }
+};
+
+/* ---------- Convert any YouTube URL to embed format ---------- */
+const toYouTubeEmbed = (url: string): string | null => {
+  const videoId = getYouTubeVideoId(url);
+  if (!videoId) return null;
+  return `https://www.youtube-nocookie.com/embed/${videoId}?rel=0`;
 };
 
 /* ---------- Check admin role ---------- */
@@ -348,14 +356,25 @@ const UserGuidePage: React.FC = () => {
 
               {/* Video iframe (if video card with valid URL) */}
               {activeCard.video_url && toYouTubeEmbed(activeCard.video_url) && (
-                <div className="aspect-video rounded-lg overflow-hidden bg-stone-100 dark:bg-stone-700 mt-4">
-                  <iframe
-                    className="w-full h-full"
-                    src={toYouTubeEmbed(activeCard.video_url)!}
-                    title="Video hướng dẫn sử dụng"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
+                <div className="mt-4">
+                  <div className="aspect-video rounded-lg overflow-hidden bg-stone-100 dark:bg-stone-700">
+                    <iframe
+                      className="w-full h-full"
+                      src={toYouTubeEmbed(activeCard.video_url)!}
+                      title="Video hướng dẫn sử dụng"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                  <a
+                    href={`https://www.youtube.com/watch?v=${getYouTubeVideoId(activeCard.video_url)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 mt-2 text-xs text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:underline"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814z"/><path fill="#fff" d="M9.545 15.568V8.432L15.818 12z"/></svg>
+                    Xem trực tiếp trên YouTube
+                  </a>
                 </div>
               )}
             </div>

@@ -30,6 +30,9 @@ export interface DashboardStats {
   total_code_submissions: number;
   recent_users: RecentUser[];
   top_teachers: TopTeacher[];
+  total_tokens_allocated: number;
+  total_tokens_used: number;
+  total_tokens_remaining: number;
 }
 
 export interface LessonInfo {

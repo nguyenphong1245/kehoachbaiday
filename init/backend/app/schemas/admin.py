@@ -37,6 +37,10 @@ class DashboardStats(BaseModel):
     total_code_submissions: int
     recent_users: list[RecentUser]
     top_teachers: list[TopTeacher]
+    # Token summary across all teachers
+    total_tokens_allocated: int = 0
+    total_tokens_used: int = 0
+    total_tokens_remaining: int = 0
 
 
 class ContentItem(BaseModel):

@@ -52,9 +52,13 @@ _MINDMAP_RESERVE_TOKENS = 500       # Reserve for mindmap generation
 
 
 async def _deduct_tokens(session: AsyncSession, user_id: int, amount: int) -> bool:
-    """Deduct tokens from user balance and track usage. Returns True if successful."""
+    """Deduct tokens from user balance and track usage. Returns True if successful.
+    If amount exceeds balance, deduct all remaining balance instead of failing.
+    """
     if amount <= 0:
         return True
+
+    # First, try to deduct the full amount
     result = await session.execute(
         update(User)
         .where(User.id == user_id, User.token_balance >= amount)
@@ -65,10 +69,32 @@ async def _deduct_tokens(session: AsyncSession, user_id: int, amount: int) -> bo
         .returning(User.token_balance)
     )
     row = result.first()
-    if row is None:
+    if row is not None:
+        await session.flush()
+        logger.info("lesson_builder.token_deducted user_id=%s amount=%s new_balance=%s", user_id, amount, row[0])
+        return True
+
+    # Full amount exceeds balance — deduct whatever remains
+    result2 = await session.execute(
+        select(User.token_balance).where(User.id == user_id)
+    )
+    current_balance = result2.scalar()
+    if current_balance is None or current_balance <= 0:
         return False
+
+    await session.execute(
+        update(User)
+        .where(User.id == user_id)
+        .values(
+            token_balance=0,
+            tokens_used=User.tokens_used + current_balance,
+        )
+    )
     await session.flush()
-    logger.info("lesson_builder.token_deducted user_id=%s amount=%s new_balance=%s", user_id, amount, row[0])
+    logger.info(
+        "lesson_builder.token_deducted user_id=%s amount=%s (capped from %s) new_balance=0",
+        user_id, current_balance, amount,
+    )
     return True
 
 
@@ -313,13 +339,29 @@ async def generate_lesson_plan_stream(
             current_step += 1
             yield f"data: {json.dumps({'type': 'progress', 'step': current_step, 'total_steps': total_steps, 'message': 'Đang lấy tài liệu tham khảo...'}, ensure_ascii=False)}\n\n"
 
-            reference_documents = await loop.run_in_executor(None, service.get_reference_documents_from_neo4j)
+            try:
+                reference_documents = await asyncio.wait_for(
+                    loop.run_in_executor(None, service.get_reference_documents_from_neo4j),
+                    timeout=30,
+                )
+            except asyncio.TimeoutError:
+                logger.error("Neo4j get_reference_documents timed out after 30s")
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Không thể kết nối cơ sở dữ liệu tham khảo (timeout). Vui lòng thử lại.'}, ensure_ascii=False)}\n\n"
+                return
 
             # Step 2: Lấy chi tiết bài học
             current_step += 1
             yield f"data: {json.dumps({'type': 'progress', 'step': current_step, 'total_steps': total_steps, 'message': 'Đang lấy nội dung bài học...'}, ensure_ascii=False)}\n\n"
 
-            lesson_detail = await loop.run_in_executor(None, service.get_lesson_detail, payload.lesson_id)
+            try:
+                lesson_detail = await asyncio.wait_for(
+                    loop.run_in_executor(None, service.get_lesson_detail, payload.lesson_id),
+                    timeout=30,
+                )
+            except asyncio.TimeoutError:
+                logger.error("Neo4j get_lesson_detail timed out after 30s for lesson_id=%s", payload.lesson_id)
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Không thể lấy nội dung bài học (timeout). Vui lòng thử lại.'}, ensure_ascii=False)}\n\n"
+                return
             if not lesson_detail:
                 yield f"data: {json.dumps({'type': 'error', 'message': f'Không tìm thấy bài học với ID: {payload.lesson_id}'}, ensure_ascii=False)}\n\n"
                 return
@@ -342,8 +384,16 @@ async def generate_lesson_plan_stream(
             current_step += 1
             yield f"data: {json.dumps({'type': 'progress', 'step': current_step, 'total_steps': total_steps, 'message': 'AI đang sinh kế hoạch bài dạy...'}, ensure_ascii=False)}\n\n"
 
-            async with get_gemini_semaphore():
-                response = await loop.run_in_executor(None, service.model.generate_content, prompt)
+            try:
+                async with get_gemini_semaphore():
+                    response = await asyncio.wait_for(
+                        loop.run_in_executor(None, service.model.generate_content, prompt),
+                        timeout=300,
+                    )
+            except asyncio.TimeoutError:
+                logger.error("Gemini generate_content timed out after 300s")
+                yield f"data: {json.dumps({'type': 'error', 'message': 'AI xử lý quá lâu (timeout 5 phút). Vui lòng thử lại.'}, ensure_ascii=False)}\n\n"
+                return
 
             # Track token usage from main generation
             if hasattr(response, 'usage_metadata') and response.usage_metadata:
@@ -381,7 +431,10 @@ async def generate_lesson_plan_stream(
                 try:
                     retry_fn = lambda: service._retry_missing_sections(missing_sections, section_titles, payload, sections)
                     async with get_gemini_semaphore():
-                        retry_sections, retry_tokens = await loop.run_in_executor(None, retry_fn)
+                        retry_sections, retry_tokens = await asyncio.wait_for(
+                            loop.run_in_executor(None, retry_fn),
+                            timeout=120,
+                        )
                     sections.extend(retry_sections)
                     total_tokens_used += retry_tokens
                     logger.info("Stream: retry tokens=%d", retry_tokens)
@@ -420,16 +473,19 @@ async def generate_lesson_plan_stream(
                     if target_section:
                         try:
                             async with get_gemini_semaphore():
-                                mindmap_md, mindmap_tokens = await loop.run_in_executor(
-                                    None,
-                                    lambda: service.generate_mindmap(
-                                        lesson_name=payload.lesson_name,
-                                        lesson_id=payload.lesson_id,
-                                        activity_content=target_section.content,
-                                        activity_name=activity.activity_name,
-                                        activity_type=activity.activity_type,
-                                        chi_muc=activity.chi_muc,
-                                    )
+                                mindmap_md, mindmap_tokens = await asyncio.wait_for(
+                                    loop.run_in_executor(
+                                        None,
+                                        lambda: service.generate_mindmap(
+                                            lesson_name=payload.lesson_name,
+                                            lesson_id=payload.lesson_id,
+                                            activity_content=target_section.content,
+                                            activity_name=activity.activity_name,
+                                            activity_type=activity.activity_type,
+                                            chi_muc=activity.chi_muc,
+                                        )
+                                    ),
+                                    timeout=60,
                                 )
                             target_section.mindmap_data = mindmap_md
                             target_section.mindmap_activity_name = activity.activity_name
@@ -473,8 +529,15 @@ async def generate_lesson_plan_stream(
             )
 
         except Exception as e:
-            logger.error(f"Error in generate_stream: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'message': 'Lỗi sinh kế hoạch bài dạy'}, ensure_ascii=False)}\n\n"
+            logger.error("Error in generate_stream: %s", e, exc_info=True)
+            err_msg = str(e)
+            if "quota" in err_msg.lower() or "rate" in err_msg.lower():
+                user_msg = "Đã vượt giới hạn API. Vui lòng thử lại sau vài phút."
+            elif "api key" in err_msg.lower() or "authentication" in err_msg.lower():
+                user_msg = "Lỗi xác thực API AI. Vui lòng liên hệ quản trị viên."
+            else:
+                user_msg = f"Lỗi sinh kế hoạch bài dạy: {err_msg[:200]}"
+            yield f"data: {json.dumps({'type': 'error', 'message': user_msg}, ensure_ascii=False)}\n\n"
     
     return StreamingResponse(
         event_generator(),
