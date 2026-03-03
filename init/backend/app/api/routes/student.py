@@ -4,7 +4,7 @@ API Routes cho Student Portal - Trang học sinh
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from sqlalchemy import select, func, and_
@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.api.deps import get_db, get_current_user, require_role, user_has_role
+from app.core.rate_limiter import limiter
 from app.models.user import User
 from app.models.classroom import Classroom
 from app.models.class_student import ClassStudent
@@ -200,7 +201,9 @@ async def _get_submission_status(
 # ==================== Routes ====================
 
 @router.get("/dashboard", response_model=StudentDashboardResponse)
+@limiter.limit("30/minute")
 async def student_dashboard(
+    request: Request,
     current_user: User = Depends(require_role("student")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -259,7 +262,9 @@ async def student_dashboard(
 
 
 @router.get("/assignments/{assignment_id}", response_model=AssignmentContentResponse)
+@limiter.limit("30/minute")
 async def get_assignment_detail(
+    request: Request,
     assignment_id: int,
     current_user: User = Depends(require_role("student")),
     db: AsyncSession = Depends(get_db),
@@ -440,7 +445,9 @@ async def _get_my_group_for_assignment(
 
 
 @router.get("/assignments/{assignment_id}/my-group", response_model=Optional[MyGroupInfo])
+@limiter.limit("30/minute")
 async def get_my_group(
+    request: Request,
     assignment_id: int,
     current_user: User = Depends(require_role("student")),
     db: AsyncSession = Depends(get_db),
@@ -458,7 +465,9 @@ async def get_my_group(
 
 
 @router.post("/assignments/{assignment_id}/start-session")
+@limiter.limit("10/minute")
 async def start_work_session(
+    request: Request,
     assignment_id: int,
     current_user: User = Depends(require_role("student")),
     db: AsyncSession = Depends(get_db),
@@ -545,7 +554,9 @@ async def start_work_session(
 
 
 @router.post("/assignments/{assignment_id}/run-code")
+@limiter.limit("10/minute")
 async def run_code_in_assignment(
+    request: Request,
     assignment_id: int,
     data: RunCodeRequest,
     current_user: User = Depends(require_role("student")),
@@ -590,7 +601,9 @@ async def run_code_in_assignment(
 
 
 @router.post("/assignments/{assignment_id}/submit")
+@limiter.limit("10/minute")
 async def submit_assignment(
+    request: Request,
     assignment_id: int,
     data: SubmitAnswersRequest,
     current_user: User = Depends(require_role("student")),
@@ -840,7 +853,9 @@ class MemberEvaluationRequest(BaseModel):
 
 
 @router.post("/assignments/{assignment_id}/evaluate-members")
+@limiter.limit("10/minute")
 async def evaluate_group_members(
+    request: Request,
     assignment_id: int,
     data: MemberEvaluationRequest,
     current_user: User = Depends(require_role("student")),
@@ -884,7 +899,9 @@ async def evaluate_group_members(
 
 
 @router.get("/assignments/{assignment_id}/member-evaluation-status")
+@limiter.limit("30/minute")
 async def get_member_evaluation_status(
+    request: Request,
     assignment_id: int,
     current_user: User = Depends(require_role("student")),
     db: AsyncSession = Depends(get_db),
@@ -955,7 +972,9 @@ async def get_member_evaluation_status(
 
 
 @router.get("/assignments/{assignment_id}/work-session")
+@limiter.limit("30/minute")
 async def get_work_session(
+    request: Request,
     assignment_id: int,
     current_user: User = Depends(require_role("student")),
     db: AsyncSession = Depends(get_db),
@@ -1017,7 +1036,9 @@ async def get_work_session(
 
 
 @router.get("/assignments/{assignment_id}/discussion")
+@limiter.limit("30/minute")
 async def get_discussion(
+    request: Request,
     assignment_id: int,
     current_user: User = Depends(require_role("student")),
     db: AsyncSession = Depends(get_db),
@@ -1072,7 +1093,9 @@ async def get_discussion(
 
 
 @router.post("/change-password")
+@limiter.limit("10/minute")
 async def change_password(
+    request: Request,
     data: ChangePasswordRequest,
     current_user: User = Depends(require_role("student")),
     db: AsyncSession = Depends(get_db),
@@ -1088,7 +1111,9 @@ async def change_password(
 
 
 @router.post("/assignments/{assignment_id}/auto-submit")
+@limiter.limit("10/minute")
 async def auto_submit_assignment(
+    request: Request,
     assignment_id: int,
     api_key: str,
     db: AsyncSession = Depends(get_db),

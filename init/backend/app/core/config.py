@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     project_name: str = "AuthApp"
     secret_key: str = "CHANGE-ME-IN-ENV-FILE"
-    access_token_expire_minutes: int = 60
+    access_token_expire_minutes: int = 30
     algorithm: str = "HS256"
     sql_database_url: str
     alembic_ini_path: str = "alembic.ini"

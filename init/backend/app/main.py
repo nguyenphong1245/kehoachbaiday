@@ -139,7 +139,7 @@ def get_app() -> FastAPI:
             f"{settings.api_v1_prefix}/auth/refresh",
             f"{settings.api_v1_prefix}/auth/verify-email",
             f"{settings.api_v1_prefix}/auth/resend-verification",
-            f"{settings.api_v1_prefix}/auth/forgot-password",
+            f"{settings.api_v1_prefix}/auth/request-password-reset",
             f"{settings.api_v1_prefix}/auth/reset-password",
         }
         # Skip for WebSocket connections

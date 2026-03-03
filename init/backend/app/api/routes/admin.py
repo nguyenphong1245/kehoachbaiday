@@ -1,13 +1,14 @@
 """
 Admin routes - Dashboard stats, content management
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from typing import Any
 
 from app.api.deps import require_admin
+from app.core.rate_limiter import limiter
 from app.db.session import get_db
 from app.models.user import User
 from app.models.role import Role
@@ -36,7 +37,8 @@ router = APIRouter()
 
 
 @router.get("/dashboard-stats", response_model=DashboardStats, dependencies=[Depends(require_admin)])
-async def get_dashboard_stats(session: AsyncSession = Depends(get_db)):
+@limiter.limit("30/minute")
+async def get_dashboard_stats(request: Request, session: AsyncSession = Depends(get_db)):
     """Thống kê tổng quan cho admin dashboard"""
 
     # User counts
@@ -125,10 +127,12 @@ async def get_dashboard_stats(session: AsyncSession = Depends(get_db)):
 
 
 @router.get("/all-content", response_model=ContentListResponse, dependencies=[Depends(require_admin)])
+@limiter.limit("30/minute")
 async def get_all_content(
+    request: Request,
     content_type: str = Query("all"),
     page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=10000),
+    limit: int = Query(20, ge=1, le=500),
     session: AsyncSession = Depends(get_db),
 ):
     """Lấy danh sách tất cả nội dung trên hệ thống"""
@@ -250,7 +254,9 @@ async def get_all_content(
 
 
 @router.delete("/content/{content_type}/{content_id}", dependencies=[Depends(require_admin)])
+@limiter.limit("10/minute")
 async def delete_content(
+    request: Request,
     content_type: str,
     content_id: int,
     session: AsyncSession = Depends(get_db),
@@ -278,7 +284,9 @@ async def delete_content(
 
 
 @router.put("/users/{user_id}/token-balance", dependencies=[Depends(require_admin)])
+@limiter.limit("10/minute")
 async def update_token_balance(
+    request: Request,
     user_id: int,
     payload: TokenBalanceUpdate,
     session: AsyncSession = Depends(get_db),
@@ -295,7 +303,8 @@ async def update_token_balance(
 
 
 @router.get("/teachers-overview", dependencies=[Depends(require_admin)])
-async def get_teachers_overview(session: AsyncSession = Depends(get_db)) -> list[dict[str, Any]]:
+@limiter.limit("30/minute")
+async def get_teachers_overview(request: Request, session: AsyncSession = Depends(get_db)) -> list[dict[str, Any]]:
     """
     Get overview of all teachers with their classrooms, materials, and students.
     Returns teachers organized by their classrooms.

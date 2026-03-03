@@ -5,11 +5,12 @@ import secrets
 import re
 import logging
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, get_current_user
+from app.core.rate_limiter import limiter
 from app.models.user import User
 from app.models.shared_worksheet import SharedWorksheet, WorksheetResponse
 from app.schemas.shared_worksheet import (
@@ -63,40 +64,42 @@ def parse_questions_from_content(content: str) -> list:
 # ============== AUTHENTICATED ENDPOINTS (Giáo viên) ==============
 
 @router.post("/share", response_model=CreateSharedWorksheetResponse)
+@limiter.limit("10/minute")
 async def create_shared_worksheet(
-    request: CreateSharedWorksheetRequest,
+    request: Request,
+    payload: CreateSharedWorksheetRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Tạo phiếu học tập chia sẻ mới"""
     share_code = generate_share_code()
-    
+
     # Log content để debug
-    logger.info(f"[SHARE] Creating worksheet. Title: {request.title}")
-    logger.info(f"[SHARE] Content length: {len(request.content)} characters")
-    logger.info(f"[SHARE] Content preview: {request.content[:200]}...")
-    
+    logger.info(f"[SHARE] Creating worksheet. Title: {payload.title}")
+    logger.info(f"[SHARE] Content length: {len(payload.content)} characters")
+    logger.info(f"[SHARE] Content preview: {payload.content[:200]}...")
+
     # Parse câu hỏi từ nội dung
-    questions = parse_questions_from_content(request.content)
+    questions = parse_questions_from_content(payload.content)
     logger.info(f"[SHARE] Parsed {len(questions)} questions from content")
-    
+
     if len(questions) == 0:
-        logger.warning(f"[SHARE] No questions found in content! Content: {request.content[:500]}")
-    
+        logger.warning(f"[SHARE] No questions found in content! Content: {payload.content[:500]}")
+
     # Tính thời gian hết hạn
     expires_at = None
-    if request.expires_hours:
-        expires_at = datetime.utcnow() + timedelta(hours=request.expires_hours)
-    
+    if payload.expires_hours:
+        expires_at = datetime.utcnow() + timedelta(hours=payload.expires_hours)
+
     worksheet = SharedWorksheet(
         share_code=share_code,
         user_id=current_user.id,
-        title=request.title,
-        content=request.content,
-        lesson_info=request.lesson_info,
+        title=payload.title,
+        content=payload.content,
+        lesson_info=payload.lesson_info,
         questions=questions,
         expires_at=expires_at,
-        max_submissions=request.max_submissions,
+        max_submissions=payload.max_submissions,
         is_active=True,
     )
     
@@ -121,7 +124,9 @@ async def create_shared_worksheet(
 
 
 @router.get("/my-worksheets", response_model=SharedWorksheetListResponse)
+@limiter.limit("30/minute")
 async def get_my_shared_worksheets(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -166,7 +171,9 @@ async def get_my_shared_worksheets(
 
 
 @router.get("/{worksheet_id}/responses", response_model=WorksheetResponsesListResponse)
+@limiter.limit("30/minute")
 async def get_worksheet_responses(
+    request: Request,
     worksheet_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -210,7 +217,9 @@ async def get_worksheet_responses(
 
 
 @router.delete("/{worksheet_id}")
+@limiter.limit("10/minute")
 async def delete_shared_worksheet(
+    request: Request,
     worksheet_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -246,7 +255,9 @@ async def delete_shared_worksheet(
 
 
 @router.get("/{worksheet_id}/detail")
+@limiter.limit("30/minute")
 async def get_worksheet_detail(
+    request: Request,
     worksheet_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -273,9 +284,11 @@ async def get_worksheet_detail(
 
 
 @router.patch("/{worksheet_id}")
+@limiter.limit("10/minute")
 async def update_worksheet(
+    request: Request,
     worksheet_id: int,
-    request: UpdateWorksheetRequest,
+    payload: UpdateWorksheetRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -293,13 +306,13 @@ async def update_worksheet(
             detail="Không tìm thấy phiếu học tập"
         )
 
-    if request.title is not None:
-        worksheet.title = request.title
+    if payload.title is not None:
+        worksheet.title = payload.title
 
-    if request.content is not None:
-        worksheet.content = request.content
+    if payload.content is not None:
+        worksheet.content = payload.content
         # Re-parse câu hỏi từ nội dung mới
-        worksheet.questions = parse_questions_from_content(request.content)
+        worksheet.questions = parse_questions_from_content(payload.content)
 
     await db.commit()
     await db.refresh(worksheet)
@@ -310,7 +323,9 @@ async def update_worksheet(
 
 
 @router.patch("/{worksheet_id}/toggle-active")
+@limiter.limit("10/minute")
 async def toggle_worksheet_active(
+    request: Request,
     worksheet_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),

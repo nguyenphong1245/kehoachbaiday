@@ -23,11 +23,12 @@ import {
   X,
 } from "lucide-react";
 import type { LessonPlanSection, GenerateLessonPlanResponse, ActivityConfig } from "@/types/lessonBuilder";
-import { exportToPDF, saveLessonPlan } from "@/services/lessonBuilderService";
+import { exportToPDF, saveLessonPlan, updateSavedLessonPlan } from "@/services/lessonBuilderService";
 import { createSharedWorksheet } from "@/services/worksheetService";
 import { createSharedQuiz } from "@/services/sharedQuizService";
 import { extractCodeExercisesFromLesson } from "@/services/codeExerciseService";
 import RichTextEditor from "@/components/common/RichTextEditor";
+import { sanitizeHTML } from "@/utils/sanitize";
 import MindMapRenderer from "@/components/lesson-builder/MindMapRenderer";
 import WorksheetRenderer from "@/components/lesson-builder/WorksheetRenderer";
 import { Transformer } from "markmap-lib";
@@ -41,6 +42,7 @@ interface LessonPlanOutputProps {
   onExportPDF?: () => void;
   activities?: ActivityConfig[];
   onBack?: () => void;
+  savedLessonPlanId?: string;
 }
 
 // ============== Turndown helpers ==============
@@ -665,6 +667,7 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
   onSectionUpdate,
   activities,
   onBack,
+  savedLessonPlanId,
 }) => {
   const [sections, setSections] = useState<LessonPlanSection[]>(result.sections);
   const [isSaving, setIsSaving] = useState(false);
@@ -1290,56 +1293,70 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
         .map((s) => `## ${s.title}\n\n${s.content}\n\n`)
         .join("\n");
 
-      const response = await saveLessonPlan({
-        title: `KHBD - ${result.lesson_info.lesson_name}`,
-        lesson_info: result.lesson_info,
-        sections: saveSections,
-        full_content: fullContent,
-        activities: activities,
-        is_printed: false,
-      });
+      let successText: string;
 
-      // Auto-create shared materials (worksheets + quizzes) — only on first save
-      if (!materialsCreated) {
-        const worksheetSections = sections.filter(s => s.section_type === "phieu_hoc_tap");
-        const quizSections = sections.filter(s => s.section_type === "trac_nghiem");
+      if (savedLessonPlanId) {
+        // Update existing saved lesson plan
+        await updateSavedLessonPlan(savedLessonPlanId, {
+          title: `KHBD - ${result.lesson_info.lesson_name}`,
+          sections: saveSections,
+          full_content: fullContent,
+        });
+        successText = "Đã cập nhật KHBD thành công!";
+      } else {
+        // Create new saved lesson plan
+        const response = await saveLessonPlan({
+          title: `KHBD - ${result.lesson_info.lesson_name}`,
+          lesson_info: result.lesson_info,
+          sections: saveSections,
+          full_content: fullContent,
+          activities: activities,
+          is_printed: false,
+        });
+        successText = response.message;
 
-        for (const ws of worksheetSections) {
-          try {
-            await createSharedWorksheet({
-              title: ws.title || "Phiếu học tập",
-              content: ws.content,
-              lesson_info: result.lesson_info,
-            });
-          } catch {
-            // Skip if error
+        // Auto-create shared materials (worksheets + quizzes) — only on first save
+        if (!materialsCreated) {
+          const worksheetSections = sections.filter(s => s.section_type === "phieu_hoc_tap");
+          const quizSections = sections.filter(s => s.section_type === "trac_nghiem");
+
+          for (const ws of worksheetSections) {
+            try {
+              await createSharedWorksheet({
+                title: ws.title || "Phiếu học tập",
+                content: ws.content,
+                lesson_info: result.lesson_info,
+              });
+            } catch {
+              // Skip if error
+            }
           }
-        }
 
-        for (const qz of quizSections) {
-          try {
-            await createSharedQuiz({
-              title: result.lesson_info?.lesson_name
-                ? `Trắc nghiệm: ${result.lesson_info.lesson_name}`
-                : qz.title || "Bài trắc nghiệm",
-              description: `${result.lesson_info?.topic || ""} - ${result.lesson_info?.grade || ""} - ${result.lesson_info?.book_type || ""}`.trim(),
-              content: qz.content,
-              questions: qz.questions,
-              show_correct_answers: true,
-              allow_multiple_attempts: true,
-              lesson_info: result.lesson_info,
-            });
-          } catch {
-            // Skip if error
+          for (const qz of quizSections) {
+            try {
+              await createSharedQuiz({
+                title: result.lesson_info?.lesson_name
+                  ? `Trắc nghiệm: ${result.lesson_info.lesson_name}`
+                  : qz.title || "Bài trắc nghiệm",
+                description: `${result.lesson_info?.topic || ""} - ${result.lesson_info?.grade || ""} - ${result.lesson_info?.book_type || ""}`.trim(),
+                content: qz.content,
+                questions: qz.questions,
+                show_correct_answers: true,
+                allow_multiple_attempts: true,
+                lesson_info: result.lesson_info,
+              });
+            } catch {
+              // Skip if error
+            }
           }
-        }
 
-        if (worksheetSections.length > 0 || quizSections.length > 0) {
-          setMaterialsCreated(true);
+          if (worksheetSections.length > 0 || quizSections.length > 0) {
+            setMaterialsCreated(true);
+          }
         }
       }
 
-      setSaveMessage({ type: "success", text: response.message });
+      setSaveMessage({ type: "success", text: successText });
       setTimeout(() => setSaveMessage(null), 3000);
     } catch (error: any) {
       setSaveMessage({
@@ -1593,7 +1610,7 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
           title="In phiếu học tập riêng"
         >
           <Printer className="w-3.5 h-3.5" />
-          In PHT
+          <span className="hidden sm:inline">In PHT</span>
         </button>
       )}
 
@@ -1606,7 +1623,7 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
         title="Trích xuất bài tập lập trình từ KHBD và tạo test cases tự động"
       >
         {isExtractingCode ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Code2 className="w-3.5 h-3.5" />}
-        {isExtractingCode ? "Đang trích xuất..." : "Bài tập code"}
+        <span className="hidden sm:inline">{isExtractingCode ? "Đang trích xuất..." : "Bài tập code"}</span>
       </button>
 
       {/* Mindmap button - only enabled when mindmap data exists */}
@@ -1618,7 +1635,7 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
         title={mindmapSections.length === 0 ? "Chưa có sơ đồ tư duy (chọn kỹ thuật Sơ đồ tư duy khi sinh KHBD)" : "Chỉnh sửa sơ đồ tư duy"}
       >
         <GitBranch className="w-3.5 h-3.5" />
-        Sơ đồ tư duy
+        <span className="hidden sm:inline">Sơ đồ tư duy</span>
       </button>
 
       <div className="w-px h-5 bg-gray-300 dark:bg-gray-600" />
@@ -1632,7 +1649,7 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
         title="Lưu KHBD (Ctrl+S)"
       >
         {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-        {isSaving ? "Đang lưu..." : "Lưu"}
+        <span className="hidden sm:inline">{isSaving ? "Đang lưu..." : "Lưu"}</span>
       </button>
 
       {/* Export PDF button */}
@@ -1643,7 +1660,7 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
         title="Xuất PDF"
       >
         <Download className="w-3.5 h-3.5" />
-        Xuất PDF
+        <span className="hidden sm:inline">Xuất PDF</span>
       </button>
     </>
   );
@@ -1871,7 +1888,7 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
                         }}
                       />
                     ) : (
-                      <div dangerouslySetInnerHTML={{ __html: block.html || '' }} />
+                      <div dangerouslySetInnerHTML={{ __html: sanitizeHTML(block.html || '') }} />
                     )}
                   </div>
                 ))}

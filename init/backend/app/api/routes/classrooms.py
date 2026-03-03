@@ -8,12 +8,13 @@ import random
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, status
 from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_db, get_current_user, require_role, require_teacher, user_has_role
+from app.core.rate_limiter import limiter
 from app.core.security import get_password_hash
 from app.models.user import User
 from app.models.role import Role
@@ -167,7 +168,9 @@ def _build_group_read(group: StudentGroup) -> StudentGroupRead:
 # ============== CLASSROOM CRUD ==============
 
 @router.post("/", response_model=ClassroomRead, status_code=201)
+@limiter.limit("10/minute")
 async def create_classroom(
+    request: Request,
     data: ClassroomCreate,
     current_user: User = Depends(require_teacher()),
     db: AsyncSession = Depends(get_db),
@@ -198,7 +201,9 @@ async def create_classroom(
 
 
 @router.get("/", response_model=ClassroomListResponse)
+@limiter.limit("30/minute")
 async def list_classrooms(
+    request: Request,
     current_user: User = Depends(require_teacher()),
     db: AsyncSession = Depends(get_db),
 ):
@@ -232,7 +237,9 @@ async def list_classrooms(
 
 
 @router.get("/{classroom_id}", response_model=ClassroomDetailRead)
+@limiter.limit("30/minute")
 async def get_classroom_detail(
+    request: Request,
     classroom_id: int,
     current_user: User = Depends(require_teacher()),
     db: AsyncSession = Depends(get_db),
@@ -269,7 +276,9 @@ async def get_classroom_detail(
 
 
 @router.patch("/{classroom_id}", response_model=ClassroomRead)
+@limiter.limit("10/minute")
 async def update_classroom(
+    request: Request,
     classroom_id: int,
     data: ClassroomUpdate,
     current_user: User = Depends(require_teacher()),
@@ -312,7 +321,9 @@ async def update_classroom(
 
 
 @router.delete("/{classroom_id}", status_code=204)
+@limiter.limit("10/minute")
 async def delete_classroom(
+    request: Request,
     classroom_id: int,
     current_user: User = Depends(require_teacher()),
     db: AsyncSession = Depends(get_db),
@@ -346,7 +357,9 @@ async def delete_classroom(
 # ============== STUDENT MANAGEMENT ==============
 
 @router.post("/{classroom_id}/upload-students", response_model=StudentUploadResponse)
+@limiter.limit("10/minute")
 async def upload_students(
+    request: Request,
     classroom_id: int,
     file: UploadFile = File(...),
     current_user: User = Depends(require_teacher()),
@@ -541,7 +554,9 @@ async def upload_students(
 
 
 @router.post("/{classroom_id}/students", response_model=ClassStudentRead, status_code=201)
+@limiter.limit("10/minute")
 async def add_student(
+    request: Request,
     classroom_id: int,
     data: AddStudentRequest,
     current_user: User = Depends(require_teacher()),
@@ -621,7 +636,9 @@ async def add_student(
 
 
 @router.delete("/{classroom_id}/students/{student_id}", status_code=204)
+@limiter.limit("10/minute")
 async def remove_student(
+    request: Request,
     classroom_id: int,
     student_id: int,
     current_user: User = Depends(require_teacher()),
@@ -647,7 +664,9 @@ async def remove_student(
 # ============== GROUP MANAGEMENT ==============
 
 @router.post("/{classroom_id}/groups", response_model=StudentGroupRead, status_code=201)
+@limiter.limit("10/minute")
 async def create_group(
+    request: Request,
     classroom_id: int,
     data: GroupCreateRequest,
     current_user: User = Depends(require_teacher()),
@@ -701,7 +720,9 @@ async def create_group(
 
 
 @router.post("/{classroom_id}/groups/auto-divide", response_model=BulkGroupCreateResponse)
+@limiter.limit("10/minute")
 async def auto_divide_groups(
+    request: Request,
     classroom_id: int,
     data: BulkGroupCreateRequest,
     current_user: User = Depends(require_teacher()),
@@ -796,7 +817,9 @@ async def auto_divide_groups(
 
 
 @router.patch("/{classroom_id}/groups/{group_id}", response_model=StudentGroupRead)
+@limiter.limit("10/minute")
 async def update_group(
+    request: Request,
     classroom_id: int,
     group_id: int,
     data: GroupUpdateRequest,
@@ -849,7 +872,9 @@ async def update_group(
 
 
 @router.delete("/{classroom_id}/groups/{group_id}", status_code=204)
+@limiter.limit("10/minute")
 async def delete_group(
+    request: Request,
     classroom_id: int,
     group_id: int,
     current_user: User = Depends(require_teacher()),
@@ -875,7 +900,9 @@ async def delete_group(
 # ============== CLASSROOM MATERIALS (Staging) ==============
 
 @router.post("/{classroom_id}/materials", status_code=201)
+@limiter.limit("10/minute")
 async def add_material_to_class(
+    request: Request,
     classroom_id: int,
     data: dict,
     current_user: User = Depends(require_teacher()),
@@ -928,7 +955,9 @@ async def add_material_to_class(
 
 
 @router.get("/{classroom_id}/materials")
+@limiter.limit("30/minute")
 async def list_classroom_materials(
+    request: Request,
     classroom_id: int,
     current_user: User = Depends(require_teacher()),
     db: AsyncSession = Depends(get_db),
@@ -958,7 +987,9 @@ async def list_classroom_materials(
 
 
 @router.delete("/{classroom_id}/materials/{material_id}", status_code=204)
+@limiter.limit("10/minute")
 async def remove_material_from_class(
+    request: Request,
     classroom_id: int,
     material_id: int,
     current_user: User = Depends(require_teacher()),

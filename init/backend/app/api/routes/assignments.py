@@ -4,13 +4,14 @@ API Routes cho Giao bài cho lớp
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select, func, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.api.deps import get_db, get_current_user, require_role, require_teacher, user_has_role
+from app.core.rate_limiter import limiter
 from app.core.logging import logger
 from app.models.user import User
 from app.models.classroom import Classroom
@@ -153,7 +154,9 @@ async def _build_assignment_read(
 
 
 @router.post("/", response_model=AssignmentRead, status_code=201)
+@limiter.limit("10/minute")
 async def create_assignment(
+    request: Request,
     data: AssignmentCreate,
     current_user: User = Depends(require_teacher()),
     db: AsyncSession = Depends(get_db),
@@ -313,7 +316,9 @@ async def create_assignment(
 
 
 @router.get("/classroom/{classroom_id}", response_model=AssignmentListResponse)
+@limiter.limit("30/minute")
 async def list_assignments(
+    request: Request,
     classroom_id: int,
     current_user: User = Depends(require_teacher()),
     db: AsyncSession = Depends(get_db),
@@ -347,16 +352,80 @@ async def list_assignments(
         if m.lesson_info:
             material_lesson_map[f"{m.content_type}-{m.content_id}"] = m.lesson_info
 
+    # Batch: total students for this classroom (single query instead of N)
+    total_students_result = await db.execute(
+        select(func.count(ClassStudent.id)).where(ClassStudent.classroom_id == classroom_id)
+    )
+    total_students = total_students_result.scalar() or 0
+
+    # Batch: submission counts for all assignments (2 queries instead of N)
+    assignment_ids = [a.id for a in assignments]
+    group_counts: dict[int, int] = {}
+    individual_counts: dict[int, int] = {}
+    if assignment_ids:
+        gc_result = await db.execute(
+            select(GroupWorkSession.assignment_id, func.count(GroupWorkSession.id))
+            .where(GroupWorkSession.assignment_id.in_(assignment_ids), GroupWorkSession.status == "submitted")
+            .group_by(GroupWorkSession.assignment_id)
+        )
+        group_counts = dict(gc_result.all())
+        ic_result = await db.execute(
+            select(IndividualSubmission.assignment_id, func.count(IndividualSubmission.id))
+            .where(IndividualSubmission.assignment_id.in_(assignment_ids), IndividualSubmission.status == "submitted")
+            .group_by(IndividualSubmission.assignment_id)
+        )
+        individual_counts = dict(ic_result.all())
+
+    # Batch: content titles (3 queries max instead of N)
+    content_keys = {(a.content_type, a.content_id) for a in assignments}
+    title_map: dict[tuple[str, int], str] = {}
+    for ctype, model in [("quiz", SharedQuiz), ("worksheet", SharedWorksheet), ("code_exercise", CodeExercise)]:
+        ids = [cid for ct, cid in content_keys if ct == ctype]
+        if ids:
+            tr = await db.execute(select(model.id, model.title).where(model.id.in_(ids)))
+            for row in tr.all():
+                title_map[(ctype, row[0])] = row[1]
+
     items = []
     for a in assignments:
+        sub_count = group_counts.get(a.id, 0) if a.work_type == "group" else individual_counts.get(a.id, 0)
         fallback = material_lesson_map.get(f"{a.content_type}-{a.content_id}")
-        items.append(await _build_assignment_read(a, db, classroom.name, fallback))
+        start_at = getattr(a, 'start_at', None)
+        auto_peer_review = getattr(a, 'auto_peer_review', False)
+        peer_review_status = getattr(a, 'peer_review_status', None)
+        peer_review_start = getattr(a, 'peer_review_start_time', None)
+        peer_review_end = getattr(a, 'peer_review_end_time', None)
+        items.append(AssignmentRead(
+            id=a.id,
+            classroom_id=a.classroom_id,
+            classroom_name=classroom.name,
+            content_type=a.content_type,
+            content_id=a.content_id,
+            content_title=title_map.get((a.content_type, a.content_id), ""),
+            title=a.title,
+            description=a.description,
+            work_type=a.work_type,
+            is_active=a.is_active,
+            start_at=start_at,
+            due_date=a.due_date,
+            auto_peer_review=auto_peer_review,
+            lesson_info=a.lesson_info or fallback,
+            peer_review_status=peer_review_status,
+            peer_review_start_time=peer_review_start,
+            peer_review_end_time=peer_review_end,
+            submission_count=sub_count,
+            total_students=total_students,
+            created_at=a.created_at,
+            updated_at=a.updated_at,
+        ))
 
     return AssignmentListResponse(assignments=items, total=len(items))
 
 
 @router.get("/{assignment_id}", response_model=AssignmentRead)
+@limiter.limit("30/minute")
 async def get_assignment(
+    request: Request,
     assignment_id: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -377,7 +446,9 @@ async def get_assignment(
 
 
 @router.patch("/{assignment_id}", response_model=AssignmentRead)
+@limiter.limit("10/minute")
 async def update_assignment(
+    request: Request,
     assignment_id: int,
     data: AssignmentUpdate,
     current_user: User = Depends(require_teacher()),
@@ -424,7 +495,9 @@ async def update_assignment(
 
 
 @router.delete("/{assignment_id}", status_code=204)
+@limiter.limit("10/minute")
 async def delete_assignment(
+    request: Request,
     assignment_id: int,
     current_user: User = Depends(require_teacher()),
     db: AsyncSession = Depends(get_db),
@@ -444,7 +517,9 @@ async def delete_assignment(
 
 
 @router.put("/{assignment_id}/grade")
+@limiter.limit("10/minute")
 async def grade_submission(
+    request: Request,
     assignment_id: int,
     data: GradeSubmissionRequest,
     current_user: User = Depends(require_teacher()),
@@ -535,7 +610,9 @@ async def grade_submission(
 
 
 @router.get("/{assignment_id}/submissions")
+@limiter.limit("30/minute")
 async def get_submissions(
+    request: Request,
     assignment_id: int,
     current_user: User = Depends(require_teacher()),
     db: AsyncSession = Depends(get_db),
@@ -634,7 +711,9 @@ async def get_submissions(
 
 
 @router.get("/classroom/{classroom_id}/statistics")
+@limiter.limit("30/minute")
 async def get_classroom_statistics(
+    request: Request,
     classroom_id: int,
     current_user: User = Depends(require_teacher()),
     db: AsyncSession = Depends(get_db),

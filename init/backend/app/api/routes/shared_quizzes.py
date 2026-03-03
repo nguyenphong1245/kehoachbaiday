@@ -5,11 +5,12 @@ import secrets
 import re
 import logging
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, get_current_user
+from app.core.rate_limiter import limiter
 from app.models.user import User
 from app.models.shared_quiz import SharedQuiz, QuizResponse
 from app.schemas.shared_quiz import (
@@ -139,8 +140,10 @@ def convert_questions_input_to_quiz(questions_input: list) -> list[QuizQuestion]
 
 
 @router.post("/", response_model=CreateSharedQuizResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/minute")
 async def create_shared_quiz(
-    request: CreateSharedQuizRequest,
+    request: Request,
+    payload: CreateSharedQuizRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -150,28 +153,28 @@ async def create_shared_quiz(
     1. Gửi questions array trực tiếp (từ LLM JSON)
     2. Gửi content string (parse thủ công)
     """
-    logger.info(f"Creating shared quiz for user {current_user.id}: {request.title}")
-    
+    logger.info(f"Creating shared quiz for user {current_user.id}: {payload.title}")
+
     questions = []
-    
+
     # Ưu tiên dùng questions array nếu có
-    if request.questions and len(request.questions) > 0:
-        logger.info(f"Using questions array: {len(request.questions)} questions")
-        questions = convert_questions_input_to_quiz(request.questions)
-    elif request.content:
+    if payload.questions and len(payload.questions) > 0:
+        logger.info(f"Using questions array: {len(payload.questions)} questions")
+        questions = convert_questions_input_to_quiz(payload.questions)
+    elif payload.content:
         # Fallback: parse từ content
         logger.info("Parsing questions from content string")
-        questions = parse_quiz_questions(request.content)
-    
+        questions = parse_quiz_questions(payload.content)
+
     if not questions:
         logger.error("No valid questions found")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Không tìm thấy câu hỏi hợp lệ. Vui lòng kiểm tra lại nội dung trắc nghiệm."
         )
-    
+
     logger.info(f"Total {len(questions)} valid questions")
-    
+
     # Tạo share code unique
     share_code = generate_share_code()
     while True:
@@ -179,16 +182,16 @@ async def create_shared_quiz(
         if not result.scalar_one_or_none():
             break
         share_code = generate_share_code()
-    
+
     # Tính thời gian hết hạn
-    expires_at = datetime.utcnow() + timedelta(days=request.expires_in_days)
-    
+    expires_at = datetime.utcnow() + timedelta(days=payload.expires_in_days)
+
     # Lưu content để backup
-    content_to_save = request.content or ""
-    if request.questions and not request.content:
+    content_to_save = payload.content or ""
+    if payload.questions and not payload.content:
         # Tạo content từ questions để backup
         lines = []
-        for idx, q in enumerate(request.questions, 1):
+        for idx, q in enumerate(payload.questions, 1):
             lines.append(f"Câu {idx}: {q.question}")
             if q.A: lines.append(f"A. {q.A}")
             if q.B: lines.append(f"B. {q.B}")
@@ -197,21 +200,21 @@ async def create_shared_quiz(
             if q.answer: lines.append(f"Đáp án: {q.answer}")
             lines.append("")
         content_to_save = "\n".join(lines)
-    
+
     # Tạo quiz
     quiz = SharedQuiz(
         share_code=share_code,
-        title=request.title,
-        description=request.description,
+        title=payload.title,
+        description=payload.description,
         content=content_to_save,
         questions=[q.dict() for q in questions],
         total_questions=len(questions),
-        time_limit=request.time_limit,
+        time_limit=payload.time_limit,
         creator_id=current_user.id,
         expires_at=expires_at,
-        show_correct_answers=request.show_correct_answers,
-        allow_multiple_attempts=request.allow_multiple_attempts,
-        lesson_info=request.lesson_info,
+        show_correct_answers=payload.show_correct_answers,
+        allow_multiple_attempts=payload.allow_multiple_attempts,
+        lesson_info=payload.lesson_info,
     )
     
     db.add(quiz)
@@ -234,7 +237,9 @@ async def create_shared_quiz(
 
 
 @router.get("/my-quizzes", response_model=list[SharedQuizResponse])
+@limiter.limit("30/minute")
 async def get_my_quizzes(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -271,7 +276,9 @@ async def get_my_quizzes(
 
 
 @router.get("/{quiz_id}/detail")
+@limiter.limit("30/minute")
 async def get_quiz_detail(
+    request: Request,
     quiz_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -301,9 +308,11 @@ async def get_quiz_detail(
 
 
 @router.patch("/{quiz_id}")
+@limiter.limit("10/minute")
 async def update_quiz(
+    request: Request,
     quiz_id: int,
-    request: UpdateQuizRequest,
+    payload: UpdateQuizRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -322,15 +331,15 @@ async def update_quiz(
             detail="Không tìm thấy bài trắc nghiệm"
         )
 
-    if request.title is not None:
-        quiz.title = request.title
+    if payload.title is not None:
+        quiz.title = payload.title
 
-    if request.questions is not None:
-        quiz.questions = [q.dict() for q in request.questions]
-        quiz.total_questions = len(request.questions)
+    if payload.questions is not None:
+        quiz.questions = [q.dict() for q in payload.questions]
+        quiz.total_questions = len(payload.questions)
         # Tạo lại content backup từ questions
         lines = []
-        for idx, q in enumerate(request.questions, 1):
+        for idx, q in enumerate(payload.questions, 1):
             lines.append(f"Câu {idx}: {q.question}")
             for key, value in q.options.items():
                 lines.append(f"{key}. {value}")
@@ -338,11 +347,11 @@ async def update_quiz(
             lines.append("")
         quiz.content = "\n".join(lines)
 
-    if request.time_limit is not None:
-        quiz.time_limit = request.time_limit
+    if payload.time_limit is not None:
+        quiz.time_limit = payload.time_limit
 
-    if request.show_correct_answers is not None:
-        quiz.show_correct_answers = request.show_correct_answers
+    if payload.show_correct_answers is not None:
+        quiz.show_correct_answers = payload.show_correct_answers
 
     await db.commit()
     await db.refresh(quiz)
@@ -353,7 +362,9 @@ async def update_quiz(
 
 
 @router.delete("/{quiz_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("10/minute")
 async def delete_quiz(
+    request: Request,
     quiz_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -392,7 +403,9 @@ async def delete_quiz(
 
 
 @router.patch("/{quiz_id}/toggle-active", response_model=SharedQuizResponse)
+@limiter.limit("10/minute")
 async def toggle_quiz_active(
+    request: Request,
     quiz_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -444,7 +457,9 @@ async def toggle_quiz_active(
 
 
 @router.get("/{quiz_id}/responses", response_model=QuizResponsesListResponse)
+@limiter.limit("30/minute")
 async def get_quiz_responses(
+    request: Request,
     quiz_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -498,7 +513,9 @@ async def get_quiz_responses(
 
 
 @router.get("/{quiz_id}/statistics", response_model=QuizStatisticsResponse)
+@limiter.limit("30/minute")
 async def get_quiz_statistics(
+    request: Request,
     quiz_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),

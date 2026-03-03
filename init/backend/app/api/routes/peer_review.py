@@ -6,13 +6,14 @@ import random
 from datetime import datetime, timezone
 from typing import Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_db, get_current_user, require_role, user_has_role
+from app.core.rate_limiter import limiter
 from app.models.user import User
 from app.models.classroom import Classroom
 from app.models.class_student import ClassStudent
@@ -79,7 +80,9 @@ async def _verify_teacher_assignment(assignment_id: int, user: User, db: AsyncSe
 # ==================== Teacher Endpoints ====================
 
 @router.post("/assignments/{assignment_id}/activate", response_model=PeerReviewRoundInfo)
+@limiter.limit("10/minute")
 async def activate_peer_review(
+    request: Request,
     assignment_id: int,
     current_user: User = Depends(require_role("teacher")),
     db: AsyncSession = Depends(get_db),
@@ -194,7 +197,9 @@ async def activate_peer_review(
 
 
 @router.get("/assignments/{assignment_id}/status", response_model=PeerReviewRoundInfo)
+@limiter.limit("30/minute")
 async def get_peer_review_status(
+    request: Request,
     assignment_id: int,
     current_user: User = Depends(require_role("teacher")),
     db: AsyncSession = Depends(get_db),
@@ -236,7 +241,9 @@ async def get_peer_review_status(
 
 
 @router.post("/assignments/{assignment_id}/complete")
+@limiter.limit("10/minute")
 async def complete_peer_review(
+    request: Request,
     assignment_id: int,
     current_user: User = Depends(require_role("teacher")),
     db: AsyncSession = Depends(get_db),
@@ -260,7 +267,9 @@ async def complete_peer_review(
 
 
 @router.get("/assignments/{assignment_id}/reviews")
+@limiter.limit("30/minute")
 async def get_all_reviews(
+    request: Request,
     assignment_id: int,
     current_user: User = Depends(require_role("teacher")),
     db: AsyncSession = Depends(get_db),
@@ -324,7 +333,9 @@ async def get_all_reviews(
 # ==================== Student Endpoints ====================
 
 @router.get("/my-review/{assignment_id}")
+@limiter.limit("30/minute")
 async def get_my_review_task(
+    request: Request,
     assignment_id: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -533,7 +544,9 @@ async def get_my_review_task(
 
 
 @router.post("/{review_id}/submit")
+@limiter.limit("10/minute")
 async def submit_peer_review(
+    request: Request,
     review_id: int,
     data: PeerReviewSubmitRequest,
     current_user: User = Depends(get_current_user),
@@ -613,7 +626,9 @@ async def submit_peer_review(
 
 
 @router.get("/my-feedback/{assignment_id}")
+@limiter.limit("30/minute")
 async def get_my_feedback(
+    request: Request,
     assignment_id: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -697,7 +712,9 @@ async def get_my_feedback(
 
 
 @router.post("/assignments/{assignment_id}/auto-activate")
+@limiter.limit("10/minute")
 async def auto_activate_peer_review(
+    request: Request,
     assignment_id: int,
     api_key: str,
     db: AsyncSession = Depends(get_db),

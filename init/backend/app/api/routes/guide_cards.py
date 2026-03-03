@@ -1,11 +1,12 @@
 """
 Guide Card routes - Public read + Admin management
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_admin
+from app.core.rate_limiter import limiter
 from app.db.session import get_db
 from app.models.guide_card import GuideCard
 from app.schemas.guide_card import (
@@ -21,7 +22,8 @@ router = APIRouter()
 # ---------- PUBLIC ----------
 
 @router.get("/", response_model=list[GuideCardPublic])
-async def get_public_guide_cards(session: AsyncSession = Depends(get_db)):
+@limiter.limit("30/minute")
+async def get_public_guide_cards(request: Request, session: AsyncSession = Depends(get_db)):
     """Public: return active cards sorted by sort_order"""
     result = await session.execute(
         select(GuideCard)
@@ -35,7 +37,8 @@ async def get_public_guide_cards(session: AsyncSession = Depends(get_db)):
 
 @router.get("/admin/all", response_model=list[GuideCardRead],
             dependencies=[Depends(require_admin)])
-async def get_all_guide_cards(session: AsyncSession = Depends(get_db)):
+@limiter.limit("30/minute")
+async def get_all_guide_cards(request: Request, session: AsyncSession = Depends(get_db)):
     """Admin: get ALL cards (including inactive) sorted by sort_order"""
     result = await session.execute(
         select(GuideCard).order_by(GuideCard.sort_order)
@@ -45,7 +48,9 @@ async def get_all_guide_cards(session: AsyncSession = Depends(get_db)):
 
 @router.put("/admin/reorder", response_model=list[GuideCardRead],
             dependencies=[Depends(require_admin)])
+@limiter.limit("10/minute")
 async def reorder_guide_cards(
+    request: Request,
     payload: GuideCardReorderRequest,
     session: AsyncSession = Depends(get_db),
 ):
@@ -66,7 +71,9 @@ async def reorder_guide_cards(
 
 @router.put("/admin/{card_id}", response_model=GuideCardRead,
             dependencies=[Depends(require_admin)])
+@limiter.limit("10/minute")
 async def update_guide_card(
+    request: Request,
     card_id: int,
     payload: GuideCardUpdate,
     session: AsyncSession = Depends(get_db),
