@@ -1,12 +1,12 @@
 """Add performance indexes for common queries
 
 Revision ID: 039
-Revises: 038
+Revises: 038_fix_video_placeholder
 """
 from alembic import op
 
 revision = "039"
-down_revision = "038"
+down_revision = "038_fix_video_placeholder"
 
 
 def upgrade() -> None:
