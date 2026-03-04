@@ -47,12 +47,19 @@ class LessonPlanBuilderService:
     """Service cho lesson plan builder mới"""
     
     def __init__(self):
-        # Neo4j connection
+        # Neo4j connection with timeout and pool config
         self.driver = GraphDatabase.driver(
             os.getenv("NEO4J_URI"),
-            auth=(os.getenv("NEO4J_USERNAME"), os.getenv("NEO4J_PASSWORD"))
+            auth=(os.getenv("NEO4J_USERNAME"), os.getenv("NEO4J_PASSWORD")),
+            connection_timeout=15,
+            connection_acquisition_timeout=30,
+            max_connection_pool_size=10,
         )
         self.neo4j_database = os.getenv("NEO4J_DATABASE", "neo4j")
+
+        # Cache for reference documents (same for all requests)
+        self._reference_docs_cache: Optional[str] = None
+        self._reference_docs_cache_time: float = 0
 
         # Gemini API
         api_key = os.getenv("GEMINI_API_KEY")
@@ -898,7 +905,13 @@ Lưu ý: Nếu có nhiều phụ lục, tạo nhiều block [UPDATED_APPENDIX] t
             raise RuntimeError(f"Lỗi sinh sơ đồ tư duy: {str(e)}")
 
     def get_reference_documents_from_neo4j(self) -> Optional[str]:
-        """Lấy tài liệu tham khảo từ Neo4j: Năng lực tin học, Năng lực chung, Phẩm chất"""
+        """Lấy tài liệu tham khảo từ Neo4j: Năng lực tin học, Năng lực chung, Phẩm chất.
+        Cached 30 phút vì data này không thay đổi giữa các request."""
+        # Return cache if fresh (30 min)
+        if self._reference_docs_cache and (time.time() - self._reference_docs_cache_time < 1800):
+            logger.debug("Using cached reference documents (%d chars)", len(self._reference_docs_cache))
+            return self._reference_docs_cache
+
         with self.driver.session(database=self.neo4j_database) as session:
             result_text = ""
             
@@ -988,6 +1001,8 @@ Lưu ý: Nếu có nhiều phụ lục, tạo nhiều block [UPDATED_APPENDIX] t
             
             if result_text:
                 logger.info("Reference documents: %d chars", len(result_text))
+                self._reference_docs_cache = result_text
+                self._reference_docs_cache_time = time.time()
                 return result_text
             else:
                 logger.warning("No competency/quality data found in Neo4j")

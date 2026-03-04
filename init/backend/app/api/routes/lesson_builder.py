@@ -342,10 +342,10 @@ async def generate_lesson_plan_stream(
             try:
                 reference_documents = await asyncio.wait_for(
                     loop.run_in_executor(None, service.get_reference_documents_from_neo4j),
-                    timeout=30,
+                    timeout=60,
                 )
             except asyncio.TimeoutError:
-                logger.error("Neo4j get_reference_documents timed out after 30s")
+                logger.error("Neo4j get_reference_documents timed out after 60s")
                 yield f"data: {json.dumps({'type': 'error', 'message': 'Không thể kết nối cơ sở dữ liệu tham khảo (timeout). Vui lòng thử lại.'}, ensure_ascii=False)}\n\n"
                 return
 
@@ -356,10 +356,10 @@ async def generate_lesson_plan_stream(
             try:
                 lesson_detail = await asyncio.wait_for(
                     loop.run_in_executor(None, service.get_lesson_detail, payload.lesson_id),
-                    timeout=30,
+                    timeout=60,
                 )
             except asyncio.TimeoutError:
-                logger.error("Neo4j get_lesson_detail timed out after 30s for lesson_id=%s", payload.lesson_id)
+                logger.error("Neo4j get_lesson_detail timed out after 60s for lesson_id=%s", payload.lesson_id)
                 yield f"data: {json.dumps({'type': 'error', 'message': 'Không thể lấy nội dung bài học (timeout). Vui lòng thử lại.'}, ensure_ascii=False)}\n\n"
                 return
             if not lesson_detail:
