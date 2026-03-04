@@ -253,8 +253,8 @@ const StudentAssignmentPage: React.FC = () => {
       <div className="max-w-3xl mx-auto px-4 py-6">
         <div className="bg-white dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 shadow-sm overflow-hidden">
           {/* Info bar */}
-          <div className="px-6 py-4 border-b border-stone-100 dark:border-stone-700 flex items-center justify-between">
-            <div className="flex items-center gap-6">
+          <div className="px-3 sm:px-6 py-4 border-b border-stone-100 dark:border-stone-700 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-6">
               <span className="flex items-center gap-2 text-stone-700 dark:text-stone-300">
                 {a.work_type === "group" ? <Users className="w-5 h-5 text-purple-500" /> : <User className="w-5 h-5 text-brand" />}
                 <span className="font-medium">{a.work_type === "group" ? "Làm nhóm" : "Cá nhân"}</span>
@@ -276,7 +276,7 @@ const StudentAssignmentPage: React.FC = () => {
           </div>
 
           {/* Main content */}
-          <div className="p-6">
+          <div className="p-3 sm:p-6">
             {a.status === "submitted" ? (
               <div className="text-center py-8">
                 <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -353,13 +353,13 @@ const StudentAssignmentPage: React.FC = () => {
       {showFeedbackModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-stone-800 rounded-xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-hidden">
-            <div className="px-6 py-4 border-b border-stone-200 dark:border-stone-700 flex items-center justify-between">
+            <div className="px-3 sm:px-6 py-4 border-b border-stone-200 dark:border-stone-700 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-stone-900 dark:text-white">Đánh giá từ nhóm khác</h3>
               <button onClick={() => setShowFeedbackModal(false)} className="p-2 hover:bg-stone-100 dark:hover:bg-stone-700 rounded-lg">
                 <X className="w-5 h-5 text-stone-500" />
               </button>
             </div>
-            <div className="p-6 overflow-y-auto max-h-[60vh]">
+            <div className="p-3 sm:p-6 overflow-y-auto max-h-[60vh]">
               {loadingFeedback ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="w-8 h-8 animate-spin text-brand" />
@@ -403,7 +403,7 @@ const StudentAssignmentPage: React.FC = () => {
       {showWorksheetModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-stone-800 rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
-            <div className="px-6 py-4 border-b border-stone-200 dark:border-stone-700 flex items-center justify-between bg-sky-50 dark:bg-sky-900/20">
+            <div className="px-3 sm:px-6 py-4 border-b border-stone-200 dark:border-stone-700 flex items-center justify-between bg-sky-50 dark:bg-sky-900/20">
               <div className="flex items-center gap-3">
                 <FileText className="w-5 h-5 text-brand dark:text-sky-400" />
                 <h3 className="text-lg font-semibold text-stone-900 dark:text-white">{worksheetTitle}</h3>
@@ -412,7 +412,7 @@ const StudentAssignmentPage: React.FC = () => {
                 <X className="w-5 h-5 text-stone-500" />
               </button>
             </div>
-            <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
+            <div className="p-3 sm:p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
               <div className="space-y-6">
                 {worksheetBlocks.map((block, idx) => {
                   if (block.type === "markdown") {

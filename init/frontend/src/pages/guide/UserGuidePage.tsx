@@ -224,7 +224,7 @@ const UserGuidePage: React.FC = () => {
             </p>
           ) : (
             /* Grid of cards */
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {cards.map((card, idx) => {
                 const Icon = ICON_MAP[card.icon_name] || FileText;
                 const isInactive = isAdmin && "is_active" in card && !card.is_active;

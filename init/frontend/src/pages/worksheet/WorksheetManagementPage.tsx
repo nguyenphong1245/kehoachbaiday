@@ -196,10 +196,10 @@ const WorksheetManagementPage: React.FC = () => {
                 className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden"
               >
                 {/* Main row */}
-                <div className="p-5">
-                  <div className="flex items-start justify-between gap-4">
+                <div className="p-4 sm:p-5">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                     {/* Left side - Info */}
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="font-semibold text-gray-900 dark:text-white">
                           {worksheet.title}

@@ -587,7 +587,7 @@ const GroupPeerReviewPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="max-w-md mx-auto px-4 py-8">
+        <div className="w-full sm:max-w-md mx-auto px-4 py-8">
           {/* Member Evaluation Form in submitted state - ALL MEMBERS INCLUDING SELF */}
           {needsMemberEval && allMembersSubmitted.length > 0 && (
             <div className="bg-white dark:bg-stone-800 rounded-xl border border-amber-200 dark:border-amber-800 p-6 shadow-sm mb-6">
@@ -716,7 +716,7 @@ const GroupPeerReviewPage: React.FC = () => {
       {/* Main */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left - Members */}
-        <div className="w-56 bg-white dark:bg-stone-800 border-r border-stone-200 dark:border-stone-700 flex-shrink-0 flex flex-col">
+        <div className="hidden sm:flex w-56 bg-white dark:bg-stone-800 border-r border-stone-200 dark:border-stone-700 flex-shrink-0 flex-col">
           <div className="p-4 border-b border-stone-100 dark:border-stone-700">
             <h2 className="text-sm font-semibold text-stone-700 dark:text-stone-300 flex items-center gap-2">
               <Users className="w-4 h-4" />
@@ -781,10 +781,10 @@ const GroupPeerReviewPage: React.FC = () => {
 
         {/* Center - Content */}
         <div className="flex-1 overflow-y-auto">
-          <div className="max-w-3xl mx-auto p-6">
+          <div className="max-w-3xl mx-auto p-3 sm:p-6">
             <div className="bg-white dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 shadow-sm">
               {/* Worksheet header */}
-              <div className="px-6 py-4 border-b border-stone-200 dark:border-stone-700 bg-sky-50 dark:bg-sky-900/20">
+              <div className="px-3 sm:px-6 py-4 border-b border-stone-200 dark:border-stone-700 bg-sky-50 dark:bg-sky-900/20">
                 <h3 className="font-semibold text-stone-900 dark:text-white flex items-center gap-2">
                   <FileText className="w-5 h-5 text-brand dark:text-sky-400" />
                   {worksheetTitle}
@@ -793,7 +793,7 @@ const GroupPeerReviewPage: React.FC = () => {
               </div>
 
               {/* Content */}
-              <div className="p-6 space-y-6">
+              <div className="p-3 sm:p-6 space-y-6">
                 {worksheetBlocks.length > 0 ? (
                   worksheetBlocks.map((block, idx) => {
                     if (block.type === "markdown") {
@@ -906,7 +906,7 @@ const GroupPeerReviewPage: React.FC = () => {
         </div>
 
         {/* Right - Chat */}
-        <div className={`${chatOpen ? 'w-72' : 'w-12'} bg-white dark:bg-stone-800 border-l border-stone-200 dark:border-stone-700 flex flex-col flex-shrink-0 transition-all duration-200`}>
+        <div className={`hidden sm:flex ${chatOpen ? 'w-72' : 'w-12'} bg-white dark:bg-stone-800 border-l border-stone-200 dark:border-stone-700 flex-col flex-shrink-0 transition-all duration-200`}>
           <div className="p-3 border-b border-stone-100 dark:border-stone-700 flex items-center justify-between">
             {chatOpen ? (
               <span className="text-sm font-semibold text-stone-700 dark:text-stone-300 flex items-center gap-2">

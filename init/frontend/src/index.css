@@ -364,3 +364,24 @@ a {
   @apply text-inherit my-0;
 }
 
+/* Rich editor: Ctrl+Click to open link hint */
+.rich-editor-content a {
+  cursor: text;
+  position: relative;
+}
+
+.rich-editor-content a:hover::after {
+  content: 'Ctrl + Click để mở link';
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  background: #1e293b;
+  color: #fff;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 50;
+}
+

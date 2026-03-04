@@ -96,4 +96,5 @@ export interface RichTextEditorProps {
   lessonTitle?: string;
   lessonSubtitle?: string;
   onBack?: () => void;
+  hideFullscreen?: boolean;
 }

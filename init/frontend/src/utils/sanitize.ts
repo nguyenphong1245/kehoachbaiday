@@ -15,7 +15,7 @@ export function sanitizeHTML(dirty: string): string {
       "table", "thead", "tbody", "tfoot", "tr", "th", "td", "colgroup", "col",
       "blockquote", "pre", "code",
       "a", "img",
-      "span", "div", "sub", "sup",
+      "span", "div", "sub", "sup", "font",
       "hr",
       // SVG tags for inline mindmap rendering (markmap)
       "svg", "g", "path", "circle", "line", "rect", "ellipse",
@@ -25,7 +25,7 @@ export function sanitizeHTML(dirty: string): string {
     ALLOWED_ATTR: [
       "href", "target", "rel", "src", "alt", "width", "height",
       "style", "class", "colspan", "rowspan", "start",
-      "contenteditable", "data-*",
+      "contenteditable", "data-*", "color", "face", "size",
       // SVG attributes for inline mindmap rendering
       "viewBox", "xmlns", "xmlns:xlink", "fill", "stroke", "stroke-width",
       "d", "transform", "cx", "cy", "r", "x", "y", "x1", "y1", "x2", "y2",

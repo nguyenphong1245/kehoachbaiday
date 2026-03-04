@@ -23,7 +23,7 @@ export const insertTableHTML = (editorEl: HTMLDivElement, rows: number, cols: nu
 const escapeHtml = (str: string): string =>
   str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-const isValidUrl = (str: string): boolean => {
+export const isValidUrl = (str: string): boolean => {
   try {
     const u = new URL(str);
     return u.protocol === "http:" || u.protocol === "https:";
@@ -32,19 +32,9 @@ const isValidUrl = (str: string): boolean => {
   }
 };
 
-export const insertLink = () => {
-  const raw = prompt("Nhập URL (http:// hoặc https://):");
-  if (!raw) return;
-
-  const url = raw.trim();
-  if (!isValidUrl(url)) {
-    alert("URL không hợp lệ. Chỉ chấp nhận http:// hoặc https://");
-    return;
-  }
-
-  const selection = window.getSelection();
-  const text = selection && selection.toString() ? selection.toString() : url;
-  const safeUrl = escapeHtml(url);
+export const insertLink = (url: string, selectedText?: string) => {
+  const safeUrl = escapeHtml(url.trim());
+  const text = selectedText?.trim() || url.trim();
   const safeText = escapeHtml(text);
   document.execCommand("insertHTML", false, `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:underline;">${safeText}</a>`);
 };

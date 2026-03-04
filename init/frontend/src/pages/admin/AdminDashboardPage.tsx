@@ -6,7 +6,6 @@ import {
   BookOpen,
   Loader2,
   AlertCircle,
-  UserPlus,
   CheckCircle,
   XCircle,
   Coins,
@@ -15,9 +14,6 @@ import {
   Code,
   UserCheck,
   Activity,
-  FolderOpen,
-  TrendingUp,
-  Wallet,
 } from "lucide-react";
 import { getDashboardStats, type DashboardStats } from "@/services/adminService";
 import { api } from "@/services/authService";
@@ -48,7 +44,6 @@ const AdminDashboardPage = () => {
         ]);
         setStats(dashboardData);
 
-        // Calculate summary stats from teachers overview
         const teachers = teachersData.data;
         setSummaryStats({
           teachers: teachers.length,
@@ -103,62 +98,48 @@ const AdminDashboardPage = () => {
   }
 
   return (
-    <section className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
-      <div className="mb-6">
-        <h1 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white">
-          Tổng quan
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          Thống kê hệ thống và theo dõi sử dụng token
-        </p>
-      </div>
+    <section className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-5">
+      {/* Header */}
+      <h1 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white">
+        Tổng quan hệ thống
+      </h1>
 
-      {/* Token summary cards */}
-      <div className="mb-6">
-        <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3 flex items-center gap-2">
-          <Coins className="w-4 h-4" />
-          Thống kê Token toàn hệ thống
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
-          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-            <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 mb-1">
-              <Wallet className="w-4 h-4" />
-              <span className="text-xs font-medium">Tổng đã cấp</span>
-            </div>
-            <p className="text-2xl font-bold text-slate-800 dark:text-white">
+      {/* Token Overview - unified card */}
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 sm:p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Coins className="w-4.5 h-4.5 text-amber-500" />
+          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Token</span>
+        </div>
+        <div className="grid grid-cols-3 gap-3 sm:gap-6 mb-4">
+          <div>
+            <p className="text-[11px] sm:text-xs text-slate-400 dark:text-slate-500 mb-0.5">Đã cấp</p>
+            <p className="text-lg sm:text-2xl font-bold text-slate-800 dark:text-white leading-tight">
               {formatTokens(stats.total_tokens_allocated)}
             </p>
           </div>
-          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 mb-1">
-              <TrendingUp className="w-4 h-4" />
-              <span className="text-xs font-medium">Tổng đã dùng</span>
-            </div>
-            <p className="text-2xl font-bold text-slate-800 dark:text-white">
+          <div>
+            <p className="text-[11px] sm:text-xs text-slate-400 dark:text-slate-500 mb-0.5">Đã dùng</p>
+            <p className="text-lg sm:text-2xl font-bold text-amber-600 dark:text-amber-400 leading-tight">
               {formatTokens(stats.total_tokens_used)}
             </p>
           </div>
-          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-            <div className="flex items-center gap-2 text-green-600 dark:text-green-400 mb-1">
-              <Coins className="w-4 h-4" />
-              <span className="text-xs font-medium">Tổng còn lại</span>
-            </div>
-            <p className="text-2xl font-bold text-slate-800 dark:text-white">
+          <div>
+            <p className="text-[11px] sm:text-xs text-slate-400 dark:text-slate-500 mb-0.5">Còn lại</p>
+            <p className="text-lg sm:text-2xl font-bold text-green-600 dark:text-green-400 leading-tight">
               {formatTokens(stats.total_tokens_remaining)}
             </p>
           </div>
         </div>
-        {/* Usage bar */}
         {stats.total_tokens_allocated > 0 && (
-          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-2">
+          <div>
+            <div className="flex items-center justify-between text-[11px] text-slate-400 dark:text-slate-500 mb-1.5">
               <span>Tỷ lệ sử dụng</span>
-              <span className="font-semibold text-slate-700 dark:text-slate-200">{usagePercent}%</span>
+              <span className="font-semibold text-slate-600 dark:text-slate-300">{usagePercent}%</span>
             </div>
-            <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+            <div className="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all ${
-                  usagePercent > 80 ? "bg-red-500" : usagePercent > 50 ? "bg-amber-500" : "bg-green-500"
+                  usagePercent > 80 ? "bg-red-400" : usagePercent > 50 ? "bg-amber-400" : "bg-emerald-400"
                 }`}
                 style={{ width: `${Math.min(usagePercent, 100)}%` }}
               />
@@ -167,252 +148,119 @@ const AdminDashboardPage = () => {
         )}
       </div>
 
-      {/* User statistics */}
-      <div className="mb-6">
-        <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3 flex items-center gap-2">
-          <Activity className="w-4 h-4" />
-          Thống kê người dùng
-        </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-            <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400 mb-1">
-              <Users className="w-3.5 h-3.5" />
-              <span className="text-xs font-medium">Tổng users</span>
+      {/* Quick Stats - compact grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+        {[
+          { icon: Users, label: "Người dùng", value: stats.total_users, color: "text-slate-500" },
+          { icon: Activity, label: "Hoạt động", value: stats.active_users, color: "text-emerald-500" },
+          { icon: UserCheck, label: "Đã xác thực", value: stats.verified_users, color: "text-blue-500" },
+          ...(summaryStats ? [
+            { icon: School, label: "Lớp học", value: summaryStats.classrooms, color: "text-violet-500" },
+            { icon: GraduationCap, label: "Học sinh", value: summaryStats.students, color: "text-pink-500" },
+          ] : []),
+        ].map((item, i) => (
+          <div key={i} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2.5">
+            <div className="flex items-center gap-1.5 mb-1">
+              <item.icon className={`w-3.5 h-3.5 ${item.color}`} />
+              <span className="text-[11px] text-slate-400 dark:text-slate-500">{item.label}</span>
             </div>
-            <p className="text-xl font-bold text-slate-800 dark:text-white">{stats.total_users}</p>
+            <p className="text-lg font-bold text-slate-800 dark:text-white">{item.value}</p>
           </div>
-          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-            <div className="flex items-center gap-2 text-green-600 dark:text-green-400 mb-1">
-              <Activity className="w-3.5 h-3.5" />
-              <span className="text-xs font-medium">Hoạt động</span>
-            </div>
-            <p className="text-xl font-bold text-slate-800 dark:text-white">{stats.active_users}</p>
-          </div>
-          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-            <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 mb-1">
-              <UserCheck className="w-3.5 h-3.5" />
-              <span className="text-xs font-medium">Đã xác thực</span>
-            </div>
-            <p className="text-xl font-bold text-slate-800 dark:text-white">{stats.verified_users}</p>
-          </div>
-          {summaryStats && (
-            <>
-              <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-                <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 mb-1">
-                  <Users className="w-3.5 h-3.5" />
-                  <span className="text-xs font-medium">Giáo viên</span>
-                </div>
-                <p className="text-xl font-bold text-slate-800 dark:text-white">{summaryStats.teachers}</p>
-              </div>
-              <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-                <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 mb-1">
-                  <School className="w-3.5 h-3.5" />
-                  <span className="text-xs font-medium">Lớp học</span>
-                </div>
-                <p className="text-xl font-bold text-slate-800 dark:text-white">{summaryStats.classrooms}</p>
-              </div>
-              <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-                <div className="flex items-center gap-2 text-pink-600 dark:text-pink-400 mb-1">
-                  <GraduationCap className="w-3.5 h-3.5" />
-                  <span className="text-xs font-medium">Học sinh</span>
-                </div>
-                <p className="text-xl font-bold text-slate-800 dark:text-white">{summaryStats.students}</p>
-              </div>
-            </>
-          )}
-        </div>
+        ))}
       </div>
 
-      {/* Content statistics */}
-      <div className="mb-6">
-        <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3 flex items-center gap-2">
-          <FolderOpen className="w-4 h-4" />
-          Thống kê nội dung
-        </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-            <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 mb-1">
-              <FileText className="w-3.5 h-3.5" />
-              <span className="text-xs font-medium">Giáo án</span>
+      {/* Content Stats - inline row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        {[
+          { icon: FileText, label: "Giáo án", value: stats.total_lesson_plans, color: "text-blue-500" },
+          { icon: ClipboardList, label: "Trắc nghiệm", value: stats.total_quizzes, color: "text-emerald-500" },
+          { icon: BookOpen, label: "Phiếu học tập", value: stats.total_worksheets, color: "text-orange-500" },
+          { icon: Code, label: "Bài tập code", value: stats.total_code_exercises, color: "text-violet-500" },
+        ].map((item, i) => (
+          <div key={i} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2.5">
+            <div className="flex items-center gap-1.5 mb-1">
+              <item.icon className={`w-3.5 h-3.5 ${item.color}`} />
+              <span className="text-[11px] text-slate-400 dark:text-slate-500">{item.label}</span>
             </div>
-            <p className="text-xl font-bold text-slate-800 dark:text-white">{stats.total_lesson_plans}</p>
+            <p className="text-lg font-bold text-slate-800 dark:text-white">{item.value}</p>
           </div>
-          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-            <div className="flex items-center gap-2 text-green-600 dark:text-green-400 mb-1">
-              <ClipboardList className="w-3.5 h-3.5" />
-              <span className="text-xs font-medium">Trắc nghiệm</span>
-            </div>
-            <p className="text-xl font-bold text-slate-800 dark:text-white">{stats.total_quizzes}</p>
-          </div>
-          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-            <div className="flex items-center gap-2 text-orange-600 dark:text-orange-400 mb-1">
-              <BookOpen className="w-3.5 h-3.5" />
-              <span className="text-xs font-medium">Phiếu học tập</span>
-            </div>
-            <p className="text-xl font-bold text-slate-800 dark:text-white">{stats.total_worksheets}</p>
-          </div>
-          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-            <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 mb-1">
-              <Code className="w-3.5 h-3.5" />
-              <span className="text-xs font-medium">Bài tập code</span>
-            </div>
-            <p className="text-xl font-bold text-slate-800 dark:text-white">{stats.total_code_exercises}</p>
-          </div>
-        </div>
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+      {/* Bottom panels */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Recent Teachers */}
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <UserPlus className="w-5 h-5 text-blue-500" />
-            <h2 className="text-base font-semibold text-slate-800 dark:text-white">
-              Giáo viên đăng ký gần đây
-            </h2>
-          </div>
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 sm:p-5">
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">
+            Giáo viên gần đây
+          </h2>
           {stats.recent_users.length === 0 ? (
             <p className="text-sm text-slate-400">Chưa có giáo viên</p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               {stats.recent_users.map((user) => (
-                <div key={user.id} className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
-                      <Users className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                <div key={user.id} className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
+                      <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                        {user.email.charAt(0).toUpperCase()}
+                      </span>
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
+                      <p className="text-sm text-slate-700 dark:text-slate-200 truncate">
                         {user.email}
                       </p>
-                      <p className="text-xs text-slate-400">{formatDate(user.created_at)}</p>
+                      <p className="text-[11px] text-slate-400">{formatDate(user.created_at)}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {user.is_verified ? (
-                      <span className="flex items-center gap-1 text-[10px] text-green-600 dark:text-green-400">
-                        <CheckCircle className="w-3 h-3" /> Đã xác thực
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1 text-[10px] text-slate-400">
-                        <XCircle className="w-3 h-3" /> Chưa xác thực
-                      </span>
-                    )}
-                  </div>
+                  {user.is_verified ? (
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                  ) : (
+                    <XCircle className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 flex-shrink-0" />
+                  )}
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        {/* Top Token Usage - summary card */}
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <Coins className="w-5 h-5 text-amber-500" />
-            <h2 className="text-base font-semibold text-slate-800 dark:text-white">
-              Top sử dụng token
-            </h2>
-          </div>
+        {/* Top Token Usage */}
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 sm:p-5">
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">
+            Top sử dụng token
+          </h2>
           {stats.top_teachers.length === 0 ? (
             <p className="text-sm text-slate-400">Chưa có dữ liệu</p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               {stats.top_teachers.slice(0, 5).map((teacher, idx) => (
-                <div key={teacher.id} className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${
-                      idx === 0 ? "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300" :
-                      idx === 1 ? "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300" :
-                      "bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400"
+                <div key={teacher.id} className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[11px] font-bold ${
+                      idx === 0 ? "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400" :
+                      idx === 1 ? "bg-slate-100 dark:bg-slate-600 text-slate-500 dark:text-slate-300" :
+                      "bg-slate-50 dark:bg-slate-700 text-slate-400 dark:text-slate-500"
                     }`}>
-                      #{idx + 1}
+                      {idx + 1}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
+                      <p className="text-sm text-slate-700 dark:text-slate-200 truncate">
                         {teacher.email}
                       </p>
-                      <p className="text-xs text-slate-400">
-                        Còn: {formatTokens(teacher.token_balance)} token
+                      <p className="text-[11px] text-slate-400">
+                        Còn {formatTokens(teacher.token_balance)}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-sm font-semibold px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">
-                      {formatTokens(teacher.tokens_used)} đã dùng
-                    </span>
-                  </div>
+                  <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 flex-shrink-0 tabular-nums">
+                    {formatTokens(teacher.tokens_used)}
+                  </span>
                 </div>
               ))}
             </div>
           )}
         </div>
       </div>
-
-      {/* Full teacher token usage table */}
-      {stats.top_teachers.length > 0 && (
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center gap-2">
-            <Coins className="w-5 h-5 text-amber-500" />
-            <h2 className="text-base font-semibold text-slate-800 dark:text-white">
-              Chi tiết sử dụng token giáo viên
-            </h2>
-            <span className="text-xs text-slate-400 ml-auto">{stats.top_teachers.length} giáo viên</span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-900/50">
-                <tr className="text-left text-slate-500 dark:text-slate-400">
-                  <th className="px-5 py-3 font-medium">#</th>
-                  <th className="px-5 py-3 font-medium">Email</th>
-                  <th className="px-5 py-3 font-medium text-right">Đã dùng</th>
-                  <th className="px-5 py-3 font-medium text-right">Còn lại</th>
-                  <th className="px-5 py-3 font-medium text-right">Tổng cấp</th>
-                  <th className="px-5 py-3 font-medium text-center">Tỷ lệ</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                {stats.top_teachers.map((teacher, idx) => {
-                  const total = teacher.tokens_used + teacher.token_balance;
-                  const pct = total > 0 ? Math.round((teacher.tokens_used / total) * 100) : 0;
-                  return (
-                    <tr key={teacher.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 text-slate-700 dark:text-slate-300">
-                      <td className="px-5 py-3 text-slate-400 font-mono text-xs">{idx + 1}</td>
-                      <td className="px-5 py-3">
-                        <span className="font-medium">{teacher.email}</span>
-                      </td>
-                      <td className="px-5 py-3 text-right">
-                        <span className={`font-semibold ${teacher.tokens_used > 0 ? "text-amber-600 dark:text-amber-400" : "text-slate-400"}`}>
-                          {formatTokens(teacher.tokens_used)}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 text-right">
-                        <span className={teacher.token_balance === 0 ? "text-red-500 font-semibold" : ""}>
-                          {formatTokens(teacher.token_balance)}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 text-right text-slate-500">
-                        {formatTokens(total)}
-                      </td>
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-2 justify-center">
-                          <div className="w-16 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full ${
-                                pct > 80 ? "bg-red-500" : pct > 50 ? "bg-amber-500" : "bg-green-500"
-                              }`}
-                              style={{ width: `${Math.min(pct, 100)}%` }}
-                            />
-                          </div>
-                          <span className="text-xs text-slate-500 w-8 text-right">{pct}%</span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
     </section>
   );
 };

@@ -814,6 +814,7 @@ Lưu ý: Nếu có nhiều phụ lục, tạo nhiều block [UPDATED_APPENDIX] t
         activity_name: str,
         activity_type: str = None,
         chi_muc: str = None,
+        lesson_detail=None,
     ) -> tuple[str, int]:
         """Sinh sơ đồ tư duy (markdown headings) cho một hoạt động.
         Returns: (mindmap_markdown, tokens_used)
@@ -821,14 +822,16 @@ Lưu ý: Nếu có nhiều phụ lục, tạo nhiều block [UPDATED_APPENDIX] t
         AI 2 chuyên biệt: nhận nội dung hoạt động + chi_muc + SGK content,
         trả về chuỗi markdown headings (# ## ### ####) dùng cho Markmap.
 
-        Logic:
-        - Hình thành kiến thức: Lấy kiến thức của chi mục đó trong SGK
-        - Luyện tập/Vận dụng: Lấy kiến thức cả bài
+        Args:
+            lesson_detail: (optional) Nếu đã có từ bước trước, truyền vào
+                           để tránh query Neo4j lần nữa.
         """
         import re
+        from app.prompts.mindmap_generation import build_mindmap_prompt
 
-        # Lấy chi tiết bài học từ Neo4j
-        lesson_detail = self.get_lesson_detail(lesson_id)
+        # Dùng lesson_detail đã có, chỉ query Neo4j khi chưa có
+        if lesson_detail is None:
+            lesson_detail = self.get_lesson_detail(lesson_id)
         if not lesson_detail:
             raise RuntimeError(f"Không tìm thấy bài học với ID: {lesson_id}")
 
@@ -847,61 +850,25 @@ Lưu ý: Nếu có nhiều phụ lục, tạo nhiều block [UPDATED_APPENDIX] t
         is_practice_or_apply = activity_type in ("luyen_tap", "van_dung")
         is_knowledge_formation = activity_type == "hinh_thanh_kien_thuc"
 
-        # Luyện tập/Vận dụng hoặc Toàn bộ bài: Lấy kiến thức CẢ BÀI
         if is_whole_lesson or is_practice_or_apply:
             content_limit = 8000
             task_label = f"toàn bộ bài \"{lesson_name}\""
             focus_instruction = "Tổng hợp TOÀN BỘ kiến thức của bài học"
-            sgk_to_use = sgk_content[:content_limit]
-        # Hình thành kiến thức: Lấy kiến thức của CHI MỤC CỤ THỂ
         elif is_knowledge_formation and chi_muc:
             content_limit = 6000
             task_label = f"nội dung \"{chi_muc}\" trong bài \"{lesson_name}\""
             focus_instruction = f"CHỈ tập trung vào nội dung của mục \"{chi_muc}\", KHÔNG lấy kiến thức từ các mục khác"
-            sgk_to_use = sgk_content[:content_limit]
         else:
             content_limit = 6000
             task_label = f"hoạt động \"{activity_name}\" của bài \"{lesson_name}\""
             focus_instruction = "Lấy kiến thức liên quan đến hoạt động này"
-            sgk_to_use = sgk_content[:content_limit]
 
-        prompt = f"""Bạn là chuyên gia thiết kế sơ đồ tư duy cho giáo dục.
-
-NHIỆM VỤ: Tạo sơ đồ tư duy về KIẾN THỨC BÀI HỌC cho {task_label}.
-
-PHẠM VI: {focus_instruction}
-
-CHI MỤC BÀI HỌC:
-{chi_muc_str}
-
-NỘI DUNG SÁCH GIÁO KHOA (nguồn kiến thức chính):
-{sgk_to_use}
-
-QUY TẮC BẮT BUỘC:
-1. GỐC (# ): Tiêu đề phù hợp với phạm vi (tên bài hoặc tên mục)
-2. NHÁNH CHÍNH (## ): Các chủ đề/khái niệm chính (theo chi_muc hoặc nội dung SGK)
-3. NHÁNH PHỤ (### ): Kiến thức cụ thể, định nghĩa, đặc điểm, ví dụ từ SGK
-4. NHÁNH CON (#### ): Chi tiết bổ sung (công thức, phân loại, lưu ý)
-5. NỘI DUNG phải là KIẾN THỨC MÔN HỌC từ SGK (khái niệm, định nghĩa, công thức, ví dụ...)
-6. KHÔNG đưa vào cấu trúc giáo án (mục tiêu, tổ chức thực hiện, B1/B2/B3/B4, sản phẩm...)
-7. Tối thiểu 2 cấp (##, ###), tối đa 4 cấp
-
-OUTPUT: CHỈ trả về markdown headings, KHÔNG giải thích, KHÔNG wrap trong code block.
-
-VÍ DỤ (bài An toàn trên không gian mạng):
-# An toàn trên không gian mạng
-## Mạng xã hội
-### Khái niệm mạng xã hội
-### Lợi ích
-#### Kết nối bạn bè
-#### Học tập, giải trí
-### Rủi ro
-#### Lừa đảo
-#### Virus, mã độc
-## Cách sử dụng an toàn
-### Bảo vệ thông tin cá nhân
-### Nhận biết tin giả
-"""
+        prompt = build_mindmap_prompt(
+            task_label=task_label,
+            focus_instruction=focus_instruction,
+            chi_muc_str=chi_muc_str,
+            sgk_content=sgk_content[:content_limit],
+        )
 
         try:
             response = self.text_model.generate_content(prompt)

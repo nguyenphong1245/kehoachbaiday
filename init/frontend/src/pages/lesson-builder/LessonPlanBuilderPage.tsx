@@ -2,7 +2,7 @@
  * LessonPlanBuilderPage - Trang soạn Kế hoạch bài dạy
  * Phong cách hành chính - Giao diện chuyên nghiệp, rõ ràng
  */
-import React, { useState, useCallback, useEffect, useMemo } from "react";
+import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import {
   FileText,
   Sparkles,
@@ -10,9 +10,6 @@ import {
   ChevronRight,
   Settings,
   Loader2,
-  ChevronsRight,
-  ChevronUp,
-  ChevronDown,
   LogOut,
   Monitor,
   X,
@@ -22,6 +19,7 @@ import {
   Plus,
   Check,
   Save,
+  Menu,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { getStoredAuthUser } from "@/utils/authStorage";
@@ -74,6 +72,7 @@ export const LessonPlanBuilderPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [activeModal, setActiveModal] = useState<SettingsModal>(null);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Password form state
   const [oldPassword, setOldPassword] = useState("");
@@ -93,6 +92,9 @@ export const LessonPlanBuilderPage: React.FC = () => {
   const [originalStyle, setOriginalStyle] = useState("");
   const [savingStyle, setSavingStyle] = useState(false);
 
+  // AbortController for SSE stream
+  const abortRef = useRef<AbortController | null>(null);
+
   // Sync settings to local state
   useEffect(() => {
     if (!settings) return;
@@ -104,7 +106,7 @@ export const LessonPlanBuilderPage: React.FC = () => {
 
   // Lock body scroll khi sidebar mở
   useEffect(() => {
-    if (showUserMenu) {
+    if (showUserMenu || isMobileSidebarOpen) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
@@ -112,7 +114,7 @@ export const LessonPlanBuilderPage: React.FC = () => {
     return () => {
       document.body.style.overflow = '';
     };
-  }, [showUserMenu]);
+  }, [showUserMenu, isMobileSidebarOpen]);
 
   // Lấy 2 chữ cái đầu từ email để làm avatar
   const getInitials = (email: string) => {
@@ -120,9 +122,6 @@ export const LessonPlanBuilderPage: React.FC = () => {
     return name.substring(0, 2).toUpperCase();
   };
 
-  // Collapse states for fullscreen editing
-  const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
-  const [isProgressCollapsed, setIsProgressCollapsed] = useState(false);
 
   // === Settings modal handlers ===
   const openModal = (modal: SettingsModal) => {
@@ -204,14 +203,27 @@ export const LessonPlanBuilderPage: React.FC = () => {
     setGeneratedResult(null);
     setError(null);
     setCurrentStep("configure");
+    setIsMobileSidebarOpen(false);
   }, []);
 
   const handleActivitiesChange = useCallback((newActivities: ActivityConfig[]) => {
     setActivities(newActivities);
   }, []);
 
+  const cancelGeneration = useCallback(() => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+    setIsGenerating(false);
+    setProgress(null);
+  }, []);
+
   const handleGenerate = () => {
     if (!selectedLesson) return;
+
+    // Abort any previous generation
+    cancelGeneration();
 
     setIsGenerating(true);
     setError(null);
@@ -223,7 +235,7 @@ export const LessonPlanBuilderPage: React.FC = () => {
       nls_selections: nlsSelections.length > 0 ? nlsSelections : undefined,
     }));
 
-    generateLessonPlanStream(
+    const controller = generateLessonPlanStream(
       {
         book_type: selectedLesson.book_type,
         grade: selectedLesson.grade,
@@ -234,18 +246,31 @@ export const LessonPlanBuilderPage: React.FC = () => {
       },
       (evt) => setProgress(evt),
       (result) => {
+        abortRef.current = null;
         setGeneratedResult(result);
         setCurrentStep("result");
         setIsGenerating(false);
         setProgress(null);
       },
       (msg) => {
+        abortRef.current = null;
         setError(msg || "Có lỗi xảy ra khi sinh kế hoạch bài dạy");
         setIsGenerating(false);
         setProgress(null);
       },
     );
+    abortRef.current = controller;
   };
+
+  // Cleanup on unmount (e.g. user navigates away from page)
+  useEffect(() => {
+    return () => {
+      if (abortRef.current) {
+        abortRef.current.abort();
+        abortRef.current = null;
+      }
+    };
+  }, []);
 
   const handleSectionUpdate = (sectionId: string, newContent: string) => {
     if (!generatedResult) return;
@@ -256,6 +281,7 @@ export const LessonPlanBuilderPage: React.FC = () => {
   };
 
   const handleReset = () => {
+    cancelGeneration();
     setCurrentStep("select");
     setSelectedLesson(null);
     setActivities([]);
@@ -272,38 +298,46 @@ export const LessonPlanBuilderPage: React.FC = () => {
 
   return (
     <div className="h-screen flex bg-stone-50">
-      {/* Left Sidebar - Chọn bài học */}
-      {!isLeftSidebarCollapsed && (
+      {/* Left Sidebar - Desktop: always visible, Mobile: overlay drawer */}
+      <div className="hidden lg:block">
         <LessonPlanBuilderSidebar
           key={sidebarResetKey}
           onLessonSelect={handleLessonSelect}
           selectedLesson={selectedLesson}
-          onCollapse={() => setIsLeftSidebarCollapsed(true)}
         />
+      </div>
+      {/* Mobile sidebar overlay */}
+      {isMobileSidebarOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setIsMobileSidebarOpen(false)} />
+          <div className="relative h-full w-72 max-w-[85vw] shadow-xl">
+            <LessonPlanBuilderSidebar
+              key={sidebarResetKey}
+              onLessonSelect={handleLessonSelect}
+              selectedLesson={selectedLesson}
+            />
+          </div>
+        </div>
       )}
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-0">
         {/* Header */}
         <header className="bg-white border-b border-stone-200 shadow-sm">
-          <div className="px-6 py-3 flex items-center justify-between">
-            {/* Left: Toggle sidebar + Breadcrumb */}
-            <div className="flex items-center gap-2 text-sm">
-              {/* Toggle sidebar button - chỉ hiện khi sidebar đang ẩn */}
-              {isLeftSidebarCollapsed && (
-                <button
-                  onClick={() => setIsLeftSidebarCollapsed(false)}
-                  className="p-1.5 text-stone-400 hover:text-stone-600 hover:bg-stone-100 rounded transition-colors"
-                  title="Hiện thanh chọn bài"
-                >
-                  <ChevronsRight className="w-4 h-4" />
-                </button>
-              )}
-              <span className="text-stone-600 font-medium">Kế hoạch bài dạy</span>
+          <div className="px-3 sm:px-6 py-3 flex items-center justify-between">
+            {/* Left: Hamburger (mobile) + Breadcrumb */}
+            <div className="flex items-center gap-2 text-sm min-w-0">
+              <button
+                onClick={() => setIsMobileSidebarOpen(true)}
+                className="lg:hidden p-1.5 hover:bg-stone-100 rounded-lg transition-colors flex-shrink-0"
+              >
+                <Menu className="w-5 h-5 text-stone-600" />
+              </button>
+              <span className="text-stone-600 font-medium flex-shrink-0 hidden sm:inline">Kế hoạch bài dạy</span>
               {selectedLesson && (
                 <>
-                  <ChevronRight className="w-4 h-4 text-stone-400" />
-                  <span className="text-brand font-semibold truncate max-w-[250px]">
+                  <ChevronRight className="w-4 h-4 text-stone-400 flex-shrink-0" />
+                  <span className="text-brand font-semibold truncate max-w-[120px] sm:max-w-[180px] md:max-w-[250px]">
                     {selectedLesson.name}
                   </span>
                 </>
@@ -311,35 +345,28 @@ export const LessonPlanBuilderPage: React.FC = () => {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 flex-shrink-0">
               <button
                 onClick={() => window.open("/lesson-builder/saved", "_blank")}
-                className="px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
+                className="hidden md:inline-flex px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
               >
                 KHBD đã lưu
               </button>
-              <div className="w-px h-5 bg-stone-200 mx-1" />
+              <div className="w-px h-5 bg-stone-200 mx-1 hidden md:block" />
               <button
                 onClick={() => window.open("/classes", "_blank")}
-                className="px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
+                className="hidden md:inline-flex px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
               >
-                <span className="hidden sm:inline">Quản lý lớp & học liệu</span>
+                Quản lý lớp & học liệu
               </button>
-              <div className="w-px h-5 bg-stone-200 mx-1" />
+              <div className="w-px h-5 bg-stone-200 mx-1 hidden md:block" />
               <button
                 onClick={() => window.open("/huong-dan", "_blank")}
-                className="px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
+                className="hidden md:inline-flex px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
               >
                 Hướng dẫn sử dụng
               </button>
-              <div className="w-px h-5 bg-stone-200 mx-1" />
-              <button
-                onClick={handleReset}
-                className="px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
-              >
-                Làm mới
-              </button>
-              <div className="w-px h-5 bg-stone-200 mx-1" />
+              <div className="w-px h-5 bg-stone-200 mx-1 hidden md:block" />
               {/* User Menu - Avatar Button */}
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
@@ -351,84 +378,63 @@ export const LessonPlanBuilderPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Progress Steps - Collapsible */}
-          {!isProgressCollapsed ? (
-            <div className="px-6 py-3 border-t border-stone-100 bg-stone-50 flex items-center">
-              <div className="flex-1 flex items-center justify-center gap-2">
-                {STEPS.map((step, index) => {
-                  const isActive = currentStepIndex === index;
-                  const isCompleted = currentStepIndex > index;
-                  const isClickable = index === 0 || (index === 1 && selectedLesson) || (index === 2 && generatedResult);
+          {/* Progress Steps */}
+          <div className="px-3 sm:px-6 py-2 sm:py-3 border-t border-stone-100 bg-stone-50 flex items-center justify-center">
+            <div className="flex items-center gap-1 sm:gap-2">
+              {STEPS.map((step, index) => {
+                const isActive = currentStepIndex === index;
+                const isCompleted = currentStepIndex > index;
+                const isClickable = index === 0 || (index === 1 && selectedLesson) || (index === 2 && generatedResult);
 
-                  return (
-                    <React.Fragment key={step.key}>
-                      {/* Step */}
-                      <button
-                        onClick={() => {
-                          if (index === 0) handleReset();
-                          else if (index === 1 && selectedLesson) setCurrentStep("configure");
-                          else if (index === 2 && generatedResult) setCurrentStep("result");
-                        }}
-                        disabled={!isClickable}
-                        className={`flex items-center gap-2.5 px-4 py-2 text-sm transition-all rounded-lg ${
-                          isActive
-                            ? "bg-brand text-white shadow-md shadow-brand/25"
-                            : isCompleted
-                            ? "text-green-600 bg-green-50 hover:bg-green-100"
-                            : "text-stone-400 bg-stone-100"
-                        } ${!isClickable && !isActive ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
-                      >
-                        <span className={`w-6 h-6 flex items-center justify-center text-xs font-bold rounded-full ${
-                          isActive
-                            ? "bg-white/25"
-                            : isCompleted
-                            ? "bg-green-200 text-green-700"
-                            : "bg-stone-200 text-stone-500"
-                        }`}>
-                          {isCompleted ? "✓" : index + 1}
-                        </span>
-                        <span className="font-semibold">
-                          {step.label}
-                        </span>
-                      </button>
+                return (
+                  <React.Fragment key={step.key}>
+                    {/* Step */}
+                    <button
+                      onClick={() => {
+                        if (index === 0) handleReset();
+                        else if (index === 1 && selectedLesson) { cancelGeneration(); setCurrentStep("configure"); }
+                        else if (index === 2 && generatedResult) setCurrentStep("result");
+                      }}
+                      disabled={!isClickable}
+                      className={`flex items-center gap-1.5 sm:gap-2.5 px-2 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm transition-all rounded-lg ${
+                        isActive
+                          ? "bg-brand text-white shadow-md shadow-brand/25"
+                          : isCompleted
+                          ? "text-green-600 bg-green-50 hover:bg-green-100"
+                          : "text-stone-400 bg-stone-100"
+                      } ${!isClickable && !isActive ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
+                    >
+                      <span className={`w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-xs font-bold rounded-full ${
+                        isActive
+                          ? "bg-white/25"
+                          : isCompleted
+                          ? "bg-green-200 text-green-700"
+                          : "bg-stone-200 text-stone-500"
+                      }`}>
+                        {isCompleted ? "✓" : index + 1}
+                      </span>
+                      <span className="font-semibold hidden sm:inline">
+                        {step.label}
+                      </span>
+                    </button>
 
-                      {/* Connector */}
-                      {index < STEPS.length - 1 && (
-                        <div className={`w-12 h-0.5 rounded-full ${
-                          currentStepIndex > index
-                            ? "bg-green-400"
-                            : "bg-stone-200"
-                        }`} />
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </div>
-              {/* Collapse progress button */}
-              <button
-                onClick={() => setIsProgressCollapsed(true)}
-                className="p-1.5 text-stone-400 hover:text-stone-600 hover:bg-stone-200 rounded transition-colors ml-2"
-                title="Ẩn thanh tiến trình"
-              >
-                <ChevronUp className="w-4 h-4" />
-              </button>
+                    {/* Connector */}
+                    {index < STEPS.length - 1 && (
+                      <div className={`w-6 sm:w-12 h-0.5 rounded-full ${
+                        currentStepIndex > index
+                          ? "bg-green-400"
+                          : "bg-stone-200"
+                      }`} />
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </div>
-          ) : (
-            /* Collapsed progress - minimal expand button */
-            <div className="px-6 py-1 border-t border-stone-100 bg-stone-50 flex justify-center">
-              <button
-                onClick={() => setIsProgressCollapsed(false)}
-                className="p-1 text-stone-400 hover:text-stone-600 hover:bg-stone-200 rounded transition-colors"
-                title="Hiện thanh tiến trình"
-              >
-                <ChevronDown className="w-4 h-4" />
-              </button>
-            </div>
-          )}
+          </div>
         </header>
 
         {/* Content Area */}
-        <main className={`flex-1 overflow-y-auto bg-stone-100 ${currentStep === 'result' ? 'p-0' : 'p-6'}`}>
+        <main className={`flex-1 overflow-y-auto bg-stone-100 ${currentStep === 'result' ? 'p-0' : 'p-3 sm:p-6'}`}>
           {/* Step 1: Select Lesson */}
           {currentStep === "select" && (
             <div className="flex flex-col items-center justify-center h-full">
@@ -440,7 +446,8 @@ export const LessonPlanBuilderPage: React.FC = () => {
                   Chọn bài học để bắt đầu
                 </h2>
                 <p className="text-sm text-stone-600 mb-5 leading-relaxed">
-                  Sử dụng thanh bên trái để chọn lớp, chủ đề và bài học
+                  <span className="hidden lg:inline">Sử dụng thanh bên trái để chọn lớp, chủ đề và bài học</span>
+                  <span className="lg:hidden">Nhấn nút <Menu className="w-4 h-4 inline" /> ở góc trái để chọn lớp, chủ đề và bài học</span>
                 </p>
                 <div className="p-4 bg-stone-50 rounded-xl border border-stone-200">
                   <div className="flex items-center justify-center gap-2 text-sm text-stone-600 font-medium">
@@ -467,7 +474,7 @@ export const LessonPlanBuilderPage: React.FC = () => {
                   </h3>
                 </div>
                 <div className="p-5">
-                  <div className="grid grid-cols-3 gap-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-5">
                     <div className="space-y-1">
                       <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Tên bài</label>
                       <p className="text-sm text-stone-800 font-semibold">{selectedLesson.name}</p>
@@ -545,7 +552,7 @@ export const LessonPlanBuilderPage: React.FC = () => {
                     onClick={() => setShowNlsModal(false)}
                   />
                   {/* Modal */}
-                  <div className="relative bg-white dark:bg-stone-800 rounded-xl shadow-2xl border border-stone-200 dark:border-stone-700 w-[640px] max-h-[80vh] flex flex-col">
+                  <div className="relative bg-white dark:bg-stone-800 rounded-xl shadow-2xl border border-stone-200 dark:border-stone-700 w-[95vw] max-w-[640px] max-h-[80vh] flex flex-col">
                     {/* Header */}
                     <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200 dark:border-stone-700">
                       <div>
@@ -600,14 +607,18 @@ export const LessonPlanBuilderPage: React.FC = () => {
               {/* Generate Button + Progress Overlay */}
               <div className="flex flex-col items-center gap-4 pt-4">
                 <button
-                  onClick={handleGenerate}
-                  disabled={activities.length === 0 || isGenerating}
-                  className="px-8 py-3.5 bg-brand hover:bg-brand-dark text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2.5 transition-all font-semibold shadow-lg shadow-brand/25 hover:shadow-brand/40"
+                  onClick={isGenerating ? cancelGeneration : handleGenerate}
+                  disabled={!isGenerating && activities.length === 0}
+                  className={`px-8 py-3.5 rounded-xl flex items-center gap-2.5 transition-all font-semibold shadow-lg ${
+                    isGenerating
+                      ? 'bg-red-500 hover:bg-red-600 text-white shadow-red-500/25'
+                      : 'bg-brand hover:bg-brand-dark text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-brand/25 hover:shadow-brand/40'
+                  }`}
                 >
                   {isGenerating ? (
                     <>
                       <Loader2 className="w-5 h-5 animate-spin" />
-                      Đang sinh...
+                      Dừng soạn
                     </>
                   ) : (
                     <>
@@ -643,7 +654,7 @@ export const LessonPlanBuilderPage: React.FC = () => {
 
       {/* Sidebar Panel - Slide in from right */}
       <div
-        className={`fixed top-0 right-0 h-screen w-72 bg-white border-l border-stone-200 shadow-lg z-50 transform transition-all duration-300 ease-out flex flex-col overflow-hidden ${
+        className={`fixed top-0 right-0 h-screen w-full sm:w-72 bg-white border-l border-stone-200 shadow-lg z-50 transform transition-all duration-300 ease-out flex flex-col overflow-hidden ${
           showUserMenu ? 'translate-x-0 opacity-100 visible' : 'translate-x-full opacity-0 invisible'
         }`}
       >
@@ -664,6 +675,30 @@ export const LessonPlanBuilderPage: React.FC = () => {
 
         {/* Menu Items */}
         <div className="flex-1 overflow-y-auto py-2">
+          {/* Mobile-only nav links */}
+          <div className="md:hidden">
+            <button
+              className="w-full flex items-center gap-3 px-5 py-3 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
+              onClick={() => { setShowUserMenu(false); window.open("/lesson-builder/saved", "_blank"); }}
+            >
+              <Save className="w-4 h-4 text-stone-500" />
+              <span>KHBD đã lưu</span>
+            </button>
+            <button
+              className="w-full flex items-center gap-3 px-5 py-3 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
+              onClick={() => { setShowUserMenu(false); window.open("/classes", "_blank"); }}
+            >
+              <FileText className="w-4 h-4 text-stone-500" />
+              <span>Quản lý lớp & học liệu</span>
+            </button>
+            <button
+              className="w-full flex items-center gap-3 px-5 py-3 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
+              onClick={() => { setShowUserMenu(false); window.open("/huong-dan", "_blank"); }}
+            >
+              <FileText className="w-4 h-4 text-stone-500" />
+              <span>Hướng dẫn sử dụng</span>
+            </button>
+          </div>
           <button
             className="w-full flex items-center gap-3 px-5 py-3 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
             onClick={() => openModal("password")}
@@ -705,7 +740,7 @@ export const LessonPlanBuilderPage: React.FC = () => {
 
           {/* Password Modal */}
           {activeModal === "password" && (
-            <div className="relative bg-white rounded-xl shadow-2xl border border-stone-200 w-[420px] max-h-[80vh] flex flex-col">
+            <div className="relative bg-white rounded-xl shadow-2xl border border-stone-200 w-[95vw] max-w-[420px] max-h-[80vh] flex flex-col">
               <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200">
                 <h3 className="text-sm font-bold text-stone-800 flex items-center gap-2 uppercase tracking-wide">
                   <KeyRound className="w-4 h-4 text-stone-600" />
@@ -745,7 +780,7 @@ export const LessonPlanBuilderPage: React.FC = () => {
 
           {/* Tools Modal */}
           {activeModal === "tools" && (
-            <div className="relative bg-white rounded-xl shadow-2xl border border-stone-200 w-[520px] max-h-[80vh] flex flex-col">
+            <div className="relative bg-white rounded-xl shadow-2xl border border-stone-200 w-[95vw] max-w-[520px] max-h-[80vh] flex flex-col">
               <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200">
                 <div>
                   <h3 className="text-sm font-bold text-stone-800 flex items-center gap-2 uppercase tracking-wide">
@@ -805,7 +840,7 @@ export const LessonPlanBuilderPage: React.FC = () => {
 
           {/* Style Modal */}
           {activeModal === "style" && (
-            <div className="relative bg-white rounded-xl shadow-2xl border border-stone-200 w-[520px] max-h-[80vh] flex flex-col">
+            <div className="relative bg-white rounded-xl shadow-2xl border border-stone-200 w-[95vw] max-w-[520px] max-h-[80vh] flex flex-col">
               <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200">
                 <div>
                   <h3 className="text-sm font-bold text-stone-800 flex items-center gap-2 uppercase tracking-wide">

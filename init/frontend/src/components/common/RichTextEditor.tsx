@@ -1,5 +1,6 @@
 import React, { useRef, useCallback, useEffect, useState } from "react";
-import { ArrowLeft, ListTree, ChevronLeft, ChevronRight, AlignLeft, AlignCenter, AlignRight } from "lucide-react";
+
+import { ArrowLeft, ListTree, ChevronLeft, ChevronRight, AlignLeft, AlignCenter, AlignRight, Maximize2, Minimize2 } from "lucide-react";
 import {
   TOOLBAR,
   FONT_SIZES,
@@ -11,6 +12,7 @@ import {
 import {
   insertTableHTML,
   insertLink,
+  isValidUrl,
   applyFontSize,
   detectCurrentFontSize,
   saveSelection,
@@ -32,6 +34,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   lessonTitle,
   lessonSubtitle,
   onBack,
+  hideFullscreen,
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const fontSizeRef = useRef<HTMLSelectElement>(null);
@@ -53,7 +56,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const [showHighlightPicker, setShowHighlightPicker] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [outlineHeadings, setOutlineHeadings] = useState<OutlineHeading[]>([]);
-  const [showOutline, setShowOutline] = useState(true);
+  const [showOutline, setShowOutline] = useState(() => window.innerWidth >= 768);
   const headerRef = useRef<HTMLDivElement>(null);
   const [headerHeight, setHeaderHeight] = useState(88);
   const [selectedTable, setSelectedTable] = useState<HTMLTableElement | null>(null);
@@ -61,6 +64,30 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const [isEditingInCell, setIsEditingInCell] = useState(false);
   const [focusedCell, setFocusedCell] = useState<HTMLTableCellElement | null>(null);
   const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Lock body scroll & Escape key when fullscreen
+  useEffect(() => {
+    if (isFullscreen) {
+      document.body.style.overflow = 'hidden';
+      const handleEsc = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') setIsFullscreen(false);
+      };
+      document.addEventListener('keydown', handleEsc);
+      return () => {
+        document.body.style.overflow = '';
+        document.removeEventListener('keydown', handleEsc);
+      };
+    } else {
+      document.body.style.overflow = '';
+    }
+  }, [isFullscreen]);
+
+  // Link modal state
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkText, setLinkText] = useState("");
+  const [linkError, setLinkError] = useState("");
 
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -235,6 +262,20 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     return () => clearTimeout(timer);
   }, [value, updateOutline]);
 
+  // Handle link modal confirm
+  const handleLinkConfirm = useCallback(() => {
+    const url = linkUrl.trim();
+    if (!url) { setLinkError("Vui lòng nhập URL"); return; }
+    if (!isValidUrl(url)) { setLinkError("URL không hợp lệ (http:// hoặc https://)"); return; }
+    restoreSelection(savedSelectionRef.current);
+    insertLink(url, linkText);
+    setShowLinkModal(false);
+    setLinkUrl("");
+    setLinkText("");
+    setLinkError("");
+    editorRef.current?.focus();
+  }, [linkUrl, linkText]);
+
   // Handle image file selection
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -280,6 +321,15 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   // --- Handle click to select/deselect table and images ---
   const handleEditorClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
+
+    // Ctrl+Click on a link opens it in a new tab
+    const anchor = target.closest('a') as HTMLAnchorElement | null;
+    if (anchor && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      const href = anchor.getAttribute('href');
+      if (href) window.open(href, '_blank', 'noopener,noreferrer');
+      return;
+    }
     const clickedTable = target.closest('table') as HTMLTableElement | null;
     const clickedCell = target.closest('td, th') as HTMLTableCellElement | null;
     const clickedImage = target.tagName === 'IMG' ? target as HTMLImageElement : null;
@@ -318,12 +368,15 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   // Deselect table and image when clicking outside editor
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (editorRef.current && !editorRef.current.contains(e.target as Node)) {
-        setSelectedTable(null);
-        setIsEditingInCell(false);
-        setFocusedCell(null);
-        setSelectedImage(null);
+      const target = e.target as Node;
+      // Don't deselect when clicking inside the editor or the paper wrapper (resize handles etc.)
+      if (editorRef.current?.contains(target) || wrapperRef.current?.contains(target)) {
+        return;
       }
+      setSelectedTable(null);
+      setIsEditingInCell(false);
+      setFocusedCell(null);
+      setSelectedImage(null);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -631,7 +684,13 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       }
 
       if (command === "__link") {
-        insertLink();
+        savedSelectionRef.current = saveSelection();
+        const sel = window.getSelection();
+        setLinkText(sel && sel.toString() ? sel.toString() : "");
+        setLinkUrl("");
+        setLinkError("");
+        setShowLinkModal(true);
+        return;
       } else if (command === "__table") {
         setShowTablePicker(prev => !prev);
         return;
@@ -1280,13 +1339,13 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   );
 
   return (
-    <div className="flex flex-col">
+    <div className={`flex flex-col ${isFullscreen ? 'fixed inset-0 z-[100] bg-stone-100 dark:bg-stone-900' : ''}`}>
       {/* Sticky header: title + toolbar together, no gap */}
-      <div ref={headerRef} className="sticky top-0 z-40 rounded-t-lg">
+      <div ref={headerRef} className={`sticky top-0 z-40 ${isFullscreen ? '' : 'rounded-t-lg'}`}>
         {/* Title bar */}
         {lessonTitle && (
-          <div className="bg-brand dark:bg-brand-dark px-4 py-2.5 rounded-t-lg flex items-center gap-3">
-            {onBack && (
+          <div className={`bg-brand dark:bg-brand-dark px-4 py-2.5 flex items-center gap-3 ${isFullscreen ? '' : 'rounded-t-lg'}`}>
+            {onBack && !isFullscreen && (
               <button
                 onClick={onBack}
                 className="p-1.5 rounded-lg hover:bg-brand text-white/80 hover:text-white transition-colors flex-shrink-0"
@@ -1301,12 +1360,21 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                 <p className="text-sky-100 text-xs mt-0.5">{lessonSubtitle}</p>
               )}
             </div>
+            {!hideFullscreen && (
+              <button
+                onClick={() => setIsFullscreen(prev => !prev)}
+                className="p-1.5 rounded-lg hover:bg-white/15 text-white/80 hover:text-white transition-colors flex-shrink-0"
+                title={isFullscreen ? "Thu nhỏ" : "Phóng to"}
+              >
+                {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+              </button>
+            )}
           </div>
         )}
 
         {/* Toolbar - directly below title, no gap */}
-        <div className={`bg-stone-50 dark:bg-stone-900 border-b border-x border-stone-200 dark:border-stone-700 shadow-sm ${!lessonTitle ? 'border-t rounded-t-lg' : ''}`}>
-          <div className="flex items-center justify-between px-3 py-1.5">
+        <div className={`bg-stone-50 dark:bg-stone-900 border-b border-stone-200 dark:border-stone-700 shadow-sm ${isFullscreen ? '' : 'border-x'} ${!lessonTitle ? 'border-t rounded-t-lg' : ''}`}>
+          <div className="flex items-center justify-between px-2 sm:px-3 py-1.5">
             {/* Left: formatting tools */}
             <div className="flex flex-wrap items-center gap-0.5">
               {/* Font size selector - shows current size */}
@@ -1499,11 +1567,11 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       />
 
       {/* A4 page area with outline sidebar */}
-      <div className="flex bg-stone-200 dark:bg-stone-800 border-x border-b border-stone-200 dark:border-stone-700 rounded-b-lg">
+      <div className={`flex ${isFullscreen ? 'flex-1 overflow-y-auto bg-stone-300 dark:bg-stone-800' : 'border-x border-b border-stone-200 dark:border-stone-700 bg-stone-200 dark:bg-stone-800 rounded-b-lg'}`}>
         {/* Sidebar + Toggle: MỘT phần tử sticky duy nhất, self-start để không stretch bằng A4 */}
         <div
           className="flex-shrink-0 self-start sticky z-20 flex"
-          style={{ top: `${headerHeight}px`, maxHeight: `calc(100vh - ${headerHeight + 8}px)` }}
+          style={{ top: isFullscreen ? '0px' : `${headerHeight}px`, maxHeight: `calc(100vh - ${headerHeight + 8}px)` }}
         >
           {showOutline && (
             <div className="w-56 overflow-y-auto py-4 pl-3 pr-1 scrollbar-thin">
@@ -1545,11 +1613,11 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         </div>
 
         {/* Editor area */}
-        <div className="flex-1 flex justify-center py-6 px-4">
+        <div className={`flex-1 ${isFullscreen ? 'flex flex-col items-center min-h-full py-6 px-6 sm:px-10' : 'flex justify-center py-6 px-4'}`}>
           <div
             ref={wrapperRef}
-            className="w-full bg-white dark:bg-stone-900 shadow-lg dark:shadow-stone-950/50 relative"
-            style={{ maxWidth: "950px", padding: "48px 60px" }}
+            className={`w-full bg-white dark:bg-stone-900 shadow-lg dark:shadow-stone-950/50 relative px-4 py-6 sm:px-[60px] sm:py-[48px] ${isFullscreen ? 'flex-1 flex flex-col border border-stone-200 dark:border-stone-700' : ''}`}
+            style={{ maxWidth: "950px" }}
           >
             <div
               ref={editorRef}
@@ -1563,7 +1631,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
               onMouseDown={handleEditorMouseDown}
               onClick={handleEditorClick}
               data-placeholder={placeholder}
-              className="rich-editor-content outline-none leading-relaxed text-stone-800 dark:text-stone-200"
+              className={`rich-editor-content outline-none leading-relaxed text-stone-800 dark:text-stone-200 ${isFullscreen ? 'flex-1' : ''}`}
               style={{ minHeight, fontSize: '13pt', lineHeight: '1.5' }}
             />
 
@@ -1840,6 +1908,42 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           outline-offset: 2px;
         }
       `}</style>
+
+      {/* Link Modal */}
+      {showLinkModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40" onClick={() => setShowLinkModal(false)}>
+          <div className="bg-white dark:bg-stone-800 rounded-xl shadow-xl w-[95vw] max-w-[420px] p-5" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold text-stone-800 dark:text-white mb-4">Chèn liên kết</h3>
+            <div>
+              <input
+                type="url"
+                value={linkUrl}
+                onChange={(e) => { setLinkUrl(e.target.value); setLinkError(""); }}
+                onKeyDown={(e) => { if (e.key === "Enter") handleLinkConfirm(); if (e.key === "Escape") setShowLinkModal(false); }}
+                autoFocus
+                className="w-full px-3 py-2 text-sm border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-700 text-stone-800 dark:text-white focus:ring-2 focus:ring-brand focus:border-brand focus:outline-none"
+              />
+              {linkError && (
+                <p className="text-xs text-red-500 mt-1">{linkError}</p>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-2 mt-4">
+              <button
+                onClick={() => setShowLinkModal(false)}
+                className="px-4 py-2 text-sm text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-700 rounded-lg transition-colors"
+              >
+                Huỷ
+              </button>
+              <button
+                onClick={handleLinkConfirm}
+                className="px-4 py-2 text-sm font-medium text-white bg-brand hover:bg-brand-dark rounded-lg transition-colors"
+              >
+                Chèn
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

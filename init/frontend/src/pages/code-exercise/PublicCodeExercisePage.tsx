@@ -517,9 +517,9 @@ export const PublicCodeExercisePage: React.FC = () => {
 
       {/* Main content */}
       <div className="flex-1 flex overflow-hidden">
-        <div className="flex h-full w-full">
+        <div className="flex flex-col lg:flex-row h-full w-full">
           {/* Left panel - Problem description + test cases */}
-          <div className="w-[38%] flex flex-col border-r border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800">
+          <div className="h-[40vh] lg:h-full lg:w-[38%] flex flex-col border-b lg:border-b-0 lg:border-r border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800">
             {isTeacher ? (
               <div className="flex border-b border-stone-200 dark:border-stone-700 shrink-0">
                 <button

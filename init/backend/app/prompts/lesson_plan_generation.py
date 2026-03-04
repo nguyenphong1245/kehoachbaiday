@@ -785,7 +785,8 @@ QUY TẮC KHÔNG TRÍCH DẪN (bổ sung cho quy tắc xuyên suốt số 3):
    }}
    ```
 
-   TUYỆT ĐỐI KHÔNG DÙNG: sub_items, blanks, fill_blanks, code_template, kwl_table — CHỈ dùng "text", "code", "answer_lines"!
+   TUYỆT ĐỐI KHÔNG DÙNG: sub_items, blanks, fill_blanks, code_template, kwl_table, matching, nối cột — CHỈ dùng "text", "code", "answer_lines"!
+   KHÔNG TẠO câu hỏi dạng nối cột, ghép đôi, hoặc bảng so sánh trong phiếu học tập.
 
    CẤU TRÚC ĐẦY ĐỦ PHIẾU HỌC TẬP:
    ```json

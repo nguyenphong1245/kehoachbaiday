@@ -330,7 +330,7 @@ const PeerReviewPage: React.FC = () => {
       <div className="max-w-6xl mx-auto px-4 py-6">
         {/* ========== REVIEW TAB ========== */}
         {activeTab === "review" && (
-          <div className="flex gap-6">
+          <div className="flex flex-col lg:flex-row gap-6">
             {/* Left: Worksheet display */}
             <div className="flex-1 min-w-0">
               {submitted ? (
@@ -345,7 +345,7 @@ const PeerReviewPage: React.FC = () => {
                 </div>
               ) : (
                 <div className="bg-white dark:bg-stone-800 rounded-xl shadow-lg overflow-hidden">
-                  <div className="bg-brand px-6 py-4">
+                  <div className="bg-brand px-3 sm:px-6 py-4">
                     <h3 className="text-white font-bold text-xl flex items-center gap-2">
                       <FileText className="w-5 h-5" />
                       {worksheetTitle}
@@ -353,7 +353,7 @@ const PeerReviewPage: React.FC = () => {
                     <p className="text-sky-100 text-sm mt-1">Bài làm của bạn khác</p>
                   </div>
 
-                  <div className="p-6">
+                  <div className="p-3 sm:p-6">
                     {worksheetBlocks.length > 0 ? (
                       <div className="space-y-6">
                         {worksheetBlocks.map((block, blockIdx) => {
@@ -447,7 +447,7 @@ const PeerReviewPage: React.FC = () => {
 
             {/* Right: Scoring sidebar */}
             {!submitted && (
-              <div className="w-72 flex-shrink-0">
+              <div className="w-full lg:w-72 flex-shrink-0">
                 <div className="bg-white dark:bg-stone-800 rounded-xl shadow-lg border border-stone-200 dark:border-stone-700 overflow-hidden sticky top-20">
                   <div className="px-4 py-3 bg-amber-500">
                     <h3 className="font-medium text-white">Đánh giá bài làm</h3>

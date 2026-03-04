@@ -483,6 +483,7 @@ async def generate_lesson_plan_stream(
                                             activity_name=activity.activity_name,
                                             activity_type=activity.activity_type,
                                             chi_muc=activity.chi_muc,
+                                            lesson_detail=lesson_detail,
                                         )
                                     ),
                                     timeout=60,

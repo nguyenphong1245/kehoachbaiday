@@ -72,7 +72,7 @@ const SavedLessonPlansPage: React.FC = () => {
   };
 
   const handleView = (id: number) => {
-    navigate(`/lesson-builder/saved/${id}`);
+    window.open(`/lesson-builder/saved/${id}`, '_blank');
   };
 
   const formatDate = (dateStr: string) => {
@@ -107,10 +107,10 @@ const SavedLessonPlansPage: React.FC = () => {
 
       {/* Main Content */}
       <div className="flex-1 overflow-auto">
-        <div className="max-w-5xl mx-auto px-4 py-6">
+        <div className="max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
           {/* Search */}
           <div className="mb-5">
-            <div className="relative max-w-md">
+            <div className="relative w-full sm:max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
               <input
                 type="text"

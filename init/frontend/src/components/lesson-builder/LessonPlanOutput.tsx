@@ -43,6 +43,7 @@ interface LessonPlanOutputProps {
   activities?: ActivityConfig[];
   onBack?: () => void;
   savedLessonPlanId?: string;
+  hideFullscreen?: boolean;
 }
 
 // ============== Turndown helpers ==============
@@ -668,8 +669,10 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
   activities,
   onBack,
   savedLessonPlanId,
+  hideFullscreen,
 }) => {
   const [sections, setSections] = useState<LessonPlanSection[]>(result.sections);
+  const [currentSavedId, setCurrentSavedId] = useState<string | undefined>(savedLessonPlanId);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [materialsCreated, setMaterialsCreated] = useState(false);
@@ -822,8 +825,18 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
     let cancelled = false;
 
     const init = async () => {
-      const fullMd = getFullMarkdown();
-      let html = marked.parse(fullMd) as string;
+      // If full_content is already HTML (saved from editor), use directly
+      const fc = result.full_content || "";
+      const isHtml = fc.trimStart().startsWith("<");
+
+      let html: string;
+      if (isHtml && currentSavedId) {
+        // Loaded from saved KHBD with HTML content — use directly (preserves table formatting)
+        html = fc;
+      } else {
+        const fullMd = getFullMarkdown();
+        html = marked.parse(fullMd) as string;
+      }
       // Auto-format quiz answer keys into tables
       html = formatQuizAnswersToTable(html);
       // Apply syntax highlighting to code blocks
@@ -1289,18 +1302,17 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
         mindmap_activity_name: mindmapSection?.mindmap_activity_name || undefined,
       }];
 
-      const fullContent = saveSections
-        .map((s) => `## ${s.title}\n\n${s.content}\n\n`)
-        .join("\n");
+      // Save raw HTML as full_content for lossless round-trip (preserves table formatting)
+      const htmlContent = tempDiv.innerHTML;
 
       let successText: string;
 
-      if (savedLessonPlanId) {
+      if (currentSavedId) {
         // Update existing saved lesson plan
-        await updateSavedLessonPlan(savedLessonPlanId, {
+        await updateSavedLessonPlan(currentSavedId, {
           title: `KHBD - ${result.lesson_info.lesson_name}`,
           sections: saveSections,
-          full_content: fullContent,
+          full_content: htmlContent,
         });
         successText = "Đã cập nhật KHBD thành công!";
       } else {
@@ -1309,10 +1321,12 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
           title: `KHBD - ${result.lesson_info.lesson_name}`,
           lesson_info: result.lesson_info,
           sections: saveSections,
-          full_content: fullContent,
+          full_content: htmlContent,
           activities: activities,
           is_printed: false,
         });
+        // Store the ID so subsequent saves update instead of creating new
+        setCurrentSavedId(String(response.id));
         successText = response.message;
 
         // Auto-create shared materials (worksheets + quizzes) — only on first save
@@ -1667,9 +1681,9 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
 
   return (
     <div>
-      {/* Save Message */}
+      {/* Save Message - fixed top so it's visible even in fullscreen */}
       {saveMessage && (
-        <div className={`px-4 py-3 flex items-center gap-3 rounded-lg mb-3 ${
+        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[110] px-4 py-3 flex items-center gap-3 rounded-lg shadow-lg max-w-md ${
           saveMessage.type === "success"
             ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200"
             : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200"
@@ -1683,9 +1697,9 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
         </div>
       )}
 
-      {/* Code Extraction Result */}
+      {/* Code Extraction Result - fixed top so it's visible even in fullscreen */}
       {codeExtractionResult && (
-        <div ref={codeExtractionRef} className={`px-4 py-3 flex items-start gap-3 rounded-lg mb-3 ${
+        <div ref={codeExtractionRef} className={`fixed top-4 left-1/2 -translate-x-1/2 z-[110] px-4 py-3 flex items-start gap-3 rounded-lg shadow-lg max-w-lg ${
           codeExtractionResult.found
             ? "bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-200"
             : "bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300"
@@ -1731,12 +1745,12 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
         toolbarActions={toolbarActions}
         lessonTitle={result.lesson_info.lesson_name}
         lessonSubtitle={`Lớp ${result.lesson_info.grade} - ${result.lesson_info.book_type}`}
-        onBack={onBack}
+        hideFullscreen={hideFullscreen}
       />
 
       {/* Mindmap Modal */}
       {showMindmapModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-3">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl flex flex-col" style={{ width: "95vw", maxWidth: "1400px", height: "90vh" }}>
             {/* Modal Header */}
             <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
@@ -1829,7 +1843,7 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
 
       {/* Print PHT Modal — edit dotted lines before printing */}
       {showPrintPHTModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-3">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl flex flex-col" style={{ width: "90vw", maxWidth: "800px", height: "90vh" }}>
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
@@ -1876,19 +1890,38 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
                   lineHeight: '1.5',
                 }}
               >
-                {printWorksheetBlocks[activePHTIndex]?.map((block) => (
-                  <div key={block.id}>
+                {printWorksheetBlocks[activePHTIndex]?.map((block, blockIdx) => (
+                  <div key={block.id} className="group/block relative">
                     {block.type === 'dotted-line' ? (
-                      <div
-                        className="border-b border-dotted border-gray-800 dark:border-gray-400"
-                        style={{
-                          height: '1.5em',
-                          margin: '0.5em 0',
-                          width: '100%',
-                        }}
-                      />
+                      <div className="relative">
+                        <div
+                          className="border-b border-dotted border-gray-800 dark:border-gray-400"
+                          style={{
+                            height: '1.5em',
+                            margin: '0.5em 0',
+                            width: '100%',
+                          }}
+                        />
+                        <button
+                          onClick={() => handleRemoveDottedLine(activePHTIndex, block.id)}
+                          className="absolute -right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-red-500 text-white text-xs leading-none opacity-0 group-hover/block:opacity-100 hover:bg-red-600 transition-opacity shadow-sm"
+                          title="Xóa dòng"
+                        >
+                          ×
+                        </button>
+                      </div>
                     ) : (
-                      <div dangerouslySetInnerHTML={{ __html: sanitizeHTML(block.html || '') }} />
+                      <div>
+                        <div dangerouslySetInnerHTML={{ __html: sanitizeHTML(block.html || '') }} />
+                        <div className="flex justify-center opacity-0 group-hover/block:opacity-100 transition-opacity -mt-1 mb-1">
+                          <button
+                            onClick={() => handleAddDottedLine(activePHTIndex, blockIdx)}
+                            className="px-2.5 py-0.5 text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 hover:bg-purple-100 dark:hover:bg-purple-900/50 border border-purple-200 dark:border-purple-700 rounded-full transition-colors"
+                          >
+                            + Thêm dòng
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -1935,12 +1968,6 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
                 Di chuột vào nội dung để thêm (+) hoặc xóa (×) dòng chấm
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleAddDottedLine(activePHTIndex, (printWorksheetBlocks[activePHTIndex]?.length || 1) - 1)}
-                  className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
-                >
-                  + Thêm dòng
-                </button>
                 <button
                   onClick={() => setShowPrintPHTModal(false)}
                   className="px-4 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"

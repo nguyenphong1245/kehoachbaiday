@@ -14,4 +14,4 @@ else
 fi
 
 echo "Starting server..."
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --timeout-keep-alive 65 --limit-concurrency 100 --workers ${UVICORN_WORKERS:-4} --limit-max-requests 1000 --limit-max-requests-jitter 100
+exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --timeout-keep-alive 65 --limit-concurrency 100 --workers ${UVICORN_WORKERS:-4} --limit-max-requests 1000

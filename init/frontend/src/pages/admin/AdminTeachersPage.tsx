@@ -11,7 +11,6 @@ import {
   FileText,
   Code,
   ClipboardList,
-  Coins,
 } from "lucide-react";
 import { api } from "@/services/authService";
 
@@ -171,7 +170,7 @@ const AdminTeachersPage = () => {
                   </div>
                   <div className="text-left">
                     <p className="font-medium text-stone-800 dark:text-white">{teacher.email}</p>
-                    <div className="flex items-center gap-4 text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-stone-500 dark:text-stone-400 mt-0.5">
                       <span className="flex items-center gap-1">
                         <School className="w-3 h-3" />
                         {teacher.total_classrooms} lớp
@@ -183,10 +182,6 @@ const AdminTeachersPage = () => {
                       <span className="flex items-center gap-1">
                         <BookOpen className="w-3 h-3" />
                         {teacher.total_materials} học liệu
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Coins className="w-3 h-3 text-amber-500" />
-                        Đã dùng: {formatNumber(teacher.tokens_used)} token
                       </span>
                     </div>
                   </div>
@@ -234,7 +229,7 @@ const AdminTeachersPage = () => {
                                       </span>
                                     )}
                                   </p>
-                                  <div className="flex items-center gap-3 text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-500 dark:text-stone-400 mt-0.5">
                                     <span>{classroom.student_count} học sinh</span>
                                     <span className="flex items-center gap-1">
                                       <ClipboardList className="w-3 h-3" />

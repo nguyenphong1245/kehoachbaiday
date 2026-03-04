@@ -3,7 +3,7 @@
  * Phong cach hanh chinh - Gon gang, chuyen nghiep
  */
 import React, { useState, useEffect } from "react";
-import { ChevronDown, Loader2, Check, PanelLeftClose } from "lucide-react";
+import { ChevronDown, Loader2, Check } from "lucide-react";
 import {
   GRADES,
   type LessonBasicInfo,
@@ -14,13 +14,11 @@ import { searchLessons, getLessonDetail, getTopics, getSubjects } from "@/servic
 interface LessonPlanBuilderSidebarProps {
   onLessonSelect: (lesson: LessonDetail) => void;
   selectedLesson: LessonDetail | null;
-  onCollapse?: () => void;
 }
 
 export const LessonPlanBuilderSidebar: React.FC<LessonPlanBuilderSidebarProps> = ({
   onLessonSelect,
   selectedLesson,
-  onCollapse,
 }) => {
   const [selectedBookType] = useState<string>("Kết nối tri thức với cuộc sống");
   const [subjects, setSubjects] = useState<string[]>([]);
@@ -108,20 +106,9 @@ export const LessonPlanBuilderSidebar: React.FC<LessonPlanBuilderSidebarProps> =
   return (
     <aside className="w-72 h-full bg-white border-r border-stone-200 flex flex-col overflow-hidden shadow-sm">
       {/* Header - Fixed */}
-      <div className="px-4 py-4 border-b border-stone-200 bg-stone-50 flex items-start justify-between">
-        <div>
-          <h2 className="text-base font-semibold text-stone-800">Tìm kiếm bài học</h2>
-          <p className="text-xs text-stone-500 mt-1">Chọn môn, lớp và chủ đề</p>
-        </div>
-        {onCollapse && (
-          <button
-            onClick={onCollapse}
-            className="p-1.5 text-stone-400 hover:text-stone-600 hover:bg-stone-200 rounded transition-colors"
-            title="Thu gọn"
-          >
-            <PanelLeftClose className="w-4 h-4" />
-          </button>
-        )}
+      <div className="px-4 py-4 border-b border-stone-200 bg-stone-50">
+        <h2 className="text-base font-semibold text-stone-800">Tìm kiếm bài học</h2>
+        <p className="text-xs text-stone-500 mt-1">Chọn môn, lớp và chủ đề</p>
       </div>
 
       {/* Selectors - Fixed */}

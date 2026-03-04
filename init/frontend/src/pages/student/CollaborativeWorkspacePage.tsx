@@ -534,7 +534,7 @@ const CollaborativeWorkspacePage: React.FC = () => {
   if (otherSubmitted && !showEvalForm) {
     return (
       <div className="min-h-screen bg-stone-50 dark:bg-stone-900 flex items-center justify-center">
-        <div className="bg-white dark:bg-stone-800 rounded-xl shadow-lg p-8 text-center max-w-md mx-4">
+        <div className="bg-white dark:bg-stone-800 rounded-xl shadow-lg p-8 text-center w-full sm:max-w-md mx-4">
           <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-stone-800 dark:text-white mb-2">
             Bài đã được nộp!
@@ -783,7 +783,7 @@ const CollaborativeWorkspacePage: React.FC = () => {
       <div className="flex-1 flex overflow-hidden">
         {/* Left sidebar - Members (group only) */}
         {isGroupWork && (
-          <div className="w-52 bg-white dark:bg-stone-800 border-r border-stone-200 dark:border-stone-700 flex flex-col flex-shrink-0">
+          <div className="hidden sm:flex w-52 bg-white dark:bg-stone-800 border-r border-stone-200 dark:border-stone-700 flex-col flex-shrink-0">
             <div className="p-3 border-b border-stone-100 dark:border-stone-700">
               <h2 className="text-xs font-semibold text-stone-500 uppercase tracking-wider flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5" />
@@ -1163,10 +1163,10 @@ const CollaborativeWorkspacePage: React.FC = () => {
                 {/* Worksheet with blue header format */}
                 {data.assignment.content_type === "worksheet" && worksheetBlocks.length > 0 ? (
                   <div className="mb-8">
-                    <div className="bg-brand px-6 py-4 rounded-t-lg">
+                    <div className="bg-brand px-3 sm:px-6 py-4 rounded-t-lg">
                       <h3 className="text-white font-bold text-xl">{worksheetTitle}</h3>
                     </div>
-                    <div className="p-6 bg-white dark:bg-stone-800 border-2 border-brand border-t-0 rounded-b-lg shadow-sm">
+                    <div className="p-3 sm:p-6 bg-white dark:bg-stone-800 border-2 border-brand border-t-0 rounded-b-lg shadow-sm">
                       {worksheetBlocks.map((block, blockIdx) => {
                         if (block.type === "markdown") {
                           return (
@@ -1352,7 +1352,7 @@ const CollaborativeWorkspacePage: React.FC = () => {
 
         {/* Right sidebar - Chat (group only) */}
         {isGroupWork && (
-          <div className={`${chatOpen ? 'w-72' : 'w-12'} bg-white dark:bg-stone-800 border-l border-stone-200 dark:border-stone-700 flex flex-col flex-shrink-0 transition-all duration-300`}>
+          <div className={`hidden sm:flex ${chatOpen ? 'w-72' : 'w-12'} bg-white dark:bg-stone-800 border-l border-stone-200 dark:border-stone-700 flex-col flex-shrink-0 transition-all duration-300`}>
             <div className="p-3 border-b border-stone-100 dark:border-stone-700 flex items-center justify-between">
               {chatOpen ? (
                 <h2 className="text-xs font-semibold text-stone-500 uppercase tracking-wider flex items-center gap-1.5">

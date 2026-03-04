@@ -142,6 +142,13 @@ const useRbacManagement = () => {
 
   const resetError = useCallback(() => setError(null), []);
 
+  const patchUser = useCallback(
+    (userId: number, patch: Partial<User>) => {
+      setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, ...patch } : u)));
+    },
+    [],
+  );
+
   return {
     users,
     roles,
@@ -150,6 +157,7 @@ const useRbacManagement = () => {
     isLoading,
     refresh: loadAll,
     resetError,
+    patchUser,
     createRole: handleCreateRole,
     createPermission: handleCreatePermission,
     updateUserRoles: handleUpdateUserRoles,
