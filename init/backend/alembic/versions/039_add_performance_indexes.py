@@ -16,8 +16,8 @@ def upgrade() -> None:
 
     # Student enrollment lookup
     op.create_index(
-        "ix_class_student_user_classroom",
-        "class_student",
+        "ix_class_students_user_classroom",
+        "class_students",
         ["user_id", "classroom_id"],
     )
 
@@ -30,23 +30,23 @@ def upgrade() -> None:
 
     # Individual submission lookup by assignment
     op.create_index(
-        "ix_individual_submission_assignment",
-        "individual_submission",
+        "ix_individual_submissions_assignment",
+        "individual_submissions",
         ["assignment_id"],
     )
 
     # Group work session lookup by assignment
     op.create_index(
-        "ix_group_work_session_assignment",
-        "group_work_session",
+        "ix_group_work_sessions_assignment",
+        "group_work_sessions",
         ["assignment_id"],
     )
 
 
 def downgrade() -> None:
-    op.drop_index("ix_group_work_session_assignment", "group_work_session")
-    op.drop_index("ix_individual_submission_assignment", "individual_submission")
+    op.drop_index("ix_group_work_sessions_assignment", "group_work_sessions")
+    op.drop_index("ix_individual_submissions_assignment", "individual_submissions")
     op.drop_index("ix_class_assignments_classroom_active", "class_assignments")
-    op.drop_index("ix_class_student_user_classroom", "class_student")
+    op.drop_index("ix_class_students_user_classroom", "class_students")
     op.drop_index("ix_users_is_verified", "users")
     op.drop_index("ix_users_is_active", "users")
