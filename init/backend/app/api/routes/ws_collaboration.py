@@ -292,12 +292,18 @@ async def collaboration_ws(websocket: WebSocket, session_id: int):
     # Authenticate
     user_id = await authenticate_ws(websocket)
     if user_id is None:
+        logger.warning("WS auth failed for session %s - no valid token found", session_id)
+        await websocket.accept()
+        await websocket.send_text(json.dumps({"type": "error", "message": "Unauthorized"}))
         await websocket.close(code=4001, reason="Unauthorized")
         return
+
+    logger.info("WS authenticated user_id=%s for session %s", user_id, session_id)
 
     # Verify access
     has_access = await verify_session_access(user_id, session_id)
     if not has_access:
+        logger.warning("WS access denied user_id=%s session=%s", user_id, session_id)
         await websocket.accept()
         await websocket.send_text(json.dumps({"type": "error", "message": "Không có quyền truy cập phiên này"}))
         await websocket.close(code=4003, reason="Forbidden")
