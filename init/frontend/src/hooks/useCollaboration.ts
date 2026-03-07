@@ -59,7 +59,7 @@ interface UseCollaborationOptions {
   onRunResult?: (data: RunResultData) => void;
 }
 
-const WS_BASE = import.meta.env.VITE_WS_URL || `ws://${window.location.host}`;
+const WS_BASE = import.meta.env.VITE_WS_URL || `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`;
 
 export function useCollaboration({ sessionId, onAnswerUpdated, onLeaderElected, onSessionSubmitted, onPeerReviewComment, onPeerReviewScore, onRunResult }: UseCollaborationOptions) {
   const wsRef = useRef<WebSocket | null>(null);
