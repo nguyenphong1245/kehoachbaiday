@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import type { LessonPlanSection, GenerateLessonPlanResponse, ActivityConfig } from "@/types/lessonBuilder";
 import { exportToPDF, saveLessonPlan, updateSavedLessonPlan } from "@/services/lessonBuilderService";
+
 import { createSharedWorksheet } from "@/services/worksheetService";
 import { createSharedQuiz } from "@/services/sharedQuizService";
 import { extractCodeExercisesFromLesson } from "@/services/codeExerciseService";
@@ -527,6 +528,11 @@ const renderWorksheetDataToHtml = (data: WorksheetData, title?: string): string 
   const worksheetTitle = title || `Phiếu học tập số ${data.worksheet_number}`;
   const isGroup = data.type === "group";
 
+  // Convert inline backticks to <code> tags so code terms render in monospace
+  const processInlineCode = (text: string): string => {
+    return text.replace(/`([^`]+)`/g, '<code>$1</code>');
+  };
+
   const renderBlank = () => {
     return `<span style="display:inline-block;border-bottom:1px dotted #000;flex:1;height:1.2em;margin-left:4px;"></span>`;
   };
@@ -539,7 +545,7 @@ const renderWorksheetDataToHtml = (data: WorksheetData, title?: string): string 
 
   const renderQuestion = (q: WorksheetQuestion): string => {
     let html = `<div style="margin-bottom:16px;">`;
-    html += `<div style="font-weight:500;margin-bottom:8px;"><strong>Câu ${q.id}:</strong> ${q.text}</div>`;
+    html += `<div style="font-weight:500;margin-bottom:8px;"><strong>Câu ${q.id}:</strong> ${processInlineCode(q.text)}</div>`;
 
     // KWL table
     if (q.kwl_table) {
@@ -576,7 +582,7 @@ const renderWorksheetDataToHtml = (data: WorksheetData, title?: string): string 
     if (q.fill_blanks && q.fill_blanks.length > 0) {
       html += `<div style="margin-left:16px;margin-top:8px;">`;
       for (const fb of q.fill_blanks) {
-        html += `<div style="display:flex;align-items:baseline;margin-bottom:8px;"><span>${fb.before}</span>${renderBlank()}<span>${fb.after || ""}</span></div>`;
+        html += `<div style="display:flex;align-items:baseline;margin-bottom:8px;"><span>${processInlineCode(fb.before)}</span>${renderBlank()}<span>${processInlineCode(fb.after || "")}</span></div>`;
       }
       html += `</div>`;
     }
@@ -585,7 +591,7 @@ const renderWorksheetDataToHtml = (data: WorksheetData, title?: string): string 
     if (q.blanks && q.blanks.length > 0) {
       html += `<div style="margin-left:16px;margin-top:8px;">`;
       for (const blank of q.blanks) {
-        html += `<div style="display:flex;align-items:baseline;margin-bottom:4px;"><span style="flex-shrink:0;">${blank.label}:</span>${renderBlank()}</div>`;
+        html += `<div style="display:flex;align-items:baseline;margin-bottom:4px;"><span style="flex-shrink:0;">${processInlineCode(blank.label)}:</span>${renderBlank()}</div>`;
       }
       html += `</div>`;
     }
@@ -595,11 +601,11 @@ const renderWorksheetDataToHtml = (data: WorksheetData, title?: string): string 
       html += `<div style="margin-left:16px;margin-top:8px;">`;
       for (const item of q.sub_items) {
         html += `<div style="margin-bottom:12px;">`;
-        html += `<div style="margin-bottom:4px;"><strong>${item.id})</strong> ${item.text}</div>`;
+        html += `<div style="margin-bottom:4px;"><strong>${item.id})</strong> ${processInlineCode(item.text)}</div>`;
         if (item.blanks && item.blanks.length > 0) {
           html += `<div style="margin-left:16px;">`;
           for (const blank of item.blanks) {
-            html += `<div style="display:flex;align-items:baseline;margin-bottom:4px;"><span style="flex-shrink:0;">${blank.label}:</span>${renderBlank()}</div>`;
+            html += `<div style="display:flex;align-items:baseline;margin-bottom:4px;"><span style="flex-shrink:0;">${processInlineCode(blank.label)}:</span>${renderBlank()}</div>`;
           }
           html += `</div>`;
         }
@@ -650,7 +656,7 @@ const renderWorksheetDataToHtml = (data: WorksheetData, title?: string): string 
 
   // Task
   if (data.task) {
-    html += `<div style="margin-bottom:16px;"><strong>Nhiệm vụ:</strong> ${data.task}</div>`;
+    html += `<div style="margin-bottom:16px;"><strong>Nhiệm vụ:</strong> ${processInlineCode(data.task)}</div>`;
   }
 
   // Questions
@@ -686,6 +692,8 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
   const [shareResult, setShareResult] = useState<{ url: string; code: string } | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
+
+
 
   // Code extraction
   const [isExtractingCode, setIsExtractingCode] = useState(false);
@@ -1278,6 +1286,8 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
     exportToPDF(mdContent, `KHBD_${result.lesson_info.lesson_name}`, result.lesson_info, cleanDiv.innerHTML);
   };
 
+
+
   const handleSave = async () => {
     setIsSaving(true);
     setSaveMessage(null);
@@ -1676,6 +1686,9 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
         <Download className="w-3.5 h-3.5" />
         <span className="hidden sm:inline">Xuất PDF</span>
       </button>
+
+
+
     </>
   );
 
@@ -1697,42 +1710,51 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
         </div>
       )}
 
-      {/* Code Extraction Result - fixed top so it's visible even in fullscreen */}
+      {/* Code Extraction Result - toast notification */}
       {codeExtractionResult && (
-        <div ref={codeExtractionRef} className={`fixed top-4 left-1/2 -translate-x-1/2 z-[110] px-4 py-3 flex items-start gap-3 rounded-lg shadow-lg max-w-lg ${
-          codeExtractionResult.found
-            ? "bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-200"
-            : "bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300"
-        }`}>
-          {codeExtractionResult.found ? (
-            <Code2 className="w-4 h-4 flex-shrink-0 mt-0.5" />
-          ) : (
-            <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-          )}
-          <div className="flex-1">
-            <span className="text-sm">{codeExtractionResult.message}</span>
-            {codeExtractionResult.exercises && codeExtractionResult.exercises.length > 0 && (
-              <div className="mt-2 space-y-1.5">
-                {codeExtractionResult.exercises.map((ex, i) => (
-                  <button
-                    key={i}
-                    onClick={() => window.open(ex.url, '_blank')}
-                    className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-md text-xs font-medium bg-teal-100 dark:bg-teal-800/40 text-teal-700 dark:text-teal-300 hover:bg-teal-200 dark:hover:bg-teal-800/60 transition-colors"
-                  >
-                    <Code2 className="w-3.5 h-3.5 flex-shrink-0" />
-                    <span className="flex-1 truncate">{ex.title}</span>
-                    <ExternalLink className="w-3 h-3 flex-shrink-0 opacity-60" />
-                  </button>
-                ))}
+        <div ref={codeExtractionRef} className="fixed top-4 right-4 z-[110] w-80 animate-in slide-in-from-right fade-in duration-200">
+          <div className={`rounded-xl shadow-xl border overflow-hidden ${
+            codeExtractionResult.found
+              ? "bg-white dark:bg-stone-800 border-stone-200 dark:border-stone-700"
+              : "bg-white dark:bg-stone-800 border-stone-200 dark:border-stone-700"
+          }`}>
+            {/* Header */}
+            <div className={`px-4 py-2.5 flex items-center justify-between ${
+              codeExtractionResult.found
+                ? "bg-emerald-500 text-white"
+                : "bg-stone-500 text-white"
+            }`}>
+              <div className="flex items-center gap-2">
+                <Code2 className="w-4 h-4" />
+                <span className="text-sm font-medium">Bài tập lập trình</span>
               </div>
-            )}
+              <button
+                onClick={() => setCodeExtractionResult(null)}
+                className="p-0.5 rounded hover:bg-white/20 transition-colors"
+              >
+                <span className="text-base leading-none">&times;</span>
+              </button>
+            </div>
+            {/* Body */}
+            <div className="px-4 py-3">
+              <p className="text-xs text-stone-600 dark:text-stone-400">{codeExtractionResult.message}</p>
+              {codeExtractionResult.exercises && codeExtractionResult.exercises.length > 0 && (
+                <div className="mt-2.5 space-y-1.5">
+                  {codeExtractionResult.exercises.map((ex, i) => (
+                    <button
+                      key={i}
+                      onClick={() => window.open(ex.url, '_blank')}
+                      className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-lg text-xs font-medium bg-stone-50 dark:bg-stone-700/50 text-stone-700 dark:text-stone-300 hover:bg-brand/10 hover:text-brand dark:hover:bg-brand/20 dark:hover:text-sky-400 transition-colors border border-stone-100 dark:border-stone-600"
+                    >
+                      <Code2 className="w-3.5 h-3.5 flex-shrink-0 text-brand" />
+                      <span className="flex-1 truncate">{ex.title}</span>
+                      <ExternalLink className="w-3 h-3 flex-shrink-0 opacity-40" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-          <button
-            onClick={() => setCodeExtractionResult(null)}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xs"
-          >
-            ×
-          </button>
         </div>
       )}
 
@@ -1791,7 +1813,7 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
                 <button
                   onClick={handleInsertMindmap}
                   disabled={!mindmapEditorData.trim()}
-                  className="px-3 py-1.5 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+                  className="px-3 py-1.5 text-sm font-medium bg-brand hover:bg-brand-dark text-white rounded-lg flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
                 >
                   <CheckCircle className="w-4 h-4" />
                   Chèn vào KHBD

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from sqlalchemy import select, func, and_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
@@ -502,17 +503,30 @@ async def start_work_session(
         session = ws_result.scalar_one_or_none()
 
         if not session:
-            session = GroupWorkSession(
-                assignment_id=assignment.id,
-                group_id=group_info.group_id,
-                status="in_progress",
-                answers={},
-                task_assignments={},
-                leader_votes={},
-            )
-            db.add(session)
-            await db.commit()
-            await db.refresh(session)
+            try:
+                session = GroupWorkSession(
+                    assignment_id=assignment.id,
+                    group_id=group_info.group_id,
+                    status="in_progress",
+                    answers={},
+                    task_assignments={},
+                    leader_votes={},
+                )
+                db.add(session)
+                await db.commit()
+                await db.refresh(session)
+            except IntegrityError:
+                # Race condition: another member created the session simultaneously
+                await db.rollback()
+                ws_result = await db.execute(
+                    select(GroupWorkSession).where(
+                        GroupWorkSession.assignment_id == assignment.id,
+                        GroupWorkSession.group_id == group_info.group_id,
+                    )
+                )
+                session = ws_result.scalar_one_or_none()
+                if not session:
+                    raise HTTPException(status_code=500, detail="Lỗi tạo phiên làm bài, vui lòng thử lại")
 
         return {
             "session_id": session.id,
@@ -645,7 +659,12 @@ async def submit_assignment(
         if session.leader_id != student.id:
             raise HTTPException(status_code=403, detail="Chỉ nhóm trưởng mới được nộp bài")
 
-        final_answers = dict(data.answers)
+        # Merge submitted answers with existing answers (from WebSocket flush)
+        # This ensures answers from other members aren't lost if leader's state is stale
+        existing_answers = dict(session.answers or {})
+        submitted_answers = dict(data.answers)
+        existing_answers.update(submitted_answers)
+        final_answers = existing_answers
 
         # For code exercises, auto-run tests and store results
         if assignment.content_type == "code_exercise" and final_answers.get("code"):
@@ -656,6 +675,7 @@ async def submit_assignment(
         session.answers = final_answers
         session.status = "submitted"
         session.submitted_at = now
+        logger.info(f"Submit group: session={session.id}, existing_keys={list(existing_answers.keys())}, submitted_keys={list(submitted_answers.keys())}, final_keys={list(final_answers.keys())}")
         await db.commit()
 
         # Broadcast submission to all group members via WebSocket
@@ -747,9 +767,9 @@ async def _run_code_tests_for_submit(assignment: ClassAssignment, code: str, db:
 
 
 async def _maybe_auto_activate_peer_review(assignment: ClassAssignment, db: AsyncSession) -> bool:
-    """Tự động kích hoạt peer review khi tất cả đã nộp (chỉ cho worksheet)"""
-    # Peer review only for worksheet
-    if assignment.content_type != "worksheet":
+    """Tự động kích hoạt peer review khi tất cả đã nộp"""
+    # Peer review for worksheet and code_exercise
+    if assignment.content_type not in ("worksheet", "code_exercise"):
         return False
 
     total_result = await db.execute(
@@ -764,9 +784,11 @@ async def _maybe_auto_activate_peer_review(assignment: ClassAssignment, db: Asyn
                 GroupWorkSession.status == "submitted",
             )
         )
-        # Count groups instead of students
+        # Count groups that have work sessions for THIS assignment (not all groups in classroom)
         total_groups_result = await db.execute(
-            select(func.count(StudentGroup.id)).where(StudentGroup.classroom_id == assignment.classroom_id)
+            select(func.count(GroupWorkSession.id)).where(
+                GroupWorkSession.assignment_id == assignment.id,
+            )
         )
         total_students = total_groups_result.scalar() or 0
     else:
@@ -872,13 +894,24 @@ async def evaluate_group_members(
     student = await _get_student_record_for_assignment(current_user, assignment, db)
     group_info = await _get_my_group_for_assignment(student, assignment, db)
     if not group_info or not group_info.work_session_id:
+        logger.warning(f"Member eval: student {student.id} has no work session for assignment {assignment_id}")
         raise HTTPException(status_code=400, detail="Chưa có phiên làm bài")
 
+    # Use FOR UPDATE to prevent race condition when multiple members submit simultaneously
     ws_result = await db.execute(
-        select(GroupWorkSession).where(GroupWorkSession.id == group_info.work_session_id)
+        select(GroupWorkSession)
+        .where(GroupWorkSession.id == group_info.work_session_id)
+        .with_for_update()
     )
     session = ws_result.scalar_one_or_none()
-    if not session or session.status != "submitted":
+    if not session:
+        logger.warning(f"Member eval: work session {group_info.work_session_id} not found")
+        raise HTTPException(status_code=400, detail="Nhóm chưa nộp bài")
+
+    # Allow evaluation if session is submitted OR in_progress (some groups may still be working)
+    # The key requirement is that the session exists
+    logger.info(f"Member eval: student {student.id}, session {session.id}, status={session.status}")
+    if session.status not in ("submitted", "in_progress"):
         raise HTTPException(status_code=400, detail="Nhóm chưa nộp bài")
 
     # Save evaluations - use flag_modified to ensure JSON changes are detected
@@ -899,7 +932,7 @@ async def evaluate_group_members(
 
 
 @router.get("/assignments/{assignment_id}/member-evaluation-status")
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 async def get_member_evaluation_status(
     request: Request,
     assignment_id: int,
@@ -969,6 +1002,76 @@ async def get_member_evaluation_status(
         "evaluators": evaluators,
         "my_evaluation_submitted": my_evaluation_submitted,
     }
+
+
+@router.get("/assignments/{assignment_id}/submission-status")
+@limiter.limit("30/minute")
+async def get_submission_status(
+    request: Request,
+    assignment_id: int,
+    current_user: User = Depends(require_role("student")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lấy trạng thái nộp bài của tất cả nhóm/học sinh cho một assignment"""
+    result = await db.execute(
+        select(ClassAssignment).where(ClassAssignment.id == assignment_id)
+    )
+    assignment = result.scalar_one_or_none()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Không tìm thấy bài giao")
+
+    if assignment.work_type == "group":
+        ws_result = await db.execute(
+            select(GroupWorkSession)
+            .where(GroupWorkSession.assignment_id == assignment_id)
+            .options(
+                selectinload(GroupWorkSession.group)
+                .selectinload(StudentGroup.members)
+                .selectinload(GroupMember.student)
+            )
+        )
+        sessions = ws_result.scalars().all()
+        groups = []
+        for ws in sessions:
+            groups.append({
+                "group_id": ws.group_id,
+                "group_name": ws.group.name if ws.group else "",
+                "status": ws.status,
+                "submitted_at": ws.submitted_at.isoformat() if ws.submitted_at else None,
+                "members": [
+                    {"student_id": m.student_id, "full_name": m.student.full_name if m.student else ""}
+                    for m in (ws.group.members if ws.group else [])
+                ],
+            })
+        submitted_count = sum(1 for g in groups if g["status"] == "submitted")
+        return {
+            "work_type": "group",
+            "groups": groups,
+            "total_groups": len(groups),
+            "submitted_count": submitted_count,
+        }
+    else:
+        subs_result = await db.execute(
+            select(IndividualSubmission)
+            .where(IndividualSubmission.assignment_id == assignment_id)
+            .options(selectinload(IndividualSubmission.student))
+        )
+        subs = subs_result.scalars().all()
+        students = []
+        for sub in subs:
+            students.append({
+                "student_id": sub.student_id,
+                "full_name": sub.student.full_name if sub.student else "",
+                "status": sub.status,
+                "submitted_at": sub.submitted_at.isoformat() if sub.submitted_at else None,
+            })
+        submitted_count = sum(1 for s in students if s["status"] == "submitted")
+        return {
+            "work_type": "individual",
+            "students": students,
+            "total_students": len(students),
+            "submitted_count": submitted_count,
+        }
 
 
 @router.get("/assignments/{assignment_id}/work-session")
@@ -1066,19 +1169,29 @@ async def get_discussion(
         msg_result = await db.execute(
             select(GroupDiscussion)
             .where(GroupDiscussion.work_session_id == group_info.work_session_id)
-            .options(selectinload(GroupDiscussion.user))
             .order_by(GroupDiscussion.created_at.asc())
         )
         messages = msg_result.scalars().all()
 
         logger.info(f"Found {len(messages)} messages for work_session_id={group_info.work_session_id}")
 
+        # Build user_id -> display name map from ClassStudent
+        user_ids = list(set(m.user_id for m in messages))
+        name_map: dict[int, str] = {}
+        if user_ids:
+            from app.models.class_student import ClassStudent as CS
+            cs_result = await db.execute(
+                select(CS.user_id, CS.full_name).where(CS.user_id.in_(user_ids))
+            )
+            for uid, fname in cs_result.all():
+                name_map[uid] = fname
+
         return {
             "messages": [
                 {
                     "id": m.id,
                     "user_id": m.user_id,
-                    "user_name": m.user.full_name if m.user else "",
+                    "user_name": name_map.get(m.user_id, f"User {m.user_id}"),
                     "message": m.message,
                     "created_at": m.created_at.isoformat() if m.created_at else "",
                 }

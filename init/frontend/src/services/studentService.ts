@@ -94,6 +94,11 @@ export async function submitAssignment(
   return res.data;
 }
 
+export async function getSubmissionStatus(assignmentId: number): Promise<any> {
+  const res = await api.get(`/student/assignments/${assignmentId}/submission-status`);
+  return res.data;
+}
+
 export async function getWorkSession(assignmentId: number): Promise<{ session: Record<string, any> | null }> {
   const res = await api.get(`/student/assignments/${assignmentId}/work-session`);
   return res.data;

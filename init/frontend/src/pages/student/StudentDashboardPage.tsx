@@ -15,8 +15,10 @@ import {
   Lock,
 } from "lucide-react";
 import { getStudentDashboard, type StudentAssignmentInfo } from "@/services/studentService";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const StudentDashboardPage: React.FC = () => {
+  usePageTitle("Bảng tin học sinh");
   const [assignments, setAssignments] = useState<StudentAssignmentInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -235,7 +237,7 @@ const StudentDashboardPage: React.FC = () => {
                                 <>
                                   <span className="text-stone-300 dark:text-stone-600">·</span>
                                   <span className="text-red-500 dark:text-red-400">
-                                    Hạn: {new Date(a.due_date).toLocaleDateString("vi-VN")}
+                                    Hạn: {new Date(a.due_date).toLocaleString("vi-VN", { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                   </span>
                                 </>
                               )}

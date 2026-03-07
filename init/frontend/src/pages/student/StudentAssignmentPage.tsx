@@ -3,19 +3,11 @@ import { useParams, useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
-  ArrowLeft,
   FileText,
-  HelpCircle,
-  Code2,
-  Users,
-  User,
   Loader2,
   CheckCircle2,
-  Clock,
-  Eye,
   X,
   Crown,
-  BookOpen,
 } from "lucide-react";
 import {
   getAssignmentDetail,
@@ -23,6 +15,7 @@ import {
   type AssignmentContentResponse,
 } from "@/services/studentService";
 import { getMyFeedback, type FeedbackItem } from "@/services/peerReviewService";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 // Worksheet parsing helpers
 interface InteractiveBlock {
@@ -30,6 +23,7 @@ interface InteractiveBlock {
   text: string;
   questionLine: string;
   questionNum: string;
+  codeBlock?: string;
 }
 
 const buildInteractiveBlocks = (content: string): InteractiveBlock[] => {
@@ -37,6 +31,8 @@ const buildInteractiveBlocks = (content: string): InteractiveBlock[] => {
   const questionLinePattern = /^\s*\*{0,2}\s*(?:Câu|Bài|Question)\s+(\d+)\s*[.:]/i;
   const dotLinePattern = /^\s*\.{3,}\s*$/;
   const studentInfoPattern = /^\s*\*{0,2}\s*(?:Họ và tên|Họ tên|HỌ VÀ TÊN|HỌ TÊN|Nhóm|NHÓM|Lớp|LỚP)\s*\*{0,2}\s*:/i;
+  const sectionHeaderPattern = /^\s*#{1,4}\s*\*{0,2}\s*(?:I{1,3}V?|V?I{0,3})\.\s*PHỤ LỤC/i;
+  const worksheetTitlePattern = /^\s*\*{0,2}\s*PHIẾU HỌC TẬP\s*(?:SỐ\s*\d+)?\s*\*{0,2}\s*$/i;
 
   const lines = content.split("\n");
   let currentMarkdown: string[] = [];
@@ -53,13 +49,36 @@ const buildInteractiveBlocks = (content: string): InteractiveBlock[] => {
     if (line.trim().startsWith("```")) { inCodeBlock = !inCodeBlock; currentMarkdown.push(line); continue; }
     if (inCodeBlock) { currentMarkdown.push(line); continue; }
     if (dotLinePattern.test(line)) continue;
+    const stripped = line.replace(/\*/g, "").trim();
+    if (sectionHeaderPattern.test(line) || sectionHeaderPattern.test(stripped)) continue;
+    if (worksheetTitlePattern.test(line) || worksheetTitlePattern.test(stripped)) continue;
     if (studentInfoPattern.test(line)) {
       const withoutDots = line.replace(/\.{2,}/g, "").replace(/\*{1,2}/g, "").trim();
       if (/^(?:Họ và tên|Họ tên|Nhóm|Lớp)\s*:\s*$/i.test(withoutDots)) continue;
     }
     const cleanedLine = line.replace(/\.{3,}/g, "");
     const qMatch = cleanedLine.match(questionLinePattern);
-    if (qMatch) { flushMarkdown(); blocks.push({ type: "question_input", text: "", questionLine: cleanedLine, questionNum: qMatch[1] }); continue; }
+    if (qMatch) {
+      flushMarkdown();
+      // Look ahead for code block immediately after question
+      let questionCode: string | undefined;
+      let j = i + 1;
+      // Skip blank lines
+      while (j < lines.length && lines[j].trim() === "") j++;
+      if (j < lines.length && lines[j].trim().startsWith("```")) {
+        const codeLines: string[] = [lines[j]];
+        j++;
+        while (j < lines.length && !lines[j].trim().startsWith("```")) {
+          codeLines.push(lines[j]);
+          j++;
+        }
+        if (j < lines.length) { codeLines.push(lines[j]); j++; }
+        questionCode = codeLines.join("\n");
+        i = j - 1; // Advance past the code block
+      }
+      blocks.push({ type: "question_input", text: "", questionLine: cleanedLine, questionNum: qMatch[1], codeBlock: questionCode });
+      continue;
+    }
     currentMarkdown.push(cleanedLine);
   }
   flushMarkdown();
@@ -109,6 +128,7 @@ const mdComponents = {
 };
 
 const StudentAssignmentPage: React.FC = () => {
+  usePageTitle("Bài tập");
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const assignmentId = Number(id);
@@ -148,20 +168,42 @@ const StudentAssignmentPage: React.FC = () => {
       if (result.work_session?.answers) {
         setAnswers(result.work_session.answers);
       }
-    } catch {
-      setError("Lỗi khi tải bài tập");
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status === 404) {
+        setError("Bài tập đã bị xóa hoặc không tồn tại.");
+      } else {
+        setError("Lỗi khi tải bài tập");
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleStartSession = async () => {
+    // If session already exists (in_progress), navigate directly without calling startWorkSession
+    if (data?.assignment?.status === "in_progress") {
+      navigate(`/student/assignment/${assignmentId}/workspace`);
+      return;
+    }
+
     setStarting(true);
     try {
       await startWorkSession(assignmentId);
       navigate(`/student/assignment/${assignmentId}/workspace`);
     } catch (err: any) {
-      setError(err?.response?.data?.detail || "Lỗi khi bắt đầu làm bài");
+      // Retry once on failure (handles race condition for group sessions)
+      try {
+        await startWorkSession(assignmentId);
+        navigate(`/student/assignment/${assignmentId}/workspace`);
+      } catch (retryErr: any) {
+        // If still fails, try navigating directly (session might already exist)
+        if (retryErr?.response?.status === 400 || retryErr?.response?.status === 409) {
+          navigate(`/student/assignment/${assignmentId}/workspace`);
+        } else {
+          setError(retryErr?.response?.data?.detail || "Lỗi khi bắt đầu làm bài");
+        }
+      }
     } finally {
       setStarting(false);
     }
@@ -176,15 +218,6 @@ const StudentAssignmentPage: React.FC = () => {
     } catch {}
     finally {
       setLoadingFeedback(false);
-    }
-  };
-
-  const contentTypeIcon = (type: string) => {
-    switch (type) {
-      case "worksheet": return <FileText className="w-5 h-5" />;
-      case "quiz": return <HelpCircle className="w-5 h-5" />;
-      case "code_exercise": return <Code2 className="w-5 h-5" />;
-      default: return <FileText className="w-5 h-5" />;
     }
   };
 
@@ -207,8 +240,14 @@ const StudentAssignmentPage: React.FC = () => {
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-stone-50 dark:bg-stone-900 flex items-center justify-center">
+      <div className="min-h-screen bg-stone-50 dark:bg-stone-900 flex flex-col items-center justify-center gap-4">
         <p className="text-stone-500">{error || "Không tìm thấy bài tập"}</p>
+        <button
+          onClick={() => navigate("/student/dashboard")}
+          className="px-4 py-2 bg-brand text-white rounded-lg hover:bg-brand-dark text-sm"
+        >
+          Về trang chủ
+        </button>
       </div>
     );
   }
@@ -219,26 +258,18 @@ const StudentAssignmentPage: React.FC = () => {
     <div className="min-h-screen bg-stone-50 dark:bg-stone-900">
       {/* Header */}
       <div className="border-b border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800">
-        <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-4">
-          <button onClick={() => navigate("/student/dashboard")} className="p-2 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-700" title="Quay lại">
-            <ArrowLeft className="w-5 h-5 text-stone-600 dark:text-stone-300" />
-          </button>
-          <div className="p-2.5 rounded-xl bg-sky-100 dark:bg-sky-900/30 text-brand dark:text-sky-400">
-            {contentTypeIcon(a.content_type)}
-          </div>
-          <div className="flex-1">
-            <h1 className="text-lg font-semibold text-stone-900 dark:text-white">{a.title}</h1>
-            <div className="flex items-center gap-2 text-sm text-stone-500 mt-0.5">
-              <span>{contentTypeLabel(a.content_type)}</span>
-              <span>•</span>
-              <span>{a.classroom_name}</span>
-              {a.lesson_info?.lesson_name && (
-                <>
-                  <span>•</span>
-                  <span className="text-brand dark:text-sky-400">{a.lesson_info.lesson_name}</span>
-                </>
-              )}
-            </div>
+        <div className="max-w-3xl mx-auto px-4 py-3">
+          <h1 className="text-base font-semibold text-stone-900 dark:text-white">{a.title}</h1>
+          <div className="flex items-center gap-1.5 text-xs text-stone-400 mt-1">
+            <span>{contentTypeLabel(a.content_type)}</span>
+            <span>·</span>
+            <span>{a.classroom_name}</span>
+            {a.lesson_info?.lesson_name && (
+              <>
+                <span>·</span>
+                <span>{a.lesson_info.lesson_name}</span>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -250,103 +281,80 @@ const StudentAssignmentPage: React.FC = () => {
       )}
 
       {/* Content */}
-      <div className="max-w-3xl mx-auto px-4 py-6">
-        <div className="bg-white dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 shadow-sm overflow-hidden">
-          {/* Info bar */}
-          <div className="px-3 sm:px-6 py-4 border-b border-stone-100 dark:border-stone-700 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-3 sm:gap-6">
-              <span className="flex items-center gap-2 text-stone-700 dark:text-stone-300">
-                {a.work_type === "group" ? <Users className="w-5 h-5 text-purple-500" /> : <User className="w-5 h-5 text-brand" />}
-                <span className="font-medium">{a.work_type === "group" ? "Làm nhóm" : "Cá nhân"}</span>
-              </span>
+      <div className="max-w-2xl mx-auto px-4 py-6">
+        {a.status === "submitted" ? (
+          <div className="bg-white dark:bg-stone-800 rounded-lg border border-stone-200 dark:border-stone-700 p-6 text-center">
+            <CheckCircle2 className="w-10 h-10 text-green-500 mx-auto mb-3" />
+            <p className="text-sm text-stone-500 mb-4">Đã nộp bài</p>
+            <div className="flex items-center justify-center gap-2">
+              {a.content_type === "worksheet" && worksheetBlocks.length > 0 && (
+                <button
+                  onClick={() => setShowWorksheetModal(true)}
+                  className="px-4 py-2 text-sm border border-stone-200 dark:border-stone-600 text-stone-600 dark:text-stone-300 rounded-lg hover:bg-stone-50 dark:hover:bg-stone-700"
+                >
+                  Xem bài làm
+                </button>
+              )}
+              <button
+                onClick={handleViewFeedback}
+                className="px-4 py-2 text-sm bg-brand text-white rounded-lg hover:bg-brand-dark"
+              >
+                Xem đánh giá
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Info */}
+            <div className="flex items-center gap-4 text-sm text-stone-500">
+              <span>{a.work_type === "group" ? "Nhóm" : "Cá nhân"}</span>
               {a.due_date && (
-                <span className="flex items-center gap-2 text-stone-500">
-                  <Clock className="w-5 h-5 text-red-500" />
-                  <span>{new Date(a.due_date).toLocaleString("vi-VN", { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                </span>
+                <>
+                  <span className="text-stone-300">·</span>
+                  <span>Hạn: {new Date(a.due_date).toLocaleString("vi-VN", { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                </>
+              )}
+              {a.status === "in_progress" && (
+                <>
+                  <span className="text-stone-300">·</span>
+                  <span className="text-sky-600 dark:text-sky-400">Đang làm</span>
+                </>
               )}
             </div>
-            <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${
-              a.status === "submitted" ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" :
-              a.status === "in_progress" ? "bg-sky-100 dark:bg-sky-900/30 text-brand-dark dark:text-sky-400" :
-              "bg-stone-100 dark:bg-stone-700 text-stone-600 dark:text-stone-400"
-            }`}>
-              {a.status === "submitted" ? "Đã nộp" : a.status === "in_progress" ? "Đang làm" : "Chưa làm"}
-            </span>
-          </div>
 
-          {/* Main content */}
-          <div className="p-3 sm:p-6">
-            {a.status === "submitted" ? (
-              <div className="text-center py-8">
-                <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <CheckCircle2 className="w-8 h-8 text-green-600 dark:text-green-400" />
-                </div>
-                <h2 className="text-xl font-semibold text-stone-900 dark:text-white mb-2">Bạn đã nộp bài này</h2>
-                <p className="text-stone-500 mb-6">Xem lại bài làm hoặc xem đánh giá từ các nhóm khác</p>
-                <div className="flex items-center justify-center gap-3">
-                  {a.content_type === "worksheet" && worksheetBlocks.length > 0 && (
-                    <button
-                      onClick={() => setShowWorksheetModal(true)}
-                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-stone-100 dark:bg-stone-700 text-stone-700 dark:text-stone-200 rounded-lg hover:bg-stone-200 dark:hover:bg-stone-600 font-medium"
-                    >
-                      <BookOpen className="w-5 h-5" />
-                      Xem bài làm
-                    </button>
-                  )}
-                  <button
-                    onClick={handleViewFeedback}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand text-white rounded-lg hover:bg-brand-dark font-medium"
-                  >
-                    <Eye className="w-5 h-5" />
-                    Xem đánh giá
-                  </button>
+            {/* No group warning */}
+            {a.work_type === "group" && !data.my_group && (
+              <div className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 rounded-lg">
+                Bạn chưa được phân vào nhóm nào. Hãy liên hệ giáo viên.
+              </div>
+            )}
+
+            {/* Group members */}
+            {a.work_type === "group" && data.my_group && (
+              <div className="bg-white dark:bg-stone-800 rounded-lg border border-stone-200 dark:border-stone-700 p-4">
+                <p className="text-sm font-medium text-stone-700 dark:text-stone-300 mb-3">{data.my_group.group_name}</p>
+                <div className="flex flex-wrap gap-2">
+                  {data.my_group.members.map((m) => (
+                    <span key={m.student_id} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-stone-50 dark:bg-stone-700 rounded-md text-sm text-stone-700 dark:text-stone-300">
+                      {m.full_name}
+                      {m.is_leader && <Crown className="w-3.5 h-3.5 text-amber-500" />}
+                    </span>
+                  ))}
                 </div>
               </div>
-            ) : (
-              <>
-                {/* No group warning */}
-                {a.work_type === "group" && !data.my_group && (
-                  <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 px-4 py-3 rounded-lg mb-6">
-                    Bạn chưa được phân vào nhóm nào. Hãy liên hệ giáo viên.
-                  </div>
-                )}
-
-                {/* Group info */}
-                {a.work_type === "group" && data.my_group && (
-                  <div className="mb-6 p-4 bg-stone-50 dark:bg-stone-700/50 rounded-xl">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Users className="w-5 h-5 text-purple-500" />
-                      <span className="font-semibold text-stone-900 dark:text-white">{data.my_group.group_name}</span>
-                      <span className="text-sm text-stone-500">({data.my_group.members.length} thành viên)</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {data.my_group.members.map((m) => (
-                        <div key={m.student_id} className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-stone-700 rounded-lg border border-stone-200 dark:border-stone-600">
-                          <span className="w-8 h-8 rounded-full bg-brand text-white flex items-center justify-center text-sm font-medium">
-                            {m.full_name.charAt(m.full_name.lastIndexOf(" ") + 1)}
-                          </span>
-                          <span className="text-stone-800 dark:text-stone-200">{m.full_name}</span>
-                          {m.is_leader && <Crown className="w-4 h-4 text-amber-500" />}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Start button */}
-                <button
-                  onClick={handleStartSession}
-                  disabled={starting || (a.work_type === "group" && !data.my_group)}
-                  className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-brand text-white rounded-xl hover:bg-brand-dark disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-lg transition-colors"
-                >
-                  {starting && <Loader2 className="w-5 h-5 animate-spin" />}
-                  {a.status === "in_progress" ? "Tiếp tục làm bài" : "Bắt đầu làm bài"}
-                </button>
-              </>
             )}
+
+            {/* Start button */}
+            <button
+              onClick={handleStartSession}
+              disabled={starting || (a.work_type === "group" && !data.my_group)}
+              className="w-full py-3 bg-brand text-white rounded-lg hover:bg-brand-dark disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors flex items-center justify-center gap-2"
+            >
+              {starting && <Loader2 className="w-4 h-4 animate-spin" />}
+              {a.status === "in_progress" ? "Tiếp tục làm bài" : "Bắt đầu làm bài"}
+            </button>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Feedback Modal */}
@@ -370,26 +378,35 @@ const StudentAssignmentPage: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {feedback.map((fb) => (
-                    <div key={fb.id} className="p-4 bg-stone-50 dark:bg-stone-700/50 rounded-xl">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="font-medium text-stone-700 dark:text-stone-300">{fb.reviewer_name}</span>
-                        {fb.score && (
-                          <span className="px-3 py-1 bg-sky-100 dark:bg-sky-900/30 text-brand-dark dark:text-sky-400 rounded-full font-semibold">
-                            {fb.score}/10
-                          </span>
+                  {feedback.map((fb, fbIdx) => (
+                    <div key={fb.id} className="border border-stone-200 dark:border-stone-600 rounded-lg overflow-hidden">
+                      <div className="px-4 py-2.5 bg-stone-50 dark:bg-stone-700/50 flex items-center justify-between">
+                        <span className="text-sm font-medium text-stone-700 dark:text-stone-300">Đánh giá #{fbIdx + 1}</span>
+                        {fb.score != null && (
+                          <span className="text-sm font-semibold text-stone-900 dark:text-white">{fb.score}/10</span>
                         )}
                       </div>
-                      {fb.comments.general && (
-                        <p className="text-stone-700 dark:text-stone-300 mb-2">{fb.comments.general}</p>
-                      )}
-                      {Object.entries(fb.comments)
-                        .filter(([key]) => key !== "general")
-                        .map(([key, comment]) => (
-                          <p key={key} className="text-sm text-stone-500 dark:text-stone-400">
-                            <span className="font-medium">Câu {key}:</span> {comment}
-                          </p>
-                        ))}
+                      <div className="px-4 py-3 space-y-2">
+                        {fb.comments.general && (
+                          <p className="text-sm text-stone-700 dark:text-stone-300">{fb.comments.general}</p>
+                        )}
+                        {Object.entries(fb.comments)
+                          .filter(([key]) => key !== "general")
+                          .sort(([a], [b]) => {
+                            const numA = parseInt(a) || 0;
+                            const numB = parseInt(b) || 0;
+                            return numA - numB;
+                          })
+                          .map(([key, comment]) => (
+                            <div key={key} className="flex gap-2 text-sm">
+                              <span className="text-stone-400 whitespace-nowrap">Câu {key}:</span>
+                              <span className="text-stone-600 dark:text-stone-300">{comment}</span>
+                            </div>
+                          ))}
+                        {Object.keys(fb.comments).length === 0 && (
+                          <p className="text-sm text-stone-400 italic">Không có nhận xét</p>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -429,6 +446,11 @@ const StudentAssignmentPage: React.FC = () => {
                       <div className="mb-3">
                         <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{block.questionLine}</ReactMarkdown>
                       </div>
+                      {block.codeBlock && (
+                        <div className="mb-3">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{block.codeBlock}</ReactMarkdown>
+                        </div>
+                      )}
                       <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
                         <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-2">Câu trả lời của nhóm:</p>
                         <p className="text-stone-800 dark:text-stone-200 whitespace-pre-wrap">{answer || "(Chưa trả lời)"}</p>

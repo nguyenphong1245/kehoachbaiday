@@ -27,8 +27,10 @@ import {
   type QuizResponseItem,
   type QuizResponsesList,
 } from "@/services/sharedQuizService";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 export const SharedQuizManagementPage: React.FC = () => {
+  usePageTitle("Quản lý trắc nghiệm");
   const [quizzes, setQuizzes] = useState<SharedQuiz[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

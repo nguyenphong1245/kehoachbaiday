@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useConfirm } from "@/components/common/ConfirmDialog";
 import {
   Plus,
   Loader2,
@@ -27,6 +28,7 @@ import { getClassAssignments, type Assignment } from "@/services/assignmentServi
 import type { Classroom, ClassroomDetail } from "@/types/classroom";
 import { SharingManagementPage } from "@/pages/sharing";
 import { getStoredAuthUser } from "@/utils/authStorage";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 import StudentPanel from "./panels/StudentPanel";
 import GroupPanel from "./panels/GroupPanel";
@@ -45,7 +47,9 @@ const tabs: { key: TabType; label: string; icon: React.ReactNode }[] = [
 ];
 
 const TeacherManagementPage: React.FC = () => {
+  usePageTitle("Quản lý lớp học");
   const user = getStoredAuthUser();
+  const { confirm, ConfirmDialog, dialogProps } = useConfirm();
 
   const [viewMode, setViewMode] = useState<ViewMode>("classes");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -186,7 +190,8 @@ const TeacherManagementPage: React.FC = () => {
   };
 
   const handleDeleteClassroom = async (classId: number, className: string) => {
-    if (!window.confirm(`Xóa lớp "${className}"? Tất cả dữ liệu sẽ bị mất.`)) return;
+    const ok = await confirm({ title: "Xóa lớp", message: `Xóa lớp "${className}"? Tất cả dữ liệu sẽ bị mất.`, confirmText: "Xóa", cancelText: "Huỷ", variant: "danger" });
+    if (!ok) return;
     try {
       await deleteClassroom(classId);
       if (selectedClassId === classId) {
@@ -433,7 +438,7 @@ const TeacherManagementPage: React.FC = () => {
               <div className="flex items-center justify-end mb-4">
                 <button
                   onClick={() => setShowCreateForm(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                  className="flex items-center gap-2 px-4 py-2 bg-brand text-white rounded-lg hover:bg-brand-dark transition-colors text-sm font-medium"
                 >
                   <Plus className="w-4 h-4" />
                   Tạo lớp mới
@@ -469,7 +474,7 @@ const TeacherManagementPage: React.FC = () => {
                       </div>
                       <div className="flex gap-2 pt-1">
                         <button type="submit" disabled={creating}
-                          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium">
+                          className="flex items-center gap-2 px-4 py-2 bg-brand text-white rounded-lg hover:bg-brand-dark disabled:opacity-50 text-sm font-medium">
                           {creating && <Loader2 className="w-4 h-4 animate-spin" />}
                           Tạo lớp
                         </button>
@@ -493,7 +498,7 @@ const TeacherManagementPage: React.FC = () => {
                   <AlertCircle className="w-10 h-10 mx-auto text-amber-500 mb-3" />
                   <p className="text-slate-600 dark:text-slate-400 mb-3">Không tải được danh sách lớp học</p>
                   <button onClick={loadClassrooms}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-brand text-white rounded-lg hover:bg-brand-dark text-sm font-medium">
                     <RefreshCw className="w-4 h-4" />
                     Thử lại
                   </button>
@@ -607,6 +612,7 @@ const TeacherManagementPage: React.FC = () => {
           }}
         />
       )}
+      <ConfirmDialog {...dialogProps} />
     </div>
   );
 };

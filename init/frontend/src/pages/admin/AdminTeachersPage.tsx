@@ -13,6 +13,7 @@ import {
   ClipboardList,
 } from "lucide-react";
 import { api } from "@/services/authService";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 interface Student {
   id: number;
@@ -53,6 +54,7 @@ interface TeacherData {
 }
 
 const AdminTeachersPage = () => {
+  usePageTitle("Quản lý giáo viên");
   const [teachers, setTeachers] = useState<TeacherData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

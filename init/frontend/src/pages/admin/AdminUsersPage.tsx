@@ -15,10 +15,12 @@ import {
 import useRbacManagement from "@/hooks/useRbacManagement";
 import { getStoredAuthUser } from "@/utils/authStorage";
 import { updateTokenBalance } from "@/services/adminService";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 type TabType = "staff" | "students";
 
 const AdminUsersPage = () => {
+  usePageTitle("Quản lý người dùng");
   const {
     users,
     roles,

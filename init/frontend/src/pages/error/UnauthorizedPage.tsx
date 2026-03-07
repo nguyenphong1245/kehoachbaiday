@@ -1,8 +1,10 @@
 import { Link } from "react-router-dom";
 
 import AuthCard from "@/components/layout/AuthCard";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const UnauthorizedPage = () => {
+  usePageTitle("Không có quyền");
   return (
     <main className="flex items-center">
       <AuthCard

@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useConfirm } from "@/components/common/ConfirmDialog";
 import {
   ArrowLeft,
   Users,
@@ -22,6 +23,7 @@ import {
   Star,
   AlertCircle,
   Clock,
+  Check,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -37,6 +39,7 @@ import {
 } from "@/services/studentService";
 import { useCollaboration, type ChatMessage } from "@/hooks/useCollaboration";
 import { getStoredAuthUser } from "@/utils/authStorage";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 // ========== Worksheet parsing (same logic as PublicWorksheetPage) ==========
 interface InteractiveBlock {
@@ -44,6 +47,7 @@ interface InteractiveBlock {
   text: string;
   questionLine: string;
   questionNum: string;
+  codeBlock?: string;
 }
 
 const buildInteractiveBlocks = (content: string): InteractiveBlock[] => {
@@ -51,6 +55,10 @@ const buildInteractiveBlocks = (content: string): InteractiveBlock[] => {
   const questionLinePattern = /^\s*\*{0,2}\s*(?:Câu|Bài|Question)\s+(\d+)\s*[.:]/i;
   const dotLinePattern = /^\s*\.{3,}\s*$/;
   const studentInfoPattern = /^\s*\*{0,2}\s*(?:Họ và tên|Họ tên|HỌ VÀ TÊN|HỌ TÊN|Nhóm|NHÓM|Lớp|LỚP)\s*\*{0,2}\s*:/i;
+  // Skip lesson plan section headers & duplicate worksheet title
+  const sectionHeaderPattern = /^\s*#{1,4}\s*\*{0,2}\s*(?:I{1,3}V?|V?I{0,3})\.\s*PHỤ LỤC/i;
+  const worksheetTitlePattern = /^\s*\*{0,2}\s*PHIẾU HỌC TẬP\s*(?:SỐ\s*\d+)?\s*\*{0,2}\s*$/i;
+  const taskLabelPattern = /^\s*\*{0,2}\s*Nhiệm vụ\s*:/i;
 
   const lines = content.split("\n");
   let currentMarkdown: string[] = [];
@@ -67,13 +75,37 @@ const buildInteractiveBlocks = (content: string): InteractiveBlock[] => {
     if (line.trim().startsWith("```")) { inCodeBlock = !inCodeBlock; currentMarkdown.push(line); continue; }
     if (inCodeBlock) { currentMarkdown.push(line); continue; }
     if (dotLinePattern.test(line)) continue;
+    // Skip section headers like "## **IV. PHỤ LỤC**"
+    const stripped = line.replace(/\*/g, "").trim();
+    if (sectionHeaderPattern.test(line) || sectionHeaderPattern.test(stripped)) continue;
+    // Skip duplicate "PHIẾU HỌC TẬP SỐ X" title line
+    if (worksheetTitlePattern.test(line) || worksheetTitlePattern.test(stripped)) continue;
     if (studentInfoPattern.test(line)) {
       const withoutDots = line.replace(/\.{2,}/g, "").replace(/\*{1,2}/g, "").trim();
       if (/^(?:Họ và tên|Họ tên|Nhóm|Lớp)\s*:\s*$/i.test(withoutDots)) continue;
     }
     const cleanedLine = line.replace(/\.{3,}/g, "");
     const qMatch = cleanedLine.match(questionLinePattern);
-    if (qMatch) { flushMarkdown(); blocks.push({ type: "question_input", text: "", questionLine: cleanedLine, questionNum: qMatch[1] }); continue; }
+    if (qMatch) {
+      flushMarkdown();
+      // Look ahead for code block immediately after question
+      let questionCode: string | undefined;
+      let j = i + 1;
+      while (j < lines.length && lines[j].trim() === "") j++;
+      if (j < lines.length && lines[j].trim().startsWith("```")) {
+        const codeLines: string[] = [lines[j]];
+        j++;
+        while (j < lines.length && !lines[j].trim().startsWith("```")) {
+          codeLines.push(lines[j]);
+          j++;
+        }
+        if (j < lines.length) { codeLines.push(lines[j]); j++; }
+        questionCode = codeLines.join("\n");
+        i = j - 1;
+      }
+      blocks.push({ type: "question_input", text: "", questionLine: cleanedLine, questionNum: qMatch[1], codeBlock: questionCode });
+      continue;
+    }
     currentMarkdown.push(cleanedLine);
   }
   flushMarkdown();
@@ -97,11 +129,13 @@ const parseWorksheetTitle = (content: string): string => {
 };
 
 const CollaborativeWorkspacePage: React.FC = () => {
+  usePageTitle("Làm bài");
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const assignmentId = Number(id);
   const currentUser = getStoredAuthUser();
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const { confirm, ConfirmDialog, dialogProps } = useConfirm();
 
   const [data, setData] = useState<AssignmentContentResponse | null>(null);
   const [sessionId, setSessionId] = useState<number | null>(null);
@@ -121,9 +155,12 @@ const CollaborativeWorkspacePage: React.FC = () => {
 
   // Code exercise states
   const [code, setCode] = useState("");
+  const localCodeRef = useRef(false); // track if code change is from local typing
   const [isRunning, setIsRunning] = useState(false);
   const [testResult, setTestResult] = useState<RunTestCasesResponse | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
+  const [outputHeight, setOutputHeight] = useState(200);
+  const isDraggingRef = useRef(false);
 
   // Member evaluation (group work)
   const [showEvalForm, setShowEvalForm] = useState(false);
@@ -158,35 +195,21 @@ const CollaborativeWorkspacePage: React.FC = () => {
     if (!submitted && !submitting) {
       setOtherSubmitted(true);
       setOtherSubmitterName(submitterName);
-      // Mark as submitted so they can also see evaluation form
       setSubmitted(true);
 
-      // Check if peer review is enabled for this assignment
-      const hasPeerReview = data?.assignment?.auto_peer_review ||
-        data?.assignment?.peer_review_status === "active" ||
-        data?.assignment?.peer_review_status === "pending";
-
-      // Show evaluation form for other members too (if group work with multiple members)
+      // For group work: always navigate to group-peer-review page
+      // That page handles the full flow: peer review → member evaluation → done
       const isGroup = data?.assignment?.work_type === "group";
-      if (isGroup && data?.my_group?.members && data.my_group.members.length > 1) {
-        if (hasPeerReview) {
-          // Peer review is enabled: Skip member evaluation here
-          // Member evaluation will be shown AFTER peer review submission (in GroupPeerReviewPage)
-          setTimeout(() => {
-            navigate(`/student/assignment/${assignmentId}/group-peer-review`);
-          }, 2000);
-        } else {
-          // No peer review: Show member evaluation here
-          setShowEvalForm(true);
-        }
-      } else {
-        // No evaluation needed, redirect to waiting room after 3 seconds
+      if (isGroup) {
         setTimeout(() => {
           navigate(`/student/assignment/${assignmentId}/group-peer-review`);
-        }, 3000);
+        }, 2000);
       }
     }
-  }, [submitted, submitting, navigate, assignmentId, data?.assignment?.work_type, data?.my_group?.members, data?.assignment?.auto_peer_review, data?.assignment?.peer_review_status]);
+  }, [submitted, submitting, navigate, assignmentId, data?.assignment?.work_type]);
+
+  // Track last run result from other members
+  const [remoteRunResult, setRemoteRunResult] = useState<{ userName: string; result: any; error: string | null } | null>(null);
 
   const {
     answers,
@@ -199,15 +222,20 @@ const CollaborativeWorkspacePage: React.FC = () => {
     connected,
     connecting,
     sessionSubmitted,
+    chatDisabled,
     sendAnswerUpdate,
     sendChatMessage,
     voteLeader,
     assignTasks,
     loadChatHistory,
     sendTypingIndicator,
+    sendRunResult,
   } = useCollaboration({
     sessionId,
     onSessionSubmitted: handleSessionSubmitted,
+    onRunResult: (rd) => {
+      setRemoteRunResult({ userName: rd.user_name, result: rd.result, error: rd.error });
+    },
   });
 
   useEffect(() => {
@@ -254,8 +282,13 @@ const CollaborativeWorkspacePage: React.FC = () => {
     return () => clearInterval(interval);
   }, [data?.assignment?.due_date, peerReviewInfo.start_time, submitted, submitting, sessionId]);
 
+  // State for showing time-expired notification instead of ugly alert()
+  const [showTimeExpiredNotice, setShowTimeExpiredNotice] = useState(false);
+
   const handleAutoSubmit = async () => {
     if (!sessionId) return;
+
+    const isGroup = data?.assignment?.work_type === "group";
 
     try {
       setSubmitting(true);
@@ -264,36 +297,38 @@ const CollaborativeWorkspacePage: React.FC = () => {
         : { ...answers };
 
       await submitAssignment(assignmentId, finalAnswers);
-      setSubmitted(true);
-
-      alert("Hết thời gian làm bài! Bài làm đã được nộp tự động.");
-
-      // For group work, always go to waiting room (group-peer-review)
-      if (isGroupWork) {
-        setTimeout(() => {
-          navigate(`/student/assignment/${assignmentId}/group-peer-review`);
-        }, 2000);
-      } else {
-        // For individual work, check peer review time
-        const now = new Date();
-        const peerReviewStart = peerReviewInfo.start_time
-          ? new Date(peerReviewInfo.start_time)
-          : null;
-
-        if (peerReviewStart && now >= peerReviewStart) {
-          setTimeout(() => {
-            navigate(`/student/assignment/${assignmentId}/peer-review`);
-          }, 2000);
-        } else {
-          setTimeout(() => {
-            navigate("/student/dashboard");
-          }, 3000);
-        }
-      }
-    } catch (error) {
+    } catch (error: any) {
+      // If submit fails (e.g., already submitted by leader), still proceed
       console.error("Auto-submit failed:", error);
     } finally {
       setSubmitting(false);
+    }
+
+    // Always show time-expired notice and navigate
+    setSubmitted(true);
+    setShowTimeExpiredNotice(true);
+
+    if (isGroup) {
+      // Group work: always go to group-peer-review page
+      setTimeout(() => {
+        navigate(`/student/assignment/${assignmentId}/group-peer-review`);
+      }, 3000);
+    } else {
+      // Individual work
+      const now = new Date();
+      const peerReviewStart = peerReviewInfo.start_time
+        ? new Date(peerReviewInfo.start_time)
+        : null;
+
+      if (peerReviewStart && now >= peerReviewStart) {
+        setTimeout(() => {
+          navigate(`/student/assignment/${assignmentId}/peer-review`);
+        }, 3000);
+      } else {
+        setTimeout(() => {
+          navigate("/student/dashboard");
+        }, 3000);
+      }
     }
   };
 
@@ -320,6 +355,7 @@ const CollaborativeWorkspacePage: React.FC = () => {
       }
 
       // For code exercises, init with starter code or default
+      // (will be overridden by WebSocket session_state if group has saved code)
       if (detail.assignment.content_type === "code_exercise") {
         const starterCode = detail.content?.starter_code || "# Viết code của bạn ở đây\n\n";
         setCode(starterCode);
@@ -343,7 +379,12 @@ const CollaborativeWorkspacePage: React.FC = () => {
         }
       }
     } catch (err: any) {
-      setError(err?.response?.data?.detail || "Lỗi khi tải bài tập");
+      const status = err?.response?.status;
+      if (status === 404) {
+        setError("Bài tập đã bị xóa hoặc không tồn tại.");
+      } else {
+        setError(err?.response?.data?.detail || "Lỗi khi tải bài tập");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -378,7 +419,8 @@ const CollaborativeWorkspacePage: React.FC = () => {
   );
 
   const handleSubmit = async () => {
-    if (!window.confirm("Bạn có chắc muốn nộp bài? Không thể sửa sau khi nộp.")) return;
+    const ok = await confirm({ title: "Nộp bài", message: "Bạn có chắc muốn nộp bài? Không thể sửa sau khi nộp.", confirmText: "Nộp bài", cancelText: "Huỷ" });
+    if (!ok) return;
     setSubmitting(true);
     try {
       // For code exercises, ensure code is included in answers
@@ -399,32 +441,24 @@ const CollaborativeWorkspacePage: React.FC = () => {
         data?.assignment?.peer_review_status === "active" ||
         data?.assignment?.peer_review_status === "pending";
 
-      if (isGroupWork && data?.my_group?.members && data.my_group.members.length > 1) {
-        if (hasPeerReview) {
-          // Peer review is enabled: Skip member evaluation here
-          // Member evaluation will be shown AFTER peer review submission (in GroupPeerReviewPage)
-          setTimeout(() => {
-            navigate(`/student/assignment/${assignmentId}/group-peer-review`);
-          }, 1500);
-        } else {
-          // No peer review: Show member evaluation here
-          setShowEvalForm(true);
-        }
+      if (isGroupWork) {
+        // Group work: always go to group-peer-review page
+        // That page handles full flow: peer review → member evaluation → done
+        setTimeout(() => {
+          navigate(`/student/assignment/${assignmentId}/group-peer-review`);
+        }, 1500);
       } else {
-        // Individual work or no group members
-        // Check if peer review should start
+        // Individual work
         const now = new Date();
         const peerReviewStart = peerReviewInfo.start_time
           ? new Date(peerReviewInfo.start_time)
           : null;
 
         if (peerReviewStart && now >= peerReviewStart) {
-          // Navigate to peer review immediately
           setTimeout(() => {
             navigate(`/student/assignment/${assignmentId}/peer-review`);
           }, 1500);
         } else {
-          // Navigate to dashboard
           setTimeout(() => {
             navigate("/student/dashboard");
           }, 3000);
@@ -462,7 +496,7 @@ const CollaborativeWorkspacePage: React.FC = () => {
   };
 
   const handleSendChat = () => {
-    if (chatInput.trim()) {
+    if (chatInput.trim() && !chatDisabled) {
       sendChatMessage(chatInput);
       setChatInput("");
     }
@@ -475,6 +509,77 @@ const CollaborativeWorkspacePage: React.FC = () => {
     }
   };
 
+  // Simple Python syntax highlighting - returns React elements per line
+  const PYTHON_KEYWORDS = new Set(["def","class","return","if","elif","else","for","while","import","from","as","in","not","and","or","True","False","None","try","except","finally","with","break","continue","pass","yield","lambda","global","nonlocal","assert","del","raise","is"]);
+  const PYTHON_BUILTINS = new Set(["print","input","range","len","int","float","str","list","dict","set","tuple","type","isinstance","enumerate","zip","map","filter","sorted","reversed","abs","max","min","sum","open","super","property","staticmethod","classmethod"]);
+
+  const highlightLine = useCallback((line: string): React.ReactNode[] => {
+    // Tokenize: comments, strings, keywords, builtins, numbers, rest
+    const tokens: { type: string; value: string }[] = [];
+    let i = 0;
+    while (i < line.length) {
+      // Comment
+      if (line[i] === "#") {
+        tokens.push({ type: "comment", value: line.substring(i) });
+        break;
+      }
+      // Strings
+      if (line[i] === '"' || line[i] === "'") {
+        const quote = line[i];
+        let j = i + 1;
+        while (j < line.length && line[j] !== quote) {
+          if (line[j] === "\\") j++;
+          j++;
+        }
+        tokens.push({ type: "string", value: line.substring(i, j + 1) });
+        i = j + 1;
+        continue;
+      }
+      // Word (keyword/builtin/identifier)
+      if (/[a-zA-Z_]/.test(line[i])) {
+        let j = i;
+        while (j < line.length && /[a-zA-Z_0-9]/.test(line[j])) j++;
+        const word = line.substring(i, j);
+        if (PYTHON_KEYWORDS.has(word)) tokens.push({ type: "keyword", value: word });
+        else if (PYTHON_BUILTINS.has(word)) tokens.push({ type: "builtin", value: word });
+        else tokens.push({ type: "text", value: word });
+        i = j;
+        continue;
+      }
+      // Number
+      if (/[0-9]/.test(line[i])) {
+        let j = i;
+        while (j < line.length && /[0-9.]/.test(line[j])) j++;
+        tokens.push({ type: "number", value: line.substring(i, j) });
+        i = j;
+        continue;
+      }
+      // Operators/punctuation
+      tokens.push({ type: "text", value: line[i] });
+      i++;
+    }
+    const colors: Record<string, string> = {
+      keyword: "#0000ff",
+      builtin: "#0086b3",
+      string: "#a31515",
+      comment: "#008000",
+      number: "#098658",
+    };
+    return tokens.map((t, idx) => {
+      const color = colors[t.type];
+      return color
+        ? <span key={idx} style={{ color }}>{t.value}</span>
+        : <span key={idx}>{t.value}</span>;
+    });
+  }, []);
+
+  const highlightedLines = useMemo(() => {
+    if (!code) return null;
+    return code.split("\n").map((line, i) => (
+      <div key={i}>{line ? highlightLine(line) : "\n"}</div>
+    ));
+  }, [code, highlightLine]);
+
   // Tab key handler for code textarea
   const handleCodeKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Tab") {
@@ -483,6 +588,7 @@ const CollaborativeWorkspacePage: React.FC = () => {
       const start = target.selectionStart;
       const end = target.selectionEnd;
       const newCode = code.substring(0, start) + "    " + code.substring(end);
+      localCodeRef.current = true;
       setCode(newCode);
       handleAnswerChange("code", newCode);
       requestAnimationFrame(() => {
@@ -496,20 +602,49 @@ const CollaborativeWorkspacePage: React.FC = () => {
     setIsRunning(true);
     setTestResult(null);
     setRunError(null);
+    setRemoteRunResult(null);
     try {
       const result = await runCodeInAssignment(assignmentId, code, "python");
       setTestResult(result);
+      sendRunResult(result, null);
     } catch (err: any) {
-      setRunError(err?.response?.data?.detail || err.message || "Không thể chạy code");
+      const errorMsg = err?.response?.data?.detail || err.message || "Không thể chạy code";
+      setRunError(errorMsg);
+      sendRunResult(null, errorMsg);
     } finally {
       setIsRunning(false);
     }
   };
 
+  // Sync remote code updates from WebSocket (other members' edits)
+  const remoteCode = answers["code"];
+  useEffect(() => {
+    if (data?.assignment.content_type !== "code_exercise") return;
+    if (remoteCode !== undefined && remoteCode !== code) {
+      if (localCodeRef.current) {
+        localCodeRef.current = false;
+      } else {
+        setCode(remoteCode);
+      }
+    }
+  }, [remoteCode]);
+
   // Auto-scroll chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
+
+  // Compute vote counts per candidate: leaderVotes is {voter_user_id: candidate_student_id}
+  const voteCounts = useMemo(() => {
+    const counts: Record<number, number> = {};
+    for (const candidateId of Object.values(leaderVotes)) {
+      counts[candidateId] = (counts[candidateId] || 0) + 1;
+    }
+    return counts;
+  }, [leaderVotes]);
+
+  // Which candidate did the current user vote for?
+  const myVotedCandidateId = currentUser?.id ? leaderVotes[String(currentUser.id)] : undefined;
 
   if (isLoading) {
     return (
@@ -524,8 +659,33 @@ const CollaborativeWorkspacePage: React.FC = () => {
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-stone-50 dark:bg-stone-900 p-8 text-center text-stone-500">
-        {error || "Không tìm thấy bài tập"}
+      <div className="min-h-screen bg-stone-50 dark:bg-stone-900 flex flex-col items-center justify-center gap-4">
+        <p className="text-stone-500">{error || "Không tìm thấy bài tập"}</p>
+        <button
+          onClick={() => navigate("/student/dashboard")}
+          className="px-4 py-2 bg-brand text-white rounded-lg hover:bg-brand-dark text-sm"
+        >
+          Về trang chủ
+        </button>
+      </div>
+    );
+  }
+
+  // Show time-expired notification (replaces ugly alert())
+  if (showTimeExpiredNotice && !showEvalForm) {
+    return (
+      <div className="min-h-screen bg-stone-50 dark:bg-stone-900 flex items-center justify-center">
+        <div className="bg-white dark:bg-stone-800 rounded-xl shadow-lg p-8 text-center w-full sm:max-w-md mx-4">
+          <Clock className="w-16 h-16 text-orange-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-stone-800 dark:text-white mb-2">
+            Hết thời gian làm bài!
+          </h2>
+          <p className="text-stone-600 dark:text-stone-300 mb-4">
+            Bài làm đã được nộp tự động.
+          </p>
+          <Loader2 className="w-6 h-6 animate-spin text-brand mx-auto mt-2" />
+          <p className="text-sm text-stone-400 mt-2">Đang chuyển trang...</p>
+        </div>
       </div>
     );
   }
@@ -714,23 +874,21 @@ const CollaborativeWorkspacePage: React.FC = () => {
         </div>
       )}
 
-      {/* Countdown Timer - Fixed position */}
+      {/* Countdown Timer - Inline in top bar, not fixed position */}
       {timeRemaining && !submitted && (
-        <div className="fixed top-4 right-4 bg-white dark:bg-stone-800 shadow-lg rounded-lg p-4 border-2 border-orange-500 z-50">
-          <div className="flex items-center gap-2 mb-2">
-            <Clock className="w-5 h-5 text-orange-500" />
-            <span className="font-semibold text-stone-900 dark:text-white">
-              {peerReviewInfo.start_time ? "Đến giờ đánh giá chéo" : "Thời gian còn lại"}
-            </span>
-          </div>
-          <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+        <div className="bg-orange-50 dark:bg-orange-900/20 border-b border-orange-200 dark:border-orange-800 px-4 py-1.5 flex items-center justify-center gap-3 flex-shrink-0">
+          <Clock className="w-4 h-4 text-orange-500" />
+          <span className="text-xs font-medium text-stone-600 dark:text-stone-300">
+            {peerReviewInfo.start_time ? "Đến giờ đánh giá chéo" : "Thời gian còn lại"}
+          </span>
+          <span className="text-sm font-bold text-orange-600 dark:text-orange-400 tabular-nums">
             {timeRemaining.days > 0 && `${timeRemaining.days}d `}
             {String(timeRemaining.hours).padStart(2, "0")}:
             {String(timeRemaining.minutes).padStart(2, "0")}:
             {String(timeRemaining.seconds).padStart(2, "0")}
-          </div>
+          </span>
           {peerReviewInfo.start_time && (
-            <p className="text-xs text-orange-500 mt-1">Bài sẽ tự động nộp khi hết giờ</p>
+            <span className="text-[10px] text-orange-500">Bài sẽ tự động nộp khi hết giờ</span>
           )}
         </div>
       )}
@@ -767,17 +925,6 @@ const CollaborativeWorkspacePage: React.FC = () => {
         </div>
       )}
 
-      {/* Leader Info - Optional, not required */}
-      {!submitted && data?.assignment?.work_type === "group" && !leaderId && (
-        <div className="bg-sky-50 dark:bg-sky-900/20 border-l-4 border-brand px-4 py-3 mx-4 mt-2 rounded">
-          <div className="flex items-center gap-2 text-sky-800 dark:text-sky-200">
-            <Users className="w-5 h-5" />
-            <span className="text-sm font-medium">
-              Có thể bầu nhóm trưởng (không bắt buộc). Bất kỳ thành viên nào cũng có thể nộp bài.
-            </span>
-          </div>
-        </div>
-      )}
 
       {/* Main workspace */}
       <div className="flex-1 flex overflow-hidden">
@@ -816,10 +963,49 @@ const CollaborativeWorkspacePage: React.FC = () => {
                     {isThisLeader && (
                       <span title="Nhóm trưởng"><Crown className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" /></span>
                     )}
+                    {!leaderId && voteCounts[m.student_id] > 0 && (
+                      <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium flex-shrink-0">
+                        {voteCounts[m.student_id]} phiếu
+                      </span>
+                    )}
                   </div>
                 );
               })}
             </div>
+
+            {/* Vote panel */}
+            {showVotePanel && !leaderId && (
+              <div className="p-2 border-t border-stone-100 dark:border-stone-700 bg-amber-50/50 dark:bg-amber-900/10">
+                <p className="text-xs text-stone-600 dark:text-stone-400 mb-2">Bầu cho:</p>
+                {data.my_group?.members.map((m) => {
+                  const isMyVote = myVotedCandidateId === m.student_id;
+                  const count = voteCounts[m.student_id] || 0;
+                  return (
+                    <button
+                      key={m.student_id}
+                      onClick={() => { voteLeader(m.student_id); }}
+                      className={`w-full text-left flex items-center gap-2 px-2 py-1.5 text-xs rounded transition-colors ${
+                        isMyVote
+                          ? "bg-amber-200 dark:bg-amber-800/40 text-amber-900 dark:text-amber-200 font-medium"
+                          : "hover:bg-amber-100 dark:hover:bg-amber-900/30 text-stone-700 dark:text-stone-300"
+                      }`}
+                    >
+                      {isMyVote ? (
+                        <Check className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                      ) : (
+                        <User className="w-3 h-3" />
+                      )}
+                      <span className="flex-1">{m.full_name}</span>
+                      {count > 0 && (
+                        <span className="text-[10px] bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-medium">
+                          {count} phiếu
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Actions */}
             <div className="p-2 border-t border-stone-100 dark:border-stone-700 space-y-1.5">
@@ -832,44 +1018,17 @@ const CollaborativeWorkspacePage: React.FC = () => {
                   Bầu nhóm trưởng
                 </button>
               )}
-              {!submitted && (
-                <>
-                  {isLeader && (
-                    <p className="text-[10px] text-green-600 dark:text-green-400 text-center px-1">
-                      Bạn là nhóm trưởng
-                    </p>
-                  )}
-                  <button
-                    onClick={handleSubmit}
-                    disabled={submitting}
-                    className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
-                  >
-                    {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                    Nộp bài
-                  </button>
-                </>
+              {!submitted && data.assignment.content_type !== "code_exercise" && (
+                <button
+                  onClick={handleSubmit}
+                  disabled={submitting}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                >
+                  {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                  Nộp bài
+                </button>
               )}
             </div>
-
-            {/* Vote panel */}
-            {showVotePanel && !leaderId && (
-              <div className="p-2 border-t border-stone-100 dark:border-stone-700 bg-amber-50/50 dark:bg-amber-900/10">
-                <p className="text-xs text-stone-600 dark:text-stone-400 mb-2">Bầu cho:</p>
-                {data.my_group?.members.map((m) => {
-                  const voteCount = Object.values(leaderVotes).filter((v) => v === m.student_id).length;
-                  return (
-                    <button
-                      key={m.student_id}
-                      onClick={() => voteLeader(m.student_id)}
-                      className="w-full flex items-center justify-between px-2 py-1 rounded text-xs hover:bg-amber-100 dark:hover:bg-amber-900/20 mb-1"
-                    >
-                      <span className="text-stone-700 dark:text-stone-300">{m.full_name}</span>
-                      <span className="text-amber-600 font-medium">{voteCount} phiếu</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
           </div>
         )}
 
@@ -969,33 +1128,53 @@ const CollaborativeWorkspacePage: React.FC = () => {
                 <div className="text-center px-4">
                   <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto mb-3" />
                   <h2 className="text-xl font-bold text-stone-900 dark:text-white mb-1">Đã nộp bài!</h2>
-                  <p className="text-stone-500">Bài làm đã được ghi nhận.</p>
-                  {peerReviewActivated && (
-                    <div className="mt-4 p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg inline-flex items-center gap-2 text-sm text-orange-700 dark:text-orange-400">
-                      <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                      Đánh giá chéo đã được kích hoạt! Kiểm tra lại sau để đánh giá bài bạn khác.
-                    </div>
-                  )}
-                  <div className="mt-4">
+                  <p className="text-stone-500 mb-4">Bài làm đã được ghi nhận.</p>
+                  {isGroupWork ? (
+                    <>
+                      <Loader2 className="w-6 h-6 animate-spin text-brand mx-auto mb-2" />
+                      <p className="text-sm text-stone-400">Đang chuyển trang...</p>
+                    </>
+                  ) : (
                     <button
                       onClick={() => navigate("/student/dashboard")}
                       className="px-4 py-2 text-sm bg-brand text-white rounded-lg hover:bg-brand-dark"
                     >
                       Về trang chủ
                     </button>
-                  </div>
+                  )}
                 </div>
               )}
             </div>
           ) : data.assignment.content_type === "code_exercise" ? (
             /* Code Exercise - Full Screen Layout */
-            <div className="flex-1 flex overflow-hidden">
-              <div className="flex h-full w-full">
+            <div className="flex-1 flex flex-col overflow-hidden">
+              {/* Shared header row - same height for both panels */}
+              <div className="flex shrink-0 border-b border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800">
+                <div className="w-[38%] px-3 py-1.5 border-r border-stone-200 dark:border-stone-700">
+                  <span className="text-xs font-medium text-stone-500 dark:text-stone-400 uppercase tracking-wide">Đề bài</span>
+                </div>
+                <div className="flex-1 px-3 py-1.5 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-stone-500 dark:text-stone-400">
+                      {(data.content?.language || "python").toUpperCase()}
+                    </span>
+                    {isGroupWork && typingUsers.filter((t: any) => t.question_id === "code").length > 0 && (
+                      <span className="text-xs text-brand dark:text-sky-400 animate-pulse">
+                        {typingUsers.filter((t: any) => t.question_id === "code").map((t: any) => t.user_name).join(", ")} đang gõ...
+                      </span>
+                    )}
+                  </div>
+                  {data.content?.time_limit_seconds && (
+                    <div className="flex items-center gap-2 text-xs text-stone-400">
+                      <Clock className="w-3 h-3" />
+                      Thời gian chạy tối đa: {data.content.time_limit_seconds}s
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-1 overflow-hidden">
                 {/* Left panel - Problem description + test cases */}
                 <div className="w-[38%] flex flex-col border-r border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800">
-                  <div className="px-4 py-2 border-b border-stone-200 dark:border-stone-700 shrink-0">
-                    <span className="text-xs font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wide">Đề bài</span>
-                  </div>
                   <div className="flex-1 overflow-y-auto p-4">
                     {(data.content?.description || data.content?.content || data.content?.problem_statement) ? (
                       <div className="prose prose-sm dark:prose-invert max-w-none">
@@ -1041,34 +1220,55 @@ const CollaborativeWorkspacePage: React.FC = () => {
                 <div className="flex-1 flex flex-col min-w-0">
                   {/* Code Editor (textarea) */}
                   <div className="flex-1 min-h-0 flex flex-col">
-                    <div className="px-3 py-1.5 bg-stone-50 dark:bg-stone-800 border-b border-stone-200 dark:border-stone-700 flex items-center justify-between shrink-0">
-                      <span className="text-xs font-medium text-stone-500 dark:text-stone-400">
-                        {(data.content?.language || "python").toUpperCase()}
-                      </span>
-                      {data.content?.time_limit_seconds && (
-                        <div className="flex items-center gap-2 text-xs text-stone-400">
-                          <Clock className="w-3 h-3" />
-                          Thời gian chạy tối đa: {data.content.time_limit_seconds}s
-                        </div>
-                      )}
+                    <div className="flex-1 relative overflow-auto bg-white dark:bg-stone-900">
+                      {/* Syntax-highlighted layer (behind textarea) */}
+                      <pre
+                        className="absolute inset-0 px-4 py-3 font-mono text-sm leading-relaxed whitespace-pre-wrap break-words pointer-events-none m-0 overflow-hidden"
+                        style={{ tabSize: 4, color: "#1e1e1e" }}
+                        aria-hidden="true"
+                      >
+                        <code>{highlightedLines || <span className="text-stone-400">Viết code của bạn ở đây...</span>}</code>
+                      </pre>
+                      {/* Transparent textarea on top for editing */}
+                      <textarea
+                        value={code}
+                        onChange={(e) => {
+                          const newCode = e.target.value;
+                          localCodeRef.current = true;
+                          setCode(newCode);
+                          handleAnswerChange("code", newCode);
+                        }}
+                        onKeyDown={handleCodeKeyDown}
+                        spellCheck={false}
+                        className="absolute inset-0 w-full h-full px-4 py-3 font-mono text-sm leading-relaxed resize-none focus:outline-none border-none bg-transparent"
+                        style={{ tabSize: 4, color: "transparent", caretColor: "#000" }}
+                      />
                     </div>
-                    <textarea
-                      value={code}
-                      onChange={(e) => {
-                        const newCode = e.target.value;
-                        setCode(newCode);
-                        handleAnswerChange("code", newCode);
-                      }}
-                      onKeyDown={handleCodeKeyDown}
-                      spellCheck={false}
-                      className="flex-1 w-full px-4 py-3 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 font-mono text-sm leading-relaxed resize-none focus:outline-none border-none"
-                      style={{ tabSize: 4 }}
-                      placeholder="Viết code của bạn ở đây..."
-                    />
                   </div>
 
-                  {/* Output panel */}
-                  <div className="h-[35%] border-t border-stone-200 dark:border-stone-700 flex flex-col shrink-0 bg-white dark:bg-stone-800">
+                  {/* Output panel - drag top edge to resize */}
+                  <div style={{ height: outputHeight }} className="border-t border-stone-200 dark:border-stone-700 flex flex-col shrink-0 bg-white dark:bg-stone-800 relative">
+                    {/* Invisible resize handle at top edge */}
+                    <div
+                      className="absolute top-0 left-0 right-0 h-1.5 cursor-row-resize z-10 hover:bg-brand/20"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        isDraggingRef.current = true;
+                        const startY = e.clientY;
+                        const startH = outputHeight;
+                        const onMove = (ev: MouseEvent) => {
+                          if (!isDraggingRef.current) return;
+                          setOutputHeight(Math.max(80, Math.min(600, startH + (startY - ev.clientY))));
+                        };
+                        const onUp = () => {
+                          isDraggingRef.current = false;
+                          document.removeEventListener("mousemove", onMove);
+                          document.removeEventListener("mouseup", onUp);
+                        };
+                        document.addEventListener("mousemove", onMove);
+                        document.addEventListener("mouseup", onUp);
+                      }}
+                    />
                     <div className="flex items-center border-b border-stone-200 dark:border-stone-700 shrink-0">
                       <div className="px-4 py-2 text-xs font-medium text-green-600 dark:text-green-400 border-b-2 border-green-600 dark:border-green-400 flex items-center gap-1">
                         <Terminal className="w-3 h-3" />
@@ -1147,6 +1347,52 @@ const CollaborativeWorkspacePage: React.FC = () => {
                           <p className="font-medium mb-1">Kết quả (raw):</p>
                           <pre className="bg-stone-100 dark:bg-stone-800 p-2 rounded text-[11px] whitespace-pre-wrap">{JSON.stringify(testResult, null, 2)}</pre>
                         </div>
+                      ) : remoteRunResult ? (
+                        <div className="space-y-2">
+                          <div className={`flex items-center gap-2 px-3 py-2 rounded text-xs font-medium ${
+                            remoteRunResult.error
+                              ? "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                              : remoteRunResult.result?.status === "passed"
+                              ? "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                              : "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                          }`}>
+                            <User className="w-3.5 h-3.5" />
+                            {remoteRunResult.userName} đã chạy thử
+                            {remoteRunResult.error
+                              ? " - Lỗi"
+                              : remoteRunResult.result?.test_results
+                              ? ` - ${remoteRunResult.result.passed_tests}/${remoteRunResult.result.total_tests} test cases`
+                              : ""}
+                          </div>
+                          {remoteRunResult.error && (
+                            <div className="text-xs text-red-600 dark:text-red-400 px-2">{remoteRunResult.error}</div>
+                          )}
+                          {remoteRunResult.result?.test_results?.map((tc: any) => (
+                            <div key={tc.test_num} className={`border rounded text-xs ${
+                              tc.passed ? "border-green-200 dark:border-green-800" : "border-red-200 dark:border-red-800"
+                            }`}>
+                              <div className={`flex items-center gap-1.5 px-2.5 py-1.5 ${
+                                tc.passed
+                                  ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400"
+                                  : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400"
+                              }`}>
+                                {tc.passed ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                                <span className="font-medium">Test {tc.test_num}</span>
+                                {tc.is_hidden && <span className="text-[10px] opacity-60">(ẩn)</span>}
+                              </div>
+                              {!tc.is_hidden && (
+                                <div className="px-2.5 py-2 space-y-1 font-mono text-stone-700 dark:text-stone-300">
+                                  <div><span className="text-stone-400">Input: </span>{tc.input || "(trống)"}</div>
+                                  <div><span className="text-stone-400">Kỳ vọng: </span>{tc.expected_output}</div>
+                                  <div><span className="text-stone-400">Kết quả: </span>
+                                    <span className={tc.passed ? "text-green-600" : "text-red-600"}>{tc.actual_output || "(trống)"}</span>
+                                  </div>
+                                  {tc.error && <div className="text-red-500">Lỗi: {tc.error}</div>}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
                       ) : (
                         <p className="text-xs text-stone-500 dark:text-stone-400">
                           Nhấn "Chạy thử" để kiểm tra code với các test cases.
@@ -1188,6 +1434,13 @@ const CollaborativeWorkspacePage: React.FC = () => {
                                 {block.questionLine}
                               </ReactMarkdown>
                             </div>
+                            {block.codeBlock && (
+                              <div className="prose prose-sm dark:prose-invert max-w-none mb-2">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                                  {block.codeBlock}
+                                </ReactMarkdown>
+                              </div>
+                            )}
                             <div className="mt-1 mb-6 ml-2 relative">
                               <div className="space-y-0">
                                 {[...Array(lineCount)].map((_, lineIndex) => (
@@ -1406,23 +1659,29 @@ const CollaborativeWorkspacePage: React.FC = () => {
 
             {!submitted && (
               <div className="p-2 border-t border-stone-100 dark:border-stone-700">
-                <div className="flex gap-1.5">
-                  <input
-                    type="text"
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Nhập tin nhắn..."
-                    className="flex-1 px-3 py-1.5 text-sm border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-700 text-stone-900 dark:text-white"
-                  />
-                  <button
-                    onClick={handleSendChat}
-                    disabled={!chatInput.trim()}
-                    className="p-1.5 bg-brand text-white rounded-lg hover:bg-brand-dark disabled:opacity-50"
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
-                </div>
+                {chatDisabled ? (
+                  <p className="text-xs text-red-500 text-center py-1">Chat đã bị tắt bởi giáo viên</p>
+                ) : !connected ? (
+                  <p className="text-xs text-stone-400 text-center py-1">Đang kết nối...</p>
+                ) : (
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder="Nhập tin nhắn..."
+                      className="flex-1 px-3 py-1.5 text-sm border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-700 text-stone-900 dark:text-white"
+                    />
+                    <button
+                      onClick={handleSendChat}
+                      disabled={!chatInput.trim()}
+                      className="p-1.5 bg-brand text-white rounded-lg hover:bg-brand-dark disabled:opacity-50"
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
             )}
               </>
@@ -1430,6 +1689,7 @@ const CollaborativeWorkspacePage: React.FC = () => {
           </div>
         )}
       </div>
+      <ConfirmDialog {...dialogProps} />
     </div>
   );
 };

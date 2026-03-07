@@ -6,8 +6,10 @@ import SubmitButton from "@/components/forms/SubmitButton";
 import TextInput from "@/components/forms/TextInput";
 import AuthCard from "@/components/layout/AuthCard";
 import useAuth from "@/hooks/useAuth";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const LoginPage = () => {
+  usePageTitle("Đăng nhập");
   const navigator = useNavigate();
   const { login, isLoading, error, resetError } = useAuth();
   const [email, setEmail] = useState("");

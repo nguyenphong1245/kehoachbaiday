@@ -69,21 +69,24 @@ def send_email(subject: str, recipient: str, body: str) -> None:
 def send_verification_email(email: str, token: str) -> None:
     settings = get_settings()
     body = (
-        "Thank you for signing up!\n\n"
-        f"Your verification code is: {token}\n\n"
-        "Enter this code to verify your email address.\n"
-        f"This code will expire in {settings.email_verification_token_expire_minutes} minutes.\n"
+        "Xin chào,\n\n"
+        "Cảm ơn bạn đã đăng ký tài khoản tại hệ thống Trợ lý soạn KHBD thông minh.\n\n"
+        f"Mã xác nhận của bạn là: {token}\n\n"
+        "Vui lòng nhập mã này để xác nhận địa chỉ email của bạn.\n"
+        f"Mã có hiệu lực trong {settings.email_verification_token_expire_minutes} phút.\n\n"
+        "Nếu bạn không thực hiện đăng ký, vui lòng bỏ qua email này.\n"
     )
-    send_email("Verify your account", email, body)
+    send_email("Xác nhận tài khoản - Trợ lý soạn KHBD", email, body)
 
 
 def send_password_reset_email(email: str, token: str) -> None:
     settings = get_settings()
     body = (
-        "You requested a password reset.\n\n"
-        f"Your reset code is: {token}\n\n"
-        "Enter this code to reset your password.\n"
-        f"This code will expire in {settings.password_reset_token_expire_minutes} minutes.\n"
-        "If you did not request this, please ignore this email.\n"
+        "Xin chào,\n\n"
+        "Bạn đã yêu cầu đặt lại mật khẩu.\n\n"
+        f"Mã đặt lại mật khẩu của bạn là: {token}\n\n"
+        "Vui lòng nhập mã này để đặt lại mật khẩu.\n"
+        f"Mã có hiệu lực trong {settings.password_reset_token_expire_minutes} phút.\n\n"
+        "Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này.\n"
     )
-    send_email("Reset your password", email, body)
+    send_email("Đặt lại mật khẩu - Trợ lý soạn KHBD", email, body)

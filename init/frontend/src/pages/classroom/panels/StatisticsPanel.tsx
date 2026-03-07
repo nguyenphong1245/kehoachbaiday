@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   Loader2,
   ChevronDown,
@@ -17,13 +17,22 @@ import {
   Award,
   Eye,
   MessageSquare,
+  MessageCircleOff,
+  MessageCircle,
   X,
   Pencil,
   Save,
+  Monitor,
+  ChevronLeft,
+  Minus,
+  Plus,
+  Highlighter,
+  Eraser,
+  Undo2,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { getClassroomStatistics, getSubmissions, gradeSubmission } from "@/services/assignmentService";
+import { getClassroomStatistics, getSubmissions, gradeSubmission, toggleGroupChat } from "@/services/assignmentService";
 import { api } from "@/services/authService";
 
 /* ── Worksheet parsing (same logic as CollaborativeWorkspacePage) ── */
@@ -32,6 +41,7 @@ interface InteractiveBlock {
   text: string;
   questionLine: string;
   questionNum: string;
+  codeBlock?: string;
 }
 
 const buildInteractiveBlocks = (content: string): InteractiveBlock[] => {
@@ -39,6 +49,8 @@ const buildInteractiveBlocks = (content: string): InteractiveBlock[] => {
   const questionLinePattern = /^\s*\*{0,2}\s*(?:Câu|Bài|Question)\s+(\d+)\s*[.:]/i;
   const dotLinePattern = /^\s*\.{3,}\s*$/;
   const studentInfoPattern = /^\s*\*{0,2}\s*(?:Họ và tên|Họ tên|HỌ VÀ TÊN|HỌ TÊN|Nhóm|NHÓM|Lớp|LỚP)\s*\*{0,2}\s*:/i;
+  const sectionHeaderPattern = /^\s*#{1,4}\s*\*{0,2}\s*(?:I{1,3}V?|V?I{0,3})\.\s*PHỤ LỤC/i;
+  const worksheetTitlePattern = /^\s*\*{0,2}\s*PHIẾU HỌC TẬP\s*(?:SỐ\s*\d+)?\s*\*{0,2}\s*$/i;
 
   const lines = content.split("\n");
   let currentMarkdown: string[] = [];
@@ -55,13 +67,34 @@ const buildInteractiveBlocks = (content: string): InteractiveBlock[] => {
     if (line.trim().startsWith("```")) { inCodeBlock = !inCodeBlock; currentMarkdown.push(line); continue; }
     if (inCodeBlock) { currentMarkdown.push(line); continue; }
     if (dotLinePattern.test(line)) continue;
+    const stripped = line.replace(/\*/g, "").trim();
+    if (sectionHeaderPattern.test(line) || sectionHeaderPattern.test(stripped)) continue;
+    if (worksheetTitlePattern.test(line) || worksheetTitlePattern.test(stripped)) continue;
     if (studentInfoPattern.test(line)) {
       const withoutDots = line.replace(/\.{2,}/g, "").replace(/\*{1,2}/g, "").trim();
       if (/^(?:Họ và tên|Họ tên|Nhóm|Lớp)\s*:\s*$/i.test(withoutDots)) continue;
     }
     const cleanedLine = line.replace(/\.{3,}/g, "");
     const qMatch = cleanedLine.match(questionLinePattern);
-    if (qMatch) { flushMarkdown(); blocks.push({ type: "question_input", text: "", questionLine: cleanedLine, questionNum: qMatch[1] }); continue; }
+    if (qMatch) {
+      flushMarkdown();
+      let questionCode: string | undefined;
+      let j = i + 1;
+      while (j < lines.length && lines[j].trim() === "") j++;
+      if (j < lines.length && lines[j].trim().startsWith("```")) {
+        const codeLines: string[] = [lines[j]];
+        j++;
+        while (j < lines.length && !lines[j].trim().startsWith("```")) {
+          codeLines.push(lines[j]);
+          j++;
+        }
+        if (j < lines.length) { codeLines.push(lines[j]); j++; }
+        questionCode = codeLines.join("\n");
+        i = j - 1;
+      }
+      blocks.push({ type: "question_input", text: "", questionLine: cleanedLine, questionNum: qMatch[1], codeBlock: questionCode });
+      continue;
+    }
     currentMarkdown.push(cleanedLine);
   }
   flushMarkdown();
@@ -114,6 +147,7 @@ interface GroupStat {
   status: string;
   submitted_at: string | null;
   session_id?: number;
+  chat_disabled?: boolean;
   teacher_score?: number | null;
   teacher_comment?: string | null;
   member_grades?: Record<string, { score: number; comment?: string }> | null;
@@ -134,6 +168,7 @@ interface AssignmentStat {
   created_at: string | null;
   student_stats: StudentStat[];
   group_stats: GroupStat[];
+  chat_enabled?: boolean;
 }
 
 interface LessonStat {
@@ -170,6 +205,8 @@ interface PeerReviewInfo {
   reviewee_group_name: string | null;
   comments: Record<string, string>;
   score: number | null;
+  member_scores?: Record<string, number>;
+  member_comments?: Record<string, { comments: Record<string, string>; reviewer_name: string }>;
   submitted_at: string | null;
 }
 
@@ -245,6 +282,53 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
     members: GroupMemberInfo[];
   } | null>(null);
 
+  // Presentation mode state
+  const [presenting, setPresenting] = useState<{
+    assignmentTitle: string;
+    contentType: string;
+    submissions: any[];
+    currentIndex: number;
+    workType: string;
+    fontSize: number;
+    content: any; // quiz questions, worksheet content etc.
+  } | null>(null);
+  const codeContainerRef = useRef<HTMLDivElement>(null);
+  const highlightHistoryRef = useRef<string[]>([]);
+
+  // Chat disabled state per session
+  const [chatDisabledMap, setChatDisabledMap] = useState<Record<number, boolean>>({});
+  const handleToggleChat = async (assignmentId: number, sessionId: number) => {
+    try {
+      const res = await toggleGroupChat(assignmentId, sessionId);
+      setChatDisabledMap((prev) => ({ ...prev, [sessionId]: res.chat_disabled }));
+    } catch { /* ignore */ }
+  };
+
+  // Keyboard navigation for presentation mode
+  useEffect(() => {
+    if (!presenting) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        highlightHistoryRef.current = [];
+        setPresenting((p) => p && p.currentIndex > 0 ? { ...p, currentIndex: p.currentIndex - 1 } : p);
+      } else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        highlightHistoryRef.current = [];
+        setPresenting((p) => p && p.currentIndex < p.submissions.length - 1 ? { ...p, currentIndex: p.currentIndex + 1 } : p);
+      } else if (e.key === "Escape") {
+        setPresenting(null);
+      } else if (e.key === "z" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        // Undo highlight
+        if (codeContainerRef.current && highlightHistoryRef.current.length > 0) {
+          const prev = highlightHistoryRef.current.pop()!;
+          codeContainerRef.current.innerHTML = prev;
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [presenting]);
+
   useEffect(() => { loadStats(); }, [classroomId]);
 
   const loadStats = async () => {
@@ -254,7 +338,20 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
       const res = await getClassroomStatistics(classroomId);
       setData(res);
       const lessons = new Set<string>();
-      res.lessons.forEach((l: LessonStat) => lessons.add(l.lesson_name));
+      const chatMap: Record<number, boolean> = {};
+      res.lessons.forEach((l: LessonStat) => {
+        lessons.add(l.lesson_name);
+        l.assignments.forEach((a: any) => {
+          const assignmentChatEnabled = a.chat_enabled !== false;
+          (a.group_stats || []).forEach((gs: GroupStat) => {
+            if (gs.session_id) {
+              // Chat is disabled if either assignment-level chat is off OR per-group chat is off
+              chatMap[gs.session_id] = !assignmentChatEnabled || (gs.chat_disabled || false);
+            }
+          });
+        });
+      });
+      setChatDisabledMap(chatMap);
       setExpandedLessons(lessons);
     } catch (err: any) {
       console.error("Statistics API error:", err);
@@ -269,7 +366,19 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
     try {
       const res = await getClassroomStatistics(classroomId);
       setData(res);
-      // Don't reset expandedLessons - preserve user's current view
+      // Update chat disabled map
+      const chatMap: Record<number, boolean> = {};
+      res.lessons.forEach((l: LessonStat) => {
+        l.assignments.forEach((a: any) => {
+          const assignmentChatEnabled = a.chat_enabled !== false;
+          (a.group_stats || []).forEach((gs: GroupStat) => {
+            if (gs.session_id) {
+              chatMap[gs.session_id] = !assignmentChatEnabled || (gs.chat_disabled || false);
+            }
+          });
+        });
+      });
+      setChatDisabledMap(chatMap);
     } catch (err) {
       console.error("Silent refresh error:", err);
       // Don't show error - this is a background refresh
@@ -292,6 +401,23 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
     } catch { /* ignore */ } finally {
       setSubmissionLoading(false);
     }
+  }, []);
+
+  // Launch presentation mode
+  const startPresentation = useCallback(async (assignmentId: number, title: string, contentType: string) => {
+    try {
+      const res = await getSubmissions(assignmentId);
+      if (contentType === "quiz") {
+        // Quiz: present questions one by one, not student submissions
+        const questions = res.content?.questions || [];
+        if (questions.length === 0) return;
+        setPresenting({ assignmentTitle: title, contentType, submissions: [], currentIndex: 0, workType: "individual", fontSize: 22, content: res.content });
+      } else {
+        const subs = [...(res.submissions || [])].filter((s: any) => s.status === "submitted").sort((a: any, b: any) => a.id - b.id);
+        if (subs.length === 0) return;
+        setPresenting({ assignmentTitle: title, contentType, submissions: subs, currentIndex: 0, workType: res.work_type, fontSize: 20, content: res.content || null });
+      }
+    } catch { /* ignore */ }
   }, []);
 
   // Load peer reviews
@@ -733,8 +859,14 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                               className="flex items-center gap-1 px-2.5 py-1 text-xs border border-stone-200 dark:border-stone-700 rounded-lg hover:bg-stone-50 dark:hover:bg-stone-700/50 text-stone-600 dark:text-stone-400">
                               <Eye className="w-3 h-3" /> Xem bài nộp
                             </button>
-                            {/* Peer review only for worksheet */}
-                            {a.content_type === "worksheet" && (
+                            {(a.submitted_count > 0 || a.content_type === "quiz") && (
+                              <button onClick={() => startPresentation(a.id, a.title, a.content_type)}
+                                className="flex items-center gap-1 px-2.5 py-1 text-xs border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
+                                <Monitor className="w-3 h-3" /> Trình chiếu
+                              </button>
+                            )}
+                            {/* Peer review for worksheet and code_exercise */}
+                            {(a.content_type === "worksheet" || a.content_type === "code_exercise") && (
                               <button onClick={() => loadPeerReviews(a.id)}
                                 disabled={peerReviewLoading.has(a.id)}
                                 className="flex items-center gap-1 px-2.5 py-1 text-xs border border-stone-200 dark:border-stone-700 rounded-lg hover:bg-stone-50 dark:hover:bg-stone-700/50 text-stone-600 dark:text-stone-400 disabled:opacity-50">
@@ -777,7 +909,12 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                                         </div>
                                         <div className="flex items-center gap-2">
                                           {pr.score != null && (
-                                            <span className={`font-bold px-2 py-0.5 rounded ${pr.score >= 8 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : pr.score >= 5 ? "bg-sky-100 text-brand-dark dark:bg-sky-900/30 dark:text-sky-400" : "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"}`}>{pr.score}/10</span>
+                                            <span className={`font-bold px-2 py-0.5 rounded ${pr.score >= 8 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : pr.score >= 5 ? "bg-sky-100 text-brand-dark dark:bg-sky-900/30 dark:text-sky-400" : "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"}`}>
+                                              TB: {pr.score}/10
+                                              {pr.member_scores && Object.keys(pr.member_scores).length > 0 && (
+                                                <span className="font-normal text-stone-400 ml-1">({Object.keys(pr.member_scores).length} người)</span>
+                                              )}
+                                            </span>
                                           )}
                                           {pr.submitted_at ? (
                                             <span className="text-stone-400">{new Date(pr.submitted_at).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
@@ -786,15 +923,38 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                                           )}
                                         </div>
                                       </div>
-                                      {/* Reviewer user name (for group reviews) */}
-                                      {pr.reviewer_type === "group" && pr.reviewer_user_name && (
-                                        <p className="text-stone-500 mb-2 flex items-center gap-1">
-                                          <User className="w-3 h-3" /> Người đánh giá: {pr.reviewer_user_name}
-                                        </p>
-                                      )}
-                                      {/* Comments */}
-                                      {Object.entries(pr.comments).length > 0 ? (
+                                      {/* Per-member comments and scores */}
+                                      {pr.member_comments && Object.keys(pr.member_comments).length > 0 ? (
+                                        <div className="space-y-2">
+                                          {Object.entries(pr.member_comments).map(([uid, mc]) => (
+                                            <div key={uid} className="bg-stone-50 dark:bg-stone-700/50 rounded p-2">
+                                              <div className="flex items-center justify-between mb-1.5">
+                                                <span className="font-medium text-stone-700 dark:text-stone-300 flex items-center gap-1">
+                                                  <User className="w-3 h-3" /> {mc.reviewer_name || `User ${uid}`}
+                                                </span>
+                                                {pr.member_scores?.[uid] != null && (
+                                                  <span className={`font-bold px-1.5 py-0.5 rounded ${(pr.member_scores[uid]) >= 8 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : (pr.member_scores[uid]) >= 5 ? "bg-sky-100 text-brand-dark dark:bg-sky-900/30 dark:text-sky-400" : "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"}`}>
+                                                    {pr.member_scores[uid]}/10
+                                                  </span>
+                                                )}
+                                              </div>
+                                              {Object.entries(mc.comments || {}).map(([key, val]) => (
+                                                <div key={key} className="text-stone-600 dark:text-stone-400 ml-4">
+                                                  <span className="text-stone-500 font-medium">{key === "general" ? "Nhận xét chung" : key === "code" ? "Nhận xét code" : `Câu ${key}`}: </span>
+                                                  <span className="text-stone-700 dark:text-stone-300">{val}</span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : Object.entries(pr.comments).length > 0 ? (
+                                        /* Fallback: old format (flat comments) */
                                         <div className="space-y-1.5 bg-stone-50 dark:bg-stone-700/50 rounded p-2">
+                                          {pr.reviewer_type === "group" && pr.reviewer_user_name && (
+                                            <p className="text-stone-500 mb-1 flex items-center gap-1">
+                                              <User className="w-3 h-3" /> {pr.reviewer_user_name}
+                                            </p>
+                                          )}
                                           {Object.entries(pr.comments).map(([key, val]) => (
                                             <div key={key} className="text-stone-600 dark:text-stone-400">
                                               <span className="text-stone-500 font-medium">{key === "general" ? "Nhận xét chung" : `Câu ${key}`}: </span>
@@ -803,7 +963,7 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                                           ))}
                                         </div>
                                       ) : (
-                                        <p className="text-stone-400 italic">Không có nhận xét</p>
+                                        <p className="text-stone-400 italic">Chưa có nhận xét</p>
                                       )}
                                     </div>
                                   ))}
@@ -835,6 +995,18 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                                           <button onClick={() => setViewingEvaluations({ groupName: gs.group_name, evaluations: gs.member_evaluations!, members: gs.members })}
                                             className="flex items-center gap-1 px-2 py-0.5 border border-amber-200 dark:border-amber-800 rounded hover:bg-amber-50 dark:hover:bg-amber-900/30 text-amber-600 dark:text-amber-400">
                                             <Star className="w-3 h-3" /> Xem đánh giá TV
+                                          </button>
+                                        )}
+                                        {gs.session_id && gs.status !== "not_started" && (
+                                          <button
+                                            onClick={() => handleToggleChat(a.id, gs.session_id!)}
+                                            className={`flex items-center gap-1 px-2 py-0.5 border rounded text-xs ${
+                                              chatDisabledMap[gs.session_id] ? "border-red-200 dark:border-red-800 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30" : "border-stone-200 dark:border-stone-700 text-stone-500 hover:bg-stone-50 dark:hover:bg-stone-700/50"
+                                            }`}
+                                            title={chatDisabledMap[gs.session_id] ? "Bật lại chat cho nhóm" : "Tắt chat nhóm"}
+                                          >
+                                            {chatDisabledMap[gs.session_id] ? <MessageCircleOff className="w-3 h-3" /> : <MessageCircle className="w-3 h-3" />}
+                                            {chatDisabledMap[gs.session_id] ? "Chat tắt" : "Tắt chat"}
                                           </button>
                                         )}
                                       </div>
@@ -1020,6 +1192,13 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
                         {block.questionLine}
                       </ReactMarkdown>
                     </div>
+                    {block.codeBlock && (
+                      <div className="prose prose-sm dark:prose-invert max-w-none mb-2">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {block.codeBlock}
+                        </ReactMarkdown>
+                      </div>
+                    )}
                     {/* Answer with underline style - giống student view */}
                     <div className="mt-1 mb-6 ml-2">
                       <div className="space-y-0">
@@ -1600,6 +1779,335 @@ const StatisticsPanel: React.FC<Props> = ({ classroomId }) => {
           </div>
         </div>
       )}
+
+      {/* Presentation mode modal - white, clean, projector-friendly */}
+      {presenting && (() => {
+        const isQuizMode = presenting.contentType === "quiz";
+        const questions = presenting.content?.questions || [];
+        const sub = isQuizMode ? null : presenting.submissions[presenting.currentIndex];
+        const total = isQuizMode ? questions.length : presenting.submissions.length;
+        const idx = presenting.currentIndex;
+        const fs = presenting.fontSize;
+        const groupOrStudentName = !isQuizMode && sub
+          ? (presenting.workType === "group"
+            ? (sub.group_name || `Nhóm #${sub.group_id || idx + 1}`)
+            : (sub.student_name || `Học sinh #${idx + 1}`))
+          : "";
+
+        const adjustFont = (delta: number) => {
+          setPresenting((p) => p ? { ...p, fontSize: Math.max(12, Math.min(40, p.fontSize + delta)) } : p);
+        };
+
+        const highlightColors = [
+          { color: "#fef08a", label: "Vàng" },
+          { color: "#fca5a5", label: "Đỏ" },
+          { color: "#86efac", label: "Xanh lá" },
+          { color: "#93c5fd", label: "Xanh dương" },
+          { color: "#c4b5fd", label: "Tím" },
+        ];
+
+        // Save current DOM state for undo
+        const saveSnapshot = () => {
+          if (!codeContainerRef.current) return;
+          highlightHistoryRef.current.push(codeContainerRef.current.innerHTML);
+        };
+
+        // Apply highlight to selected text using execCommand (reliable across element boundaries)
+        const applyHighlight = (color: string) => {
+          const sel = window.getSelection();
+          if (!sel || sel.isCollapsed || !sel.rangeCount) return;
+          const range = sel.getRangeAt(0);
+          if (!codeContainerRef.current?.contains(range.commonAncestorContainer)) return;
+          saveSnapshot();
+          // Temporarily make contentEditable to use execCommand
+          codeContainerRef.current.contentEditable = "true";
+          document.execCommand("hiliteColor", false, color);
+          codeContainerRef.current.contentEditable = "false";
+          sel.removeAllRanges();
+        };
+
+        // Erase highlights only in selected text, or all if nothing selected
+        const eraseHighlight = () => {
+          if (!codeContainerRef.current) return;
+          const sel = window.getSelection();
+
+          // Helper: unwrap highlight elements (both <mark> and <span> with background-color)
+          const isHighlight = (el: Element) =>
+            el.tagName === "MARK" || (el.tagName === "SPAN" && (el as HTMLElement).style.backgroundColor);
+          const unwrap = (el: Element) => {
+            const parent = el.parentNode;
+            if (parent) {
+              while (el.firstChild) parent.insertBefore(el.firstChild, el);
+              parent.removeChild(el);
+              parent.normalize();
+            }
+          };
+
+          if (sel && !sel.isCollapsed && sel.rangeCount > 0) {
+            const range = sel.getRangeAt(0);
+            if (!codeContainerRef.current.contains(range.commonAncestorContainer)) return;
+            const all = codeContainerRef.current.querySelectorAll("mark, span");
+            const toRemove: Element[] = [];
+            all.forEach((m) => { if (isHighlight(m) && sel.containsNode(m, true)) toRemove.push(m); });
+            if (toRemove.length === 0) return;
+            saveSnapshot();
+            toRemove.forEach(unwrap);
+            sel.removeAllRanges();
+          } else {
+            const all = codeContainerRef.current.querySelectorAll("mark, span");
+            const highlights = Array.from(all).filter(isHighlight);
+            if (highlights.length === 0) return;
+            saveSnapshot();
+            highlights.forEach(unwrap);
+          }
+        };
+
+        // Undo last highlight action
+        const undoHighlight = () => {
+          if (!codeContainerRef.current || highlightHistoryRef.current.length === 0) return;
+          const prev = highlightHistoryRef.current.pop()!;
+          codeContainerRef.current.innerHTML = prev;
+        };
+
+        return (
+          <div className="fixed inset-0 z-[60] bg-white flex flex-col">
+            {/* Top bar - compact, clean */}
+            <div className="flex items-center justify-between px-6 py-2 bg-gray-50 border-b border-gray-200 flex-shrink-0">
+              <div className="flex items-center gap-4">
+                <h2 className="text-gray-800 font-bold" style={{ fontSize: `${Math.max(14, fs * 0.7)}px` }}>{presenting.assignmentTitle}</h2>
+                <span className="text-gray-400 font-medium" style={{ fontSize: `${Math.max(12, fs * 0.6)}px` }}>
+                  {isQuizMode ? `Câu ${idx + 1} / ${total}` : `Bài ${idx + 1} / ${total}`}
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                {/* Highlight tools - only for non-quiz */}
+                {!isQuizMode && (
+                  <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg px-2 py-1">
+                    <Highlighter className="w-4 h-4 text-gray-400 mr-0.5" />
+                    {highlightColors.map(({ color, label }) => (
+                      <button key={color} onClick={() => applyHighlight(color)}
+                        title={`Tô ${label}`}
+                        className="w-5 h-5 rounded-full border-2 border-gray-300 hover:border-gray-600 hover:scale-125 transition-all"
+                        style={{ backgroundColor: color }} />
+                    ))}
+                    <div className="w-px h-4 bg-gray-200 mx-0.5" />
+                    <button onClick={eraseHighlight} title="Tẩy (bôi đen chỗ cần tẩy)"
+                      className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-red-500">
+                      <Eraser className="w-4 h-4" />
+                    </button>
+                    <button onClick={undoHighlight} title="Hoàn tác (Ctrl+Z)"
+                      className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-blue-500">
+                      <Undo2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+                {/* Font size controls */}
+                <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-1">
+                  <button onClick={() => adjustFont(-2)} className="p-1.5 hover:bg-gray-100 rounded text-gray-500">
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <span className="text-xs text-gray-500 w-8 text-center font-mono">{fs}</span>
+                  <button onClick={() => adjustFont(2)} className="p-1.5 hover:bg-gray-100 rounded text-gray-500">
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+                <button onClick={() => setPresenting(null)}
+                  className="p-2 hover:bg-gray-200 rounded-lg transition-colors">
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+            </div>
+
+            {/* Main content area */}
+            <div className="flex-1 overflow-auto px-8 py-6 flex items-center justify-center">
+              {isQuizMode ? (
+                /* ── Quiz: one question per page ── */
+                (() => {
+                  const q = questions[idx];
+                  if (!q) return <p className="text-gray-400">Không có câu hỏi</p>;
+                  const questionText = q.question || q.text || q.title || `Câu hỏi ${idx + 1}`;
+                  const options = q.options || {};
+                  const correctAnswer = q.correct_answer || "";
+
+                  return (
+                    <div ref={codeContainerRef} className="w-full max-w-4xl">
+                      {/* Question */}
+                      <p className="font-bold text-gray-900 mb-8 text-center" style={{ fontSize: `${fs * 1.3}px`, lineHeight: 1.5 }}>
+                        Câu {idx + 1}. {questionText}
+                      </p>
+                      {/* Options */}
+                      <div className="space-y-4">
+                        {Object.entries(options).map(([key, value]) => {
+                          const isCorrectOption = correctAnswer === key;
+                          return (
+                            <div key={key}
+                              className={`flex items-center gap-4 p-4 rounded-xl border-2 transition-all ${
+                                isCorrectOption
+                                  ? "bg-green-50 border-green-400"
+                                  : "bg-white border-gray-200"
+                              }`}>
+                              <span className={`flex items-center justify-center rounded-full font-bold shrink-0 ${
+                                isCorrectOption ? "bg-green-500 text-white" : "bg-gray-100 text-gray-500"
+                              }`} style={{ width: `${fs * 1.8}px`, height: `${fs * 1.8}px`, fontSize: `${fs * 0.85}px` }}>
+                                {key}
+                              </span>
+                              <span className={`${isCorrectOption ? "text-green-800 font-semibold" : "text-gray-800"}`}
+                                style={{ fontSize: `${fs}px` }}>
+                                {String(value)}
+                              </span>
+                              {isCorrectOption && (
+                                <CheckCircle2 className="ml-auto text-green-500 shrink-0" style={{ width: `${fs * 1.2}px`, height: `${fs * 1.2}px` }} />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()
+              ) : (
+                /* ── Code / Worksheet: show submissions ── */
+                <div className="w-full max-w-6xl">
+                  {/* Group/Student name */}
+                  {sub && (
+                    <div className="text-center mb-6">
+                      <div className="inline-flex flex-col items-center gap-1">
+                        <div className="flex items-center gap-3">
+                          {presenting.workType === "group"
+                            ? <Users className="text-blue-500" style={{ width: `${fs * 1.2}px`, height: `${fs * 1.2}px` }} />
+                            : <User className="text-blue-500" style={{ width: `${fs * 1.2}px`, height: `${fs * 1.2}px` }} />}
+                          <span className="font-bold text-gray-900" style={{ fontSize: `${fs * 1.6}px` }}>{groupOrStudentName}</span>
+                        </div>
+                        {sub.members && sub.members.length > 0 && (
+                          <p className="text-gray-400 font-medium" style={{ fontSize: `${fs * 0.75}px` }}>
+                            {sub.members.map((m: any) => m.full_name).join("  ·  ")}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Content */}
+                  {sub && presenting.contentType === "code_exercise" && sub.answers?.code ? (
+                    <div ref={codeContainerRef}
+                      className="bg-gray-50 border-2 border-gray-200 rounded-2xl p-8 overflow-auto font-mono shadow-sm"
+                      style={{ fontSize: `${fs}px`, lineHeight: 1.7 }}>
+                      {sub.answers.code.split("\n").map((line: string, i: number) => (
+                        <div key={i} className="px-2 -mx-2">
+                          <span className="text-gray-400 select-none mr-6 inline-block text-right" style={{ fontSize: `${fs * 0.75}px`, width: `${fs * 2}px` }}>
+                            {i + 1}
+                          </span>
+                          {line.startsWith("#") || line.trimStart().startsWith("#")
+                            ? <span className="text-green-600 italic">{line}</span>
+                            : <span className="text-gray-900">{line}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  ) : sub ? (
+                    /* ── Worksheet: render like student view ── */
+                    (() => {
+                      const rawContent = typeof presenting.content?.content === "string" ? presenting.content.content : "";
+                      const worksheetBlocks = rawContent ? buildInteractiveBlocks(rawContent) : [];
+                      const wsTitle = rawContent ? parseWorksheetTitle(rawContent) : (presenting.assignmentTitle || "Phiếu học tập");
+                      const safeAnswers = sub.answers || {};
+
+                      if (worksheetBlocks.length > 0) {
+                        return (
+                          <div ref={codeContainerRef} className="max-w-4xl mx-auto w-full">
+                            {/* Blue header */}
+                            <div className="bg-blue-500 px-8 py-5 rounded-t-2xl">
+                              <h3 className="text-white font-bold" style={{ fontSize: `${fs * 1.2}px` }}>{wsTitle}</h3>
+                            </div>
+                            {/* Content */}
+                            <div className="bg-white border-2 border-blue-500 border-t-0 rounded-b-2xl shadow-sm px-8 py-6"
+                              style={{ fontSize: `${fs}px` }}>
+                              {worksheetBlocks.map((block, blockIdx) => {
+                                if (block.type === "markdown") {
+                                  return (
+                                    <div key={`block-${blockIdx}`} className="prose max-w-none mb-4"
+                                      style={{ fontSize: `${fs}px` }}>
+                                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                        {block.text}
+                                      </ReactMarkdown>
+                                    </div>
+                                  );
+                                }
+                                const answerKey = `q_${block.questionNum}`;
+                                const answer = safeAnswers[answerKey] || safeAnswers[block.questionNum] || safeAnswers[`${block.questionNum}`] || "";
+                                const answerLines = String(answer || "").split("\n");
+                                return (
+                                  <div key={`block-${blockIdx}`} className="mb-6">
+                                    <div className="prose max-w-none" style={{ fontSize: `${fs}px` }}>
+                                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                        {block.questionLine}
+                                      </ReactMarkdown>
+                                    </div>
+                                    {block.codeBlock && (
+                                      <div className="prose max-w-none mb-2" style={{ fontSize: `${fs}px` }}>
+                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                          {block.codeBlock}
+                                        </ReactMarkdown>
+                                      </div>
+                                    )}
+                                    <div className="mt-2 ml-2">
+                                      {answerLines.map((line, li) => (
+                                        <div key={`${answerKey}-${li}`} className="border-b border-gray-400 px-1 py-2"
+                                          style={{ fontSize: `${fs}px`, lineHeight: 1.8 }}>
+                                          {line || "\u00A0"}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // Fallback: raw answers
+                      return (
+                        <div ref={codeContainerRef} className="max-w-4xl mx-auto space-y-4">
+                          {Object.entries(safeAnswers).map(([qKey, answer]) => (
+                            <div key={qKey} className="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                              <span className="font-bold text-blue-600 block mb-2" style={{ fontSize: `${fs}px` }}>Câu {qKey.replace(/[^\d]/g, '') || qKey}:</span>
+                              <p className="text-gray-800 whitespace-pre-wrap" style={{ fontSize: `${fs}px`, lineHeight: 1.6 }}>{String(answer)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()
+                  ) : null}
+                </div>
+              )}
+            </div>
+
+            {/* Bottom navigation - clean */}
+            <div className="flex items-center justify-between px-6 py-3 bg-gray-50 border-t border-gray-200 flex-shrink-0">
+              <button
+                onClick={() => setPresenting({ ...presenting, currentIndex: Math.max(0, idx - 1) })}
+                disabled={idx === 0}
+                className="flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-100 disabled:opacity-30 rounded-lg transition-colors text-gray-700 font-medium"
+                style={{ fontSize: `${Math.max(13, fs * 0.7)}px` }}>
+                <ChevronLeft className="w-5 h-5" /> {isQuizMode ? "Câu trước" : "Bài trước"}
+              </button>
+              <div className="flex items-center gap-2">
+                {Array.from({ length: total }, (_, i) => (
+                  <button key={i} onClick={() => setPresenting({ ...presenting, currentIndex: i })}
+                    className={`rounded-full transition-all ${i === idx ? "bg-blue-500 w-3.5 h-3.5" : "bg-gray-300 hover:bg-gray-400 w-2.5 h-2.5"}`} />
+                ))}
+              </div>
+              <button
+                onClick={() => setPresenting({ ...presenting, currentIndex: Math.min(total - 1, idx + 1) })}
+                disabled={idx === total - 1}
+                className="flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-100 disabled:opacity-30 rounded-lg transition-colors text-gray-700 font-medium"
+                style={{ fontSize: `${Math.max(13, fs * 0.7)}px` }}>
+                {isQuizMode ? "Câu sau" : "Bài sau"} <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

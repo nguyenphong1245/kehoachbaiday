@@ -6,8 +6,10 @@ import SubmitButton from "@/components/forms/SubmitButton";
 import TextInput from "@/components/forms/TextInput";
 import AuthCard from "@/components/layout/AuthCard";
 import useAuth from "@/hooks/useAuth";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const StudentLoginPage = () => {
+  usePageTitle("Đăng nhập học sinh");
   const navigator = useNavigate();
   const { studentLogin, isLoading, error, resetError } = useAuth();
   const [username, setUsername] = useState("");

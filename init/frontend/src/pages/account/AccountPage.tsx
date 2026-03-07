@@ -8,8 +8,10 @@ import useAccount from "@/hooks/useAccount";
 import { getStoredAuthUser } from "@/utils/authStorage";
 import { useToast } from "@/contexts/Toast";
 import { changePassword } from "@/services/authService";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const AccountPage = () => {
+  usePageTitle("Tài khoản");
   const navigate = useNavigate();
   const storedUser = useMemo(() => getStoredAuthUser(), []);
   const userId = storedUser?.id ?? null;

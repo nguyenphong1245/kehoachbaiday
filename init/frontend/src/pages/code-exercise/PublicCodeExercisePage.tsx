@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import {
   Play,
@@ -38,6 +38,7 @@ import {
 } from "@/services/codeExerciseService";
 import { getStoredAuthUser } from "@/utils/authStorage";
 import { useToast } from "@/contexts/Toast";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 interface StudentInfo {
   name: string;
@@ -56,6 +57,7 @@ interface RunTestResult {
 }
 
 export const PublicCodeExercisePage: React.FC = () => {
+  usePageTitle("Bài tập code");
   const { shareCode } = useParams<{ shareCode: string }>();
   const toast = useToast();
 
@@ -91,6 +93,8 @@ export const PublicCodeExercisePage: React.FC = () => {
   // UI
   const [activeTab, setActiveTab] = useState<"problem" | "testcases">("problem");
   const [outputTab, setOutputTab] = useState<"run" | "submit">("run");
+  const [outputHeight, setOutputHeight] = useState(200);
+  const isDraggingRef = useRef(false);
 
   // Teacher mode
   const [isTeacher, setIsTeacher] = useState(false);
@@ -314,6 +318,43 @@ export const PublicCodeExercisePage: React.FC = () => {
     setEditTestCases(editTestCases.filter((_, i) => i !== index));
   };
 
+  // Python syntax highlighting
+  const PYTHON_KW = useMemo(() => new Set(["def","class","return","if","elif","else","for","while","import","from","as","in","not","and","or","True","False","None","try","except","finally","with","break","continue","pass","yield","lambda","global","nonlocal","assert","del","raise","is"]), []);
+  const PYTHON_BI = useMemo(() => new Set(["print","input","range","len","int","float","str","list","dict","set","tuple","type","isinstance","enumerate","zip","map","filter","sorted","reversed","abs","max","min","sum","open","super"]), []);
+
+  const highlightLine = useCallback((line: string): React.ReactNode[] => {
+    const tokens: { type: string; value: string }[] = [];
+    let i = 0;
+    while (i < line.length) {
+      if (line[i] === "#") { tokens.push({ type: "comment", value: line.substring(i) }); break; }
+      if (line[i] === '"' || line[i] === "'") {
+        const q = line[i]; let j = i + 1;
+        while (j < line.length && line[j] !== q) { if (line[j] === "\\") j++; j++; }
+        tokens.push({ type: "string", value: line.substring(i, j + 1) }); i = j + 1; continue;
+      }
+      if (/[a-zA-Z_]/.test(line[i])) {
+        let j = i; while (j < line.length && /[a-zA-Z_0-9]/.test(line[j])) j++;
+        const w = line.substring(i, j);
+        tokens.push({ type: PYTHON_KW.has(w) ? "keyword" : PYTHON_BI.has(w) ? "builtin" : "text", value: w }); i = j; continue;
+      }
+      if (/[0-9]/.test(line[i])) {
+        let j = i; while (j < line.length && /[0-9.]/.test(line[j])) j++;
+        tokens.push({ type: "number", value: line.substring(i, j) }); i = j; continue;
+      }
+      tokens.push({ type: "text", value: line[i] }); i++;
+    }
+    const colors: Record<string, string> = { keyword: "#0000ff", builtin: "#0086b3", string: "#a31515", comment: "#008000", number: "#098658" };
+    return tokens.map((t, idx) => {
+      const c = colors[t.type];
+      return c ? <span key={idx} style={{ color: c }}>{t.value}</span> : <span key={idx}>{t.value}</span>;
+    });
+  }, [PYTHON_KW, PYTHON_BI]);
+
+  const highlightedLines = useMemo(() => {
+    if (!code) return null;
+    return code.split("\n").map((line, i) => <div key={i}>{line ? highlightLine(line) : "\n"}</div>);
+  }, [code, highlightLine]);
+
   // Tab key handler for textarea
   const handleCodeKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Tab") {
@@ -415,7 +456,7 @@ export const PublicCodeExercisePage: React.FC = () => {
             </div>
             <button
               type="submit"
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+              className="w-full py-3 bg-brand hover:bg-brand-dark text-white font-medium rounded-lg transition-colors"
             >
               Bắt đầu làm bài
             </button>
@@ -516,12 +557,12 @@ export const PublicCodeExercisePage: React.FC = () => {
       </div>
 
       {/* Main content */}
-      <div className="flex-1 flex overflow-hidden">
-        <div className="flex flex-col lg:flex-row h-full w-full">
-          {/* Left panel - Problem description + test cases */}
-          <div className="h-[40vh] lg:h-full lg:w-[38%] flex flex-col border-b lg:border-b-0 lg:border-r border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800">
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Shared header row */}
+        <div className="flex shrink-0 border-b border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800">
+          <div className="lg:w-[38%] border-r border-stone-200 dark:border-stone-700">
             {isTeacher ? (
-              <div className="flex border-b border-stone-200 dark:border-stone-700 shrink-0">
+              <div className="flex">
                 <button
                   onClick={() => setActiveTab("problem")}
                   className={`px-4 py-2 text-xs font-medium transition-colors ${
@@ -544,10 +585,21 @@ export const PublicCodeExercisePage: React.FC = () => {
                 </button>
               </div>
             ) : (
-              <div className="px-4 py-2 border-b border-stone-200 dark:border-stone-700 shrink-0">
-                <span className="text-xs font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wide">Đề bài</span>
+              <div className="px-3 py-1.5">
+                <span className="text-xs font-medium text-stone-500 dark:text-stone-400 uppercase tracking-wide">Đề bài</span>
               </div>
             )}
+          </div>
+          <div className="flex-1 px-3 py-1.5 flex items-center">
+            <span className="text-xs font-medium text-stone-500 dark:text-stone-400">
+              {exercise.language.toUpperCase()}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
+          {/* Left panel - Problem description + test cases */}
+          <div className="h-[40vh] lg:h-full lg:w-[38%] flex flex-col border-b lg:border-b-0 lg:border-r border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800">
 
             <div className="flex-1 overflow-y-auto p-4">
               {(!isTeacher || activeTab === "problem") ? (
@@ -711,26 +763,50 @@ export const PublicCodeExercisePage: React.FC = () => {
 
           {/* Right panel - Code Editor + Output */}
           <div className="flex-1 flex flex-col min-w-0">
-            {/* Code Editor (textarea) */}
+            {/* Code Editor with syntax highlighting */}
             <div className="flex-1 min-h-0 flex flex-col">
-              <div className="px-3 py-1.5 bg-stone-50 dark:bg-stone-800 border-b border-stone-200 dark:border-stone-700 flex items-center justify-between shrink-0">
-                <span className="text-xs font-medium text-stone-500 dark:text-stone-400">
-                  {exercise.language.toUpperCase()}
-                </span>
+              <div className="flex-1 relative overflow-auto bg-white dark:bg-stone-900">
+                <pre
+                  className="absolute inset-0 px-4 py-3 font-mono text-sm leading-relaxed whitespace-pre-wrap break-words pointer-events-none m-0 overflow-hidden"
+                  style={{ tabSize: 4, color: "#1e1e1e" }}
+                  aria-hidden="true"
+                >
+                  <code>{highlightedLines || <span className="text-stone-400">Viết code của bạn ở đây...</span>}</code>
+                </pre>
+                <textarea
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  onKeyDown={handleCodeKeyDown}
+                  spellCheck={false}
+                  className="absolute inset-0 w-full h-full px-4 py-3 font-mono text-sm leading-relaxed resize-none focus:outline-none border-none bg-transparent"
+                  style={{ tabSize: 4, color: "transparent", caretColor: "#000" }}
+                />
               </div>
-              <textarea
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                onKeyDown={handleCodeKeyDown}
-                spellCheck={false}
-                className="flex-1 w-full px-4 py-3 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 font-mono text-sm leading-relaxed resize-none focus:outline-none border-none"
-                style={{ tabSize: 4 }}
-                placeholder="Viết code của bạn ở đây..."
-              />
             </div>
 
-            {/* Output panel */}
-            <div className="h-[35%] border-t border-stone-200 dark:border-stone-700 flex flex-col shrink-0 bg-white dark:bg-stone-800">
+            {/* Output panel - drag top edge to resize */}
+            <div style={{ height: outputHeight }} className="border-t border-stone-200 dark:border-stone-700 flex flex-col shrink-0 bg-white dark:bg-stone-800 relative">
+              {/* Invisible resize handle at top edge */}
+              <div
+                className="absolute top-0 left-0 right-0 h-1.5 cursor-row-resize z-10 hover:bg-brand/20"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  isDraggingRef.current = true;
+                  const startY = e.clientY;
+                  const startH = outputHeight;
+                  const onMove = (ev: MouseEvent) => {
+                    if (!isDraggingRef.current) return;
+                    setOutputHeight(Math.max(80, Math.min(600, startH + (startY - ev.clientY))));
+                  };
+                  const onUp = () => {
+                    isDraggingRef.current = false;
+                    document.removeEventListener("mousemove", onMove);
+                    document.removeEventListener("mouseup", onUp);
+                  };
+                  document.addEventListener("mousemove", onMove);
+                  document.addEventListener("mouseup", onUp);
+                }}
+              />
               <div className="flex items-center border-b border-stone-200 dark:border-stone-700 shrink-0">
                 <button
                   onClick={() => setOutputTab("run")}

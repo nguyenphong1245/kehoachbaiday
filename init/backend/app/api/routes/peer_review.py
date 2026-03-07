@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 class PeerReviewSubmitRequest(BaseModel):
     comments: dict = Field(default_factory=dict)
-    score: Optional[int] = Field(None, ge=1, le=10)
+    score: Optional[float] = Field(None, ge=1, le=10)
 
 
 class PeerReviewInfo(BaseModel):
@@ -41,7 +41,9 @@ class PeerReviewInfo(BaseModel):
     reviewer_type: str
     reviewer_user_name: Optional[str] = None
     comments: dict
-    score: Optional[int]
+    score: Optional[float] = None
+    member_scores: Optional[dict] = None
+    member_comments: Optional[dict] = None
     submitted_at: Optional[str] = None
 
 
@@ -90,9 +92,9 @@ async def activate_peer_review(
     """Kích hoạt tráo bài - tạo pairings (chỉ cho worksheet)"""
     assignment = await _verify_teacher_assignment(assignment_id, current_user, db)
 
-    # Peer review only for worksheet
-    if assignment.content_type != "worksheet":
-        raise HTTPException(status_code=400, detail="Đánh giá chéo chỉ áp dụng cho phiếu bài tập (worksheet)")
+    # Peer review for worksheet and code_exercise
+    if assignment.content_type not in ("worksheet", "code_exercise"):
+        raise HTTPException(status_code=400, detail="Đánh giá chéo chỉ áp dụng cho phiếu bài tập hoặc bài code")
 
     # Check if round already exists
     existing = await db.execute(
@@ -287,7 +289,7 @@ async def get_all_reviews(
     reviews_result = await db.execute(
         select(PeerReview)
         .where(PeerReview.round_id == review_round.id)
-        .options(selectinload(PeerReview.reviewer_user))
+        .options(selectinload(PeerReview.reviewer_user).selectinload(User.profile))
     )
     reviews = reviews_result.scalars().all()
 
@@ -318,11 +320,13 @@ async def get_all_reviews(
                 "reviewer_id": r.reviewer_id,
                 "reviewee_id": r.reviewee_id,
                 "reviewer_type": r.reviewer_type,
-                "reviewer_user_name": r.reviewer_user.full_name if r.reviewer_user else None,
+                "reviewer_user_name": (r.reviewer_user.profile.first_name if r.reviewer_user and r.reviewer_user.profile else (r.reviewer_user.email.split("@")[0] if r.reviewer_user else None)),
                 "reviewer_group_name": session_to_group_name.get(r.reviewer_id) if r.reviewer_type == "group" else None,
                 "reviewee_group_name": session_to_group_name.get(r.reviewee_id) if r.reviewer_type == "group" else None,
                 "comments": r.comments or {},
                 "score": r.score,
+                "member_scores": r.member_scores or {},
+                "member_comments": r.member_comments or {},
                 "submitted_at": r.submitted_at.isoformat() if r.submitted_at else None,
             }
             for r in reviews
@@ -435,7 +439,25 @@ async def get_my_review_task(
                 logger.warning(f"Peer review - no work session found for assignment {assignment_id} group {my_group.id}")
 
     if not review_round:
-        return {"review": None, "reviewee_answers": None, "questions": None, "group_info": group_info, "message": "Chưa có vòng đánh giá"}
+        # Still fetch worksheet content for display
+        ws_content = None
+        if assignment.content_type == "worksheet":
+            ws_r = await db.execute(select(SharedWorksheet).where(SharedWorksheet.id == assignment.content_id))
+            ws_obj = ws_r.scalar_one_or_none()
+            if ws_obj:
+                ws_content = ws_obj.content
+        return {
+            "review": None,
+            "reviewee_answers": None,
+            "questions": None,
+            "worksheet_content": ws_content,
+            "group_info": group_info,
+            "content_type": assignment.content_type,
+            "auto_peer_review": assignment.auto_peer_review,
+            "peer_review_status": assignment.peer_review_status,
+            "peer_review_duration": getattr(assignment, 'peer_review_duration', None),
+            "message": "Chưa có vòng đánh giá",
+        }
 
     # Find the review assigned to this student
     # For group: find the group work session, then the review where reviewer_id = session.id
@@ -469,12 +491,16 @@ async def get_my_review_task(
 
             if my_review:
                 # Get the reviewee's answers
+                logger.info(f"Peer review: reviewer_id={my_review.reviewer_id}, reviewee_id={my_review.reviewee_id}")
                 reviewee_ws = await db.execute(
                     select(GroupWorkSession).where(GroupWorkSession.id == my_review.reviewee_id)
                 )
                 reviewee_session = reviewee_ws.scalar_one_or_none()
                 if reviewee_session:
                     reviewee_answers = reviewee_session.answers or {}
+                    logger.info(f"Peer review: reviewee session {reviewee_session.id}, answers keys={list(reviewee_answers.keys())}, answer count={len(reviewee_answers)}")
+                else:
+                    logger.warning(f"Peer review: reviewee session not found for id={my_review.reviewee_id}")
 
                     # Set the reviewer_user_id if not set
                     if not my_review.reviewer_user_id:
@@ -512,7 +538,13 @@ async def get_my_review_task(
                     await db.commit()
 
     if not my_review:
-        return {"review": None, "reviewee_answers": None, "questions": None, "group_info": group_info, "message": "Không tìm thấy bài cần chấm"}
+        ws_content2 = None
+        if assignment.content_type == "worksheet":
+            ws_r2 = await db.execute(select(SharedWorksheet).where(SharedWorksheet.id == assignment.content_id))
+            ws_obj2 = ws_r2.scalar_one_or_none()
+            if ws_obj2:
+                ws_content2 = ws_obj2.content
+        return {"review": None, "reviewee_answers": None, "questions": None, "worksheet_content": ws_content2, "group_info": group_info, "content_type": assignment.content_type, "message": "Không tìm thấy bài cần chấm"}
 
     # Get the worksheet questions and content if content_type is worksheet
     questions = None
@@ -534,11 +566,16 @@ async def get_my_review_task(
             "reviewer_type": my_review.reviewer_type,
             "comments": my_review.comments or {},
             "score": my_review.score,
+            "member_scores": my_review.member_scores or {},
+            "member_comments": my_review.member_comments or {},
             "submitted_at": my_review.submitted_at.isoformat() if my_review.submitted_at else None,
         },
         "reviewee_answers": reviewee_answers,
         "questions": questions,
         "worksheet_content": worksheet_content,
+        "content_type": assignment.content_type,
+        "peer_review_duration": getattr(assignment, 'peer_review_duration', None),
+        "review_activated_at": review_round.activated_at.isoformat() if review_round.activated_at else None,
         "group_info": group_info,
     }
 
@@ -552,7 +589,7 @@ async def submit_peer_review(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Nộp nhận xét + điểm (chỉ nhóm trưởng được nộp cho bài nhóm)"""
+    """Nộp nhận xét + điểm - tất cả thành viên đều được nộp"""
     result = await db.execute(
         select(PeerReview)
         .where(PeerReview.id == review_id)
@@ -561,9 +598,6 @@ async def submit_peer_review(
     review = result.scalar_one_or_none()
     if not review:
         raise HTTPException(status_code=404, detail="Không tìm thấy bài chấm")
-
-    if review.submitted_at:
-        raise HTTPException(status_code=400, detail="Bài chấm đã được nộp")
 
     # Get the assignment to check work_type
     assignment_result = await db.execute(
@@ -584,18 +618,18 @@ async def submit_peer_review(
     if not student:
         raise HTTPException(status_code=403, detail="Không thuộc lớp này")
 
-    # For group assignments, only leader can submit
+    user_key = str(current_user.id)
+
+    # For group assignments, verify membership and store per-member data
     if assignment.work_type == "group" and review.reviewer_type == "group":
-        # Find the student's group membership
         group_member_result = await db.execute(
             select(GroupMember).where(GroupMember.student_id == student.id)
         )
         membership = group_member_result.scalar_one_or_none()
-
         if not membership:
             raise HTTPException(status_code=403, detail="Bạn không thuộc nhóm nào")
 
-        # Get the work session to check leader_id (leader is stored in work session, not group member)
+        # Verify group matches the reviewer session
         ws_result = await db.execute(
             select(GroupWorkSession).where(
                 GroupWorkSession.assignment_id == assignment.id,
@@ -606,23 +640,96 @@ async def submit_peer_review(
         if not work_session:
             raise HTTPException(status_code=403, detail="Không tìm thấy phiên làm việc")
 
-        is_leader = work_session.leader_id == student.id
-        if not is_leader:
-            raise HTTPException(status_code=403, detail="Chỉ nhóm trưởng mới được nộp đánh giá")
+        if work_session.id != review.reviewer_id:
+            raise HTTPException(status_code=403, detail="Bạn không thuộc nhóm đánh giá này")
 
-    # Verify this user is the reviewer (for individual)
-    if review.reviewer_user_id and review.reviewer_user_id != current_user.id:
-        # For group reviews, multiple users can access the same review
-        if review.reviewer_type != "group":
+        # Check if this member already submitted
+        existing_member_scores = dict(review.member_scores) if review.member_scores else {}
+        if user_key in existing_member_scores:
+            raise HTTPException(status_code=400, detail="Bạn đã nộp đánh giá rồi")
+
+        # Store per-member comments and score
+        member_comments = dict(review.member_comments) if review.member_comments else {}
+        member_comments[user_key] = {
+            "comments": data.comments,
+            "reviewer_name": current_user.profile.first_name if current_user.profile else current_user.email.split("@")[0],
+        }
+        review.member_comments = member_comments
+
+        member_scores = existing_member_scores
+        if data.score is not None:
+            member_scores[user_key] = data.score
+        review.member_scores = member_scores
+
+        # Calculate average score from all member scores
+        if member_scores:
+            avg_score = round(sum(member_scores.values()) / len(member_scores), 1)
+            review.score = avg_score
+
+        # Also keep the latest comments in the top-level field for backward compat
+        # Merge all member comments into one dict for display
+        merged_comments = {}
+        for uid, mc in member_comments.items():
+            member_name = mc.get("reviewer_name", f"User {uid}")
+            for key, val in mc.get("comments", {}).items():
+                merged_comments[f"{member_name} - {key}"] = val
+        review.comments = merged_comments
+
+        # Set submitted_at on first submission
+        if not review.submitted_at:
+            review.submitted_at = datetime.now(timezone.utc)
+            review.reviewer_user_id = current_user.id
+
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(review, "member_scores")
+        flag_modified(review, "member_comments")
+        flag_modified(review, "comments")
+
+    else:
+        # Individual review - simple submit
+        if review.submitted_at:
+            raise HTTPException(status_code=400, detail="Bài chấm đã được nộp")
+
+        if review.reviewer_user_id and review.reviewer_user_id != current_user.id:
             raise HTTPException(status_code=403, detail="Không phải người chấm bài này")
 
-    review.comments = data.comments
-    review.score = data.score
-    review.submitted_at = datetime.now(timezone.utc)
-    review.reviewer_user_id = current_user.id
+        review.comments = data.comments
+        review.score = data.score
+        review.submitted_at = datetime.now(timezone.utc)
+        review.reviewer_user_id = current_user.id
 
     await db.commit()
-    return {"message": "Đã nộp nhận xét"}
+
+    # Auto-complete: check if all reviews in this round are submitted
+    round_reviews_result = await db.execute(
+        select(PeerReview).where(PeerReview.round_id == review.round_id)
+    )
+    all_reviews = round_reviews_result.scalars().all()
+    all_submitted = all(r.submitted_at is not None for r in all_reviews)
+    if all_submitted and len(all_reviews) > 0:
+        round_result = await db.execute(
+            select(PeerReviewRound).where(PeerReviewRound.id == review.round_id)
+        )
+        pr_round = round_result.scalar_one_or_none()
+        if pr_round and pr_round.status == "active":
+            pr_round.status = "completed"
+            pr_round.completed_at = datetime.now(timezone.utc)
+            # Also update assignment status
+            assignment_result = await db.execute(
+                select(ClassAssignment).where(ClassAssignment.id == pr_round.assignment_id)
+            )
+            assignment = assignment_result.scalar_one_or_none()
+            if assignment:
+                assignment.peer_review_status = "completed"
+            await db.commit()
+
+    # Return member submission status
+    member_scores = review.member_scores or {}
+    return {
+        "message": "Đã nộp nhận xét",
+        "member_submitted": list(member_scores.keys()),
+        "avg_score": review.score,
+    }
 
 
 @router.get("/my-feedback/{assignment_id}")
@@ -697,11 +804,36 @@ async def get_my_feedback(
     reviews = reviews_result.scalars().all()
 
     # Return anonymous feedback (don't reveal reviewer identity)
+    # For group reviews, extract per-question comments from member_comments
+    def _extract_question_comments(review_obj) -> dict:
+        """Merge member comments into clean per-question format."""
+        mc = review_obj.member_comments or {}
+        if not mc:
+            # Individual review - comments are already per-question
+            return review_obj.comments or {}
+        # Group review - merge member comments per question
+        merged = {}
+        for _uid, member_data in mc.items():
+            for key, val in (member_data.get("comments") or {}).items():
+                if key == "general":
+                    # Append general comments
+                    if "general" not in merged:
+                        merged["general"] = val
+                    else:
+                        merged["general"] += f"; {val}"
+                else:
+                    # Question-specific: just use latest or merge
+                    if key not in merged:
+                        merged[key] = val
+                    else:
+                        merged[key] += f"; {val}"
+        return merged
+
     return {
         "feedback": [
             {
                 "id": r.id,
-                "comments": r.comments or {},
+                "comments": _extract_question_comments(r),
                 "score": r.score,
                 "reviewer_name": f"Nhóm đánh giá #{idx + 1}",  # Anonymous
                 "submitted_at": r.submitted_at.isoformat() if r.submitted_at else None,
@@ -743,8 +875,8 @@ async def auto_activate_peer_review(
     if assignment.peer_review_status in ("active", "completed"):
         return {"message": "Peer review already activated or completed", "status": assignment.peer_review_status}
 
-    if assignment.content_type != "worksheet":
-        raise HTTPException(status_code=400, detail="Peer review only for worksheets")
+    if assignment.content_type not in ("worksheet", "code_exercise"):
+        raise HTTPException(status_code=400, detail="Peer review only for worksheets and code exercises")
 
     # Check if round already exists
     existing = await db.execute(

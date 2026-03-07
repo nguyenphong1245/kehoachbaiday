@@ -22,6 +22,8 @@ export interface PeerReviewItem {
   reviewer_user_name?: string | null;
   comments: Record<string, string>;
   score?: number | null;
+  member_scores?: Record<string, number>;
+  member_comments?: Record<string, { comments: Record<string, string>; reviewer_name: string }>;
   submitted_at?: string | null;
 }
 
@@ -53,7 +55,11 @@ export interface MyReviewResponse {
   reviewee_answers: Record<string, any> | null;
   questions?: WorksheetQuestion[] | null;
   worksheet_content?: string | null;
+  content_type?: string | null;
   group_info?: GroupInfo | null;
+  auto_peer_review?: boolean;
+  peer_review_status?: string | null;
+  peer_review_duration?: number | null;
   message?: string;
 }
 
@@ -96,7 +102,7 @@ export async function submitPeerReview(
   reviewId: number,
   comments: Record<string, string>,
   score?: number
-): Promise<{ message: string }> {
+): Promise<{ message: string; member_submitted?: string[]; avg_score?: number }> {
   const res = await api.post(`/peer-review/${reviewId}/submit`, { comments, score });
   return res.data;
 }

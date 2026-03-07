@@ -27,8 +27,10 @@ import {
   type SharedWorksheet,
   type WorksheetResponseItem,
 } from "@/services/worksheetService";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const WorksheetManagementPage: React.FC = () => {
+  usePageTitle("Quản lý phiếu học tập");
   const [worksheets, setWorksheets] = useState<SharedWorksheet[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

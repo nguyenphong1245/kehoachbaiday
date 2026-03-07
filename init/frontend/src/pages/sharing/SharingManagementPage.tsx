@@ -3,6 +3,8 @@
  * Chỉ giữ: chỉnh sửa, giao cho lớp, xóa
  */
 import React, { useState, useEffect, useMemo } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   FileText,
   FileQuestion,
@@ -19,6 +21,7 @@ import {
   ArrowUpDown,
   Code2,
   Send,
+  CheckCircle,
 } from "lucide-react";
 import {
   getMySharedWorksheets,
@@ -42,6 +45,7 @@ import {
 } from "@/services/codeExerciseService";
 import { getClassrooms, addMaterialToClass } from "@/services/classroomService";
 import type { Classroom } from "@/types/classroom";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 type TabType = "worksheets" | "quizzes" | "code_exercises";
 type SortMode = "newest" | "lesson_asc" | "lesson_desc";
@@ -67,6 +71,7 @@ const getLessonGroupKey = (info?: LessonInfoType | null): string => {
 };
 
 const SharingManagementPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
+  usePageTitle("Chia sẻ tài liệu");
   const [activeTab, setActiveTab] = useState<TabType>("worksheets");
   const [sortMode, setSortMode] = useState<SortMode>("newest");
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -99,6 +104,13 @@ const SharingManagementPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [assignPopover, setAssignPopover] = useState<{ type: string; id: number; title: string; lesson_info?: LessonInfoType | null } | null>(null);
   const [assigning, setAssigning] = useState(false);
+
+  // Toast notification
+  const [toast, setToast] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const showToast = (type: "success" | "error", text: string) => {
+    setToast({ type, text });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   // Load data
   const loadWorksheets = async () => {
@@ -185,7 +197,7 @@ const SharingManagementPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
       await deleteSharedWorksheet(wsId);
       setWorksheets(prev => prev.filter(w => w.id !== wsId));
     } catch (err: any) {
-      alert(err.response?.data?.detail || "Lỗi khi xóa");
+      showToast("error", err.response?.data?.detail || "Lỗi khi xóa");
     } finally {
       setDeletingId(null);
     }
@@ -198,7 +210,7 @@ const SharingManagementPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
       await deleteQuiz(qzId);
       setQuizzes(prev => prev.filter(q => q.id !== qzId));
     } catch (err: any) {
-      alert(err.response?.data?.detail || "Lỗi khi xóa");
+      showToast("error", err.response?.data?.detail || "Lỗi khi xóa");
     } finally {
       setDeletingId(null);
     }
@@ -211,7 +223,7 @@ const SharingManagementPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
       await deleteCodeExercise(ceId);
       setCodeExercises(prev => prev.filter(c => c.id !== ceId));
     } catch (err: any) {
-      alert(err.response?.data?.detail || "Lỗi khi xóa");
+      showToast("error", err.response?.data?.detail || "Lỗi khi xóa");
     } finally {
       setDeletingId(null);
     }
@@ -224,7 +236,7 @@ const SharingManagementPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
       const detail = await getWorksheetDetail(wsId);
       setEditWsModal({ id: detail.id, title: detail.title, content: detail.content });
     } catch (err: any) {
-      alert(err.response?.data?.detail || "Lỗi khi tải chi tiết phiếu học tập");
+      showToast("error", err.response?.data?.detail || "Lỗi khi tải chi tiết phiếu học tập");
     } finally {
       setEditLoading(false);
     }
@@ -241,7 +253,7 @@ const SharingManagementPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
       setEditWsModal(null);
       loadWorksheets();
     } catch (err: any) {
-      alert(err.response?.data?.detail || "Lỗi khi lưu");
+      showToast("error", err.response?.data?.detail || "Lỗi khi lưu");
     } finally {
       setEditSaving(false);
     }
@@ -253,7 +265,7 @@ const SharingManagementPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
       const detail = await getQuizDetail(qzId);
       setEditQzModal({ id: detail.id, title: detail.title, questions: detail.questions });
     } catch (err: any) {
-      alert(err.response?.data?.detail || "Lỗi khi tải chi tiết trắc nghiệm");
+      showToast("error", err.response?.data?.detail || "Lỗi khi tải chi tiết trắc nghiệm");
     } finally {
       setEditLoading(false);
     }
@@ -270,7 +282,7 @@ const SharingManagementPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
       setEditQzModal(null);
       loadQuizzes();
     } catch (err: any) {
-      alert(err.response?.data?.detail || "Lỗi khi lưu");
+      showToast("error", err.response?.data?.detail || "Lỗi khi lưu");
     } finally {
       setEditSaving(false);
     }
@@ -287,14 +299,14 @@ const SharingManagementPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
         title: assignPopover.title,
         lesson_info: assignPopover.lesson_info || undefined,
       });
-      alert("Đã chuyển học liệu vào lớp!");
+      showToast("success", "Đã chuyển học liệu vào lớp!");
       setAssignPopover(null);
     } catch (err: any) {
       const detail = err.response?.data?.detail;
       if (detail === "Học liệu đã có trong danh sách lớp này") {
-        alert("Học liệu này đã có trong danh sách lớp rồi.");
+        showToast("error", "Học liệu này đã có trong danh sách lớp rồi.");
       } else {
-        alert(detail || "Lỗi khi chuyển học liệu");
+        showToast("error", detail || "Lỗi khi chuyển học liệu");
       }
     } finally {
       setAssigning(false);
@@ -487,6 +499,22 @@ const SharingManagementPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
 
   return (
     <div className={embedded ? "flex flex-col" : "h-screen flex flex-col bg-slate-50 dark:bg-slate-900"}>
+      {/* Toast notification */}
+      {toast && (
+        <div className="fixed top-4 right-4 z-[100] animate-in slide-in-from-top fade-in duration-200">
+          <div className={`flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-lg border text-sm font-medium ${
+            toast.type === "success"
+              ? "bg-emerald-50 dark:bg-emerald-900/80 text-emerald-700 dark:text-emerald-200 border-emerald-200 dark:border-emerald-700"
+              : "bg-red-50 dark:bg-red-900/80 text-red-700 dark:text-red-200 border-red-200 dark:border-red-700"
+          }`}>
+            {toast.type === "success" ? <CheckCircle className="w-4 h-4 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
+            <span>{toast.text}</span>
+            <button onClick={() => setToast(null)} className="ml-1 p-0.5 rounded hover:bg-black/10 dark:hover:bg-white/10">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
       {/* Header - hidden in embedded mode */}
       {!embedded && (
         <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shadow-sm">
@@ -810,7 +838,7 @@ const SharingManagementPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
                 <button
                   onClick={handleSaveWs}
                   disabled={editSaving}
-                  className="px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
+                  className="px-4 py-1.5 text-sm bg-brand hover:bg-brand-dark text-white rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
                 >
                   {editSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   Lưu
@@ -836,51 +864,125 @@ const SharingManagementPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
             </div>
 
             {/* Modal body - side by side editor + preview */}
-            <div className="flex-1 overflow-hidden flex flex-col sm:flex-row">
+            <div className="flex-1 min-h-0 flex flex-col sm:flex-row">
               {/* Editor */}
-              <div className="w-full sm:w-1/2 flex flex-col border-b sm:border-b-0 sm:border-r border-slate-200 dark:border-slate-700">
-                <div className="px-4 py-2 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700">
-                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Soạn thảo</span>
-                </div>
+              <div className="w-full sm:w-1/2 flex flex-col min-h-0 border-b sm:border-b-0 sm:border-r border-slate-200 dark:border-slate-700">
                 <textarea
                   value={editWsModal.content}
                   onChange={(e) => setEditWsModal({ ...editWsModal, content: e.target.value })}
-                  className="flex-1 w-full px-4 py-3 border-0 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-0 focus:outline-none font-mono text-sm resize-none leading-relaxed"
-                  placeholder="Nhập nội dung phiếu học tập..."
+                  className="flex-1 w-full px-5 py-4 border-0 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-0 focus:outline-none text-sm resize-none overflow-auto"
+                  style={{ lineHeight: "1.8", fontFamily: "inherit" }}
+                  placeholder="Nhập nội dung phiếu học tập bằng Markdown..."
                 />
+                <div className="px-5 py-1.5 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+                  <span className="text-[10px] text-slate-400">{(editWsModal.content || "").length} ký tự</span>
+                </div>
               </div>
 
               {/* Preview */}
-              <div className="w-full sm:w-1/2 flex flex-col">
-                <div className="px-4 py-2 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700">
-                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Xem trước</span>
-                </div>
-                <div className="flex-1 overflow-auto px-5 py-4">
-                  <div className="prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-slate-300">
-                    {editWsModal.content.split("\n").map((line, i) => {
-                      const trimmed = line.trim();
-                      if (!trimmed) return <div key={i} className="h-3" />;
-                      if (trimmed.startsWith("**") && trimmed.endsWith("**")) {
-                        const text = trimmed.slice(2, -2);
-                        return <p key={i} className="font-bold text-slate-900 dark:text-white text-base mb-1">{text}</p>;
+              <div className="w-full sm:w-1/2 flex flex-col min-h-0">
+                <div className="flex-1 overflow-auto bg-gray-50 dark:bg-slate-900 p-4">
+                  {(() => {
+                    const rawContent = editWsModal.content || "";
+                    const titleMatch = rawContent.match(/\*\*PHIẾU HỌC TẬP SỐ (\d+)\*\*/i);
+                    const wsTitle = titleMatch ? `Phiếu học tập số ${titleMatch[1]}` : (editWsModal.title || "Phiếu học tập");
+
+                    // Parse worksheet blocks (simplified version)
+                    const questionPattern = /^\s*\*{0,2}\s*(?:Câu|Bài|Question)\s+(\d+)\s*[.:]/i;
+                    const dotPattern = /^\s*\.{3,}\s*$/;
+                    const sectionPattern = /^\s*#{1,4}\s*\*{0,2}\s*(?:I{1,3}V?|V?I{0,3})\.\s*PHỤ LỤC/i;
+                    const wsTitlePattern = /^\s*\*{0,2}\s*PHIẾU HỌC TẬP\s*(?:SỐ\s*\d+)?\s*\*{0,2}\s*$/i;
+                    const studentInfoPattern = /^\s*\*{0,2}\s*(?:Họ và tên|Họ tên|Nhóm|NHÓM|Lớp|LỚP)\s*\*{0,2}\s*:/i;
+
+                    const blocks: { type: "md" | "question"; text: string; qLine: string; qNum: string; codeBlock?: string }[] = [];
+                    const lines = rawContent.split("\n");
+                    let mdBuf: string[] = [];
+                    let inCode = false;
+
+                    const flush = () => {
+                      const t = mdBuf.join("\n").trim();
+                      if (t) blocks.push({ type: "md", text: t, qLine: "", qNum: "" });
+                      mdBuf = [];
+                    };
+
+                    for (let li = 0; li < lines.length; li++) {
+                      const line = lines[li];
+                      if (line.trim().startsWith("```")) { inCode = !inCode; mdBuf.push(line); continue; }
+                      if (inCode) { mdBuf.push(line); continue; }
+                      if (dotPattern.test(line)) continue;
+                      const stripped = line.replace(/\*/g, "").trim();
+                      if (sectionPattern.test(line) || sectionPattern.test(stripped)) continue;
+                      if (wsTitlePattern.test(line) || wsTitlePattern.test(stripped)) continue;
+                      if (studentInfoPattern.test(line)) {
+                        const clean = line.replace(/\.{2,}/g, "").replace(/\*{1,2}/g, "").trim();
+                        if (/^(?:Họ và tên|Họ tên|Nhóm|Lớp)\s*:\s*$/i.test(clean)) continue;
                       }
-                      if (trimmed.startsWith("**")) {
-                        const parts = trimmed.split("**");
-                        return (
-                          <p key={i} className="mb-1">
-                            {parts.map((part, j) => j % 2 === 1 ? <strong key={j} className="text-slate-900 dark:text-white">{part}</strong> : <span key={j}>{part}</span>)}
-                          </p>
-                        );
+                      const cleaned = line.replace(/\.{3,}/g, "");
+                      const qMatch = cleaned.match(questionPattern);
+                      if (qMatch) {
+                        flush();
+                        let questionCode: string | undefined;
+                        let j = li + 1;
+                        while (j < lines.length && lines[j].trim() === "") j++;
+                        if (j < lines.length && lines[j].trim().startsWith("```")) {
+                          const codeLines: string[] = [lines[j]];
+                          j++;
+                          while (j < lines.length && !lines[j].trim().startsWith("```")) {
+                            codeLines.push(lines[j]);
+                            j++;
+                          }
+                          if (j < lines.length) { codeLines.push(lines[j]); j++; }
+                          questionCode = codeLines.join("\n");
+                          li = j - 1;
+                        }
+                        blocks.push({ type: "question", text: "", qLine: cleaned, qNum: qMatch[1], codeBlock: questionCode });
+                        continue;
                       }
-                      if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-                        return <p key={i} className="ml-4 mb-0.5 before:content-['•'] before:mr-2 before:text-slate-400">{trimmed.slice(2)}</p>;
-                      }
-                      if (/^[.\s…]+$/.test(trimmed)) {
-                        return <div key={i} className="border-b border-dotted border-slate-300 dark:border-slate-600 my-2 h-5" />;
-                      }
-                      return <p key={i} className="mb-1">{trimmed}</p>;
-                    })}
-                  </div>
+                      mdBuf.push(cleaned);
+                    }
+                    flush();
+
+                    return (
+                      <div className="max-w-2xl mx-auto">
+                        {/* Blue header */}
+                        <div className="bg-blue-500 px-6 py-4 rounded-t-lg">
+                          <h3 className="text-white font-bold text-lg">{wsTitle}</h3>
+                        </div>
+                        {/* Content */}
+                        <div className="bg-white dark:bg-slate-800 border-2 border-blue-500 border-t-0 rounded-b-lg px-6 py-5">
+                          {blocks.length === 0 && !rawContent.trim() && (
+                            <p className="text-slate-400 text-sm italic text-center py-8">Nhập nội dung bên trái để xem trước...</p>
+                          )}
+                          {blocks.map((block, i) => {
+                            if (block.type === "md") {
+                              return (
+                                <div key={i} className="prose prose-sm dark:prose-invert max-w-none mb-3">
+                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.text}</ReactMarkdown>
+                                </div>
+                              );
+                            }
+                            return (
+                              <div key={i} className="mb-5">
+                                <div className="prose prose-sm dark:prose-invert max-w-none">
+                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.qLine}</ReactMarkdown>
+                                </div>
+                                {block.codeBlock && (
+                                  <div className="prose prose-sm dark:prose-invert max-w-none my-2">
+                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.codeBlock}</ReactMarkdown>
+                                  </div>
+                                )}
+                                <div className="mt-1 ml-2">
+                                  {[0, 1, 2].map((li) => (
+                                    <div key={li} className="border-b border-slate-400 h-8" />
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
@@ -898,7 +1000,7 @@ const SharingManagementPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
                 <button
                   onClick={handleSaveWs}
                   disabled={editSaving}
-                  className="px-5 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
+                  className="px-5 py-2 text-sm bg-brand hover:bg-brand-dark text-white rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
                 >
                   {editSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   Lưu thay đổi
@@ -1017,7 +1119,7 @@ const SharingManagementPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
               <button
                 onClick={handleSaveQz}
                 disabled={editSaving}
-                className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
+                className="px-4 py-2 text-sm bg-brand hover:bg-brand-dark text-white rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
               >
                 {editSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 Lưu thay đổi

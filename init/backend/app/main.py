@@ -52,6 +52,23 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error("Failed to initialize scheduler: %s", e)
 
+    # Pre-install Piston languages in background (non-blocking)
+    try:
+        from app.services.piston_service import _ensure_language_installed, LANGUAGE_MAP
+        import asyncio
+
+        async def _warmup_piston():
+            for lang_key in LANGUAGE_MAP:
+                try:
+                    await _ensure_language_installed(_settings.piston_api_url, lang_key)
+                except Exception as e:
+                    logger.warning(f"Piston warmup skipped for {lang_key}: {e}")
+
+        asyncio.create_task(_warmup_piston())
+        logger.info("Piston language warmup started (background)")
+    except Exception as e:
+        logger.warning(f"Piston warmup failed to start: {e}")
+
     logger.info(" Application started")
 
     yield

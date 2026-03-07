@@ -383,6 +383,16 @@ export const exportToPDF = async (
           background: #fff;
           margin: 0;
           padding: 20px;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+          color-adjust: exact;
+        }
+
+        /* Preserve inline colors from editor (foreColor, hiliteColor) */
+        [style*="color"], [style*="background"], font[color] {
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+          color-adjust: exact;
         }
 
         /* Header table - theo mẫu template */
@@ -680,6 +690,9 @@ export const exportToPDF = async (
           height: auto;
           display: block;
           margin: 10px auto;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+          color-adjust: exact;
         }
 
         /* Mark - highlight text */
@@ -734,24 +747,30 @@ export const exportToPDF = async (
             page-break-before: always;
           }
 
+          /* Force browsers to print all colors and backgrounds */
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+          }
+
           .code-block, pre {
             background-color: #f5f5f5 !important;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
           }
 
-          /* Preserve syntax highlighting colors in print */
-          .hljs-keyword, .hljs-built_in, .hljs-string, .hljs-number,
-          .hljs-comment, .hljs-function, .hljs-params, .hljs-title,
-          pre code span[style] {
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
+          /* Preserve user-applied text colors, highlights, font colors */
+          span[style*="color"], span[style*="background"],
+          font[color], font[style], [style*="color"], [style*="background"] {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
           }
 
-          /* Preserve user-applied text colors and highlights in print */
-          span[style*="color"], span[style*="background"] {
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
+          /* Ensure images print with full color */
+          img {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
           }
 
           /* Tránh ngắt trang giữa các phần */
@@ -850,17 +869,34 @@ export const exportToPDF = async (
     frameDoc.write(printHtml);
     frameDoc.close();
 
-    // Đợi iframe load xong rồi in (đợi lâu hơn để highlight.js kịp load từ CDN)
+    // Đợi iframe load xong, tất cả ảnh load xong, rồi in
     printFrame.onload = () => {
-      setTimeout(() => {
-        printFrame.contentWindow?.focus();
-        printFrame.contentWindow?.print();
+      const frameWin = printFrame.contentWindow;
+      const frameDocument = frameWin?.document;
+      if (!frameWin || !frameDocument) return;
 
-        // Xóa iframe sau khi in xong
+      // Đợi tất cả ảnh load xong trước khi in
+      const images = frameDocument.querySelectorAll('img');
+      const imagePromises = Array.from(images).map(img => {
+        if (img.complete) return Promise.resolve();
+        return new Promise<void>((resolve) => {
+          img.onload = () => resolve();
+          img.onerror = () => resolve(); // Vẫn in ngay cả khi ảnh lỗi
+        });
+      });
+
+      Promise.all(imagePromises).then(() => {
+        // Thêm delay cho highlight.js kịp load từ CDN
         setTimeout(() => {
-          document.body.removeChild(printFrame);
-        }, 1000);
-      }, 800);
+          frameWin.focus();
+          frameWin.print();
+
+          // Xóa iframe sau khi in xong
+          setTimeout(() => {
+            document.body.removeChild(printFrame);
+          }, 1000);
+        }, 800);
+      });
     };
   }
 

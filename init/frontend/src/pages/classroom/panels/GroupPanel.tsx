@@ -1,11 +1,15 @@
 import React, { useState } from "react";
+import { useConfirm } from "@/components/common/ConfirmDialog";
 import {
   Shuffle,
   Plus,
   Trash2,
   Loader2,
+  Pencil,
+  X,
+  Check,
 } from "lucide-react";
-import { createGroup, autoDivideGroups, deleteGroup } from "@/services/classroomService";
+import { createGroup, autoDivideGroups, deleteGroup, updateGroup } from "@/services/classroomService";
 import type { ClassroomDetail } from "@/types/classroom";
 
 interface GroupPanelProps {
@@ -23,6 +27,7 @@ const GroupPanel: React.FC<GroupPanelProps> = ({
   onError,
   onSuccess,
 }) => {
+  const { confirm, ConfirmDialog, dialogProps } = useConfirm();
   const [showAutoDiv, setShowAutoDiv] = useState(false);
   const [numGroups, setNumGroups] = useState(4);
   const [divMethod, setDivMethod] = useState("sequential");
@@ -32,6 +37,10 @@ const GroupPanel: React.FC<GroupPanelProps> = ({
   const [newGroupName, setNewGroupName] = useState("");
   const [selectedStudentIds, setSelectedStudentIds] = useState<number[]>([]);
   const [creatingGroup, setCreatingGroup] = useState(false);
+
+  const [editingGroupId, setEditingGroupId] = useState<number | null>(null);
+  const [editMemberIds, setEditMemberIds] = useState<number[]>([]);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const handleAutoDivide = async () => {
     if (numGroups < 1) return;
@@ -79,7 +88,8 @@ const GroupPanel: React.FC<GroupPanelProps> = ({
   };
 
   const handleDeleteGroup = async (groupId: number) => {
-    if (!window.confirm("Xóa nhóm này?")) return;
+    const ok = await confirm({ title: "Xác nhận", message: "Xóa nhóm này?", confirmText: "Xóa", cancelText: "Huỷ", variant: "danger" });
+    if (!ok) return;
     try {
       await deleteGroup(classroomId, groupId);
       onSuccess("Đã xóa nhóm");
@@ -93,6 +103,47 @@ const GroupPanel: React.FC<GroupPanelProps> = ({
     setSelectedStudentIds((prev) =>
       prev.includes(studentId) ? prev.filter((id) => id !== studentId) : [...prev, studentId]
     );
+  };
+
+  const startEditGroup = (groupId: number, currentMemberIds: number[]) => {
+    setEditingGroupId(groupId);
+    setEditMemberIds([...currentMemberIds]);
+  };
+
+  const cancelEditGroup = () => {
+    setEditingGroupId(null);
+    setEditMemberIds([]);
+  };
+
+  const toggleEditMember = (studentId: number) => {
+    setEditMemberIds((prev) =>
+      prev.includes(studentId) ? prev.filter((id) => id !== studentId) : [...prev, studentId]
+    );
+  };
+
+  const handleSaveEdit = async (groupId: number) => {
+    setSavingEdit(true);
+    try {
+      await updateGroup(classroomId, groupId, { student_ids: editMemberIds });
+      onSuccess("Đã cập nhật nhóm");
+      setEditingGroupId(null);
+      setEditMemberIds([]);
+      await onReload();
+    } catch {
+      onError("Lỗi khi cập nhật nhóm");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  // Students available for editing a specific group: not in any OTHER group
+  const getAvailableForEdit = (currentGroupId: number) => {
+    const idsInOtherGroups = new Set(
+      classroom.groups
+        .filter((g) => g.id !== currentGroupId)
+        .flatMap((g) => g.members.map((m) => m.id))
+    );
+    return classroom.students.filter((s) => !idsInOtherGroups.has(s.id));
   };
 
   return (
@@ -187,9 +238,18 @@ const GroupPanel: React.FC<GroupPanelProps> = ({
                 })}
               </select>
             </div>
-            <p className="text-xs text-stone-500 dark:text-stone-400 mb-2">Chọn thành viên:</p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-stone-500 dark:text-stone-400">Chọn thành viên:</p>
+              {selectedStudentIds.length > 0 && (
+                <span className="text-xs font-medium text-brand dark:text-sky-400">
+                  Đã chọn: {selectedStudentIds.length}
+                </span>
+              )}
+            </div>
             <div className="max-h-40 overflow-y-auto space-y-0.5 mb-3">
-              {classroom.students.map((s) => (
+              {classroom.students
+                .filter((s) => !classroom.groups.some((g) => g.members.some((m) => m.id === s.id)))
+                .map((s) => (
                 <label
                   key={s.id}
                   className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-stone-50 dark:hover:bg-stone-700/50 cursor-pointer text-sm"
@@ -232,45 +292,108 @@ const GroupPanel: React.FC<GroupPanelProps> = ({
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {classroom.groups.map((group) => (
-            <div
-              key={group.id}
-              className="border border-stone-200 dark:border-stone-700 rounded-lg p-3.5 bg-white dark:bg-stone-800"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-medium text-sm text-stone-900 dark:text-white">{group.name}</h3>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-stone-400">{group.members.length} TV</span>
-                  <button
-                    onClick={() => handleDeleteGroup(group.id)}
-                    className="p-0.5 text-stone-300 hover:text-red-500 transition-colors"
-                    title="Xóa nhóm"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+          {classroom.groups.map((group) => {
+            const isEditing = editingGroupId === group.id;
+            const availableStudents = isEditing ? getAvailableForEdit(group.id) : [];
+
+            return (
+              <div
+                key={group.id}
+                className="border border-stone-200 dark:border-stone-700 rounded-lg p-3.5 bg-white dark:bg-stone-800"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-medium text-sm text-stone-900 dark:text-white">{group.name}</h3>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-stone-400">{group.members.length} TV</span>
+                    {isEditing ? (
+                      <>
+                        <button
+                          onClick={() => handleSaveEdit(group.id)}
+                          disabled={savingEdit}
+                          className="p-0.5 text-emerald-500 hover:text-emerald-600 transition-colors"
+                          title="Lưu"
+                        >
+                          {savingEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                        </button>
+                        <button
+                          onClick={cancelEditGroup}
+                          className="p-0.5 text-stone-400 hover:text-stone-600 transition-colors"
+                          title="Hủy"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => startEditGroup(group.id, group.members.map((m) => m.id))}
+                          className="p-0.5 text-stone-300 hover:text-brand transition-colors"
+                          title="Chỉnh sửa thành viên"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteGroup(group.id)}
+                          className="p-0.5 text-stone-300 hover:text-red-500 transition-colors"
+                          title="Xóa nhóm"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-0.5">
-                {group.members.length === 0 ? (
-                  <p className="text-xs text-stone-400">Chưa có thành viên</p>
+
+                {isEditing ? (
+                  <div className="max-h-48 overflow-y-auto space-y-0.5">
+                    {availableStudents.map((s) => (
+                      <label
+                        key={s.id}
+                        className="flex items-center gap-2 px-2 py-1 rounded hover:bg-stone-50 dark:hover:bg-stone-700/50 cursor-pointer text-sm"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={editMemberIds.includes(s.id)}
+                          onChange={() => toggleEditMember(s.id)}
+                          className="rounded border-stone-300"
+                        />
+                        <span className="text-stone-900 dark:text-white">{s.full_name}</span>
+                        {s.student_code && (
+                          <span className="text-stone-400 text-xs">{s.student_code}</span>
+                        )}
+                      </label>
+                    ))}
+                    {editMemberIds.length > 0 && (
+                      <p className="text-xs font-medium text-brand dark:text-sky-400 pt-1">
+                        Đã chọn: {editMemberIds.length}
+                      </p>
+                    )}
+                  </div>
                 ) : (
-                  group.members.map((m) => (
-                    <div
-                      key={m.id}
-                      className="text-sm text-stone-700 dark:text-stone-300 py-0.5"
-                    >
-                      {m.full_name}
-                      {m.student_code && (
-                        <span className="text-xs text-stone-400 ml-1.5">{m.student_code}</span>
-                      )}
-                    </div>
-                  ))
+                  <div className="space-y-0.5">
+                    {group.members.length === 0 ? (
+                      <p className="text-xs text-stone-400">Chưa có thành viên</p>
+                    ) : (
+                      group.members.map((m) => (
+                        <div
+                          key={m.id}
+                          className="text-sm text-stone-700 dark:text-stone-300 py-0.5"
+                        >
+                          {m.full_name}
+                          {m.student_code && (
+                            <span className="text-xs text-stone-400 ml-1.5">{m.student_code}</span>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
                 )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
+      <ConfirmDialog {...dialogProps} />
     </div>
   );
 };

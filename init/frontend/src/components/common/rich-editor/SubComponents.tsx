@@ -497,6 +497,37 @@ export const ColorPickerPopup: React.FC<{
   );
 };
 
+// ======================== List Style Picker ========================
+
+export const ListStylePicker: React.FC<{
+  onSelect: (styleType: string) => void;
+  onClose: () => void;
+  styles: { type: string; label: string; preview: string }[];
+}> = ({ onSelect, onClose, styles }) => {
+  return (
+    <div
+      className="absolute top-full left-0 mt-1 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-600 rounded-lg shadow-xl p-2 z-[60] w-40"
+      onMouseLeave={onClose}
+    >
+      <p className="text-xs text-stone-500 dark:text-stone-400 mb-1.5 px-1 font-medium">Kiểu danh sách</p>
+      {styles.map((s) => (
+        <button
+          key={s.type}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            onSelect(s.type);
+            onClose();
+          }}
+          className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-sky-50 dark:hover:bg-sky-900/30 text-stone-700 dark:text-stone-300 hover:text-brand dark:hover:text-sky-400 transition-colors flex items-center gap-2"
+        >
+          <span className="w-5 text-center font-mono text-stone-500 dark:text-stone-400">{s.preview}</span>
+          <span>{s.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+};
+
 // ======================== Table Insert Indicators (Word-like + buttons) ========================
 
 export interface TableInsertIndicatorsProps {

@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { getDashboardStats, type DashboardStats } from "@/services/adminService";
 import { api } from "@/services/authService";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 interface TeacherOverview {
   total_classrooms: number;
@@ -25,6 +26,7 @@ interface TeacherOverview {
 }
 
 const AdminDashboardPage = () => {
+  usePageTitle("Quản trị");
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [summaryStats, setSummaryStats] = useState<{
     teachers: number;

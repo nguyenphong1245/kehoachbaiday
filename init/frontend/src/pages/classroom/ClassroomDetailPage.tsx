@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
+import { useConfirm } from "@/components/common/ConfirmDialog";
 import {
   ArrowLeft,
   Users,
@@ -34,11 +35,14 @@ import {
 import type { ClassroomDetail, ClassStudent, StudentGroup } from "@/types/classroom";
 import { getClassAssignments, deleteAssignment, type Assignment } from "@/services/assignmentService";
 import { activatePeerReview } from "@/services/peerReviewService";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const ClassroomDetailPage: React.FC = () => {
+  usePageTitle("Chi tiết lớp học");
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { confirm, ConfirmDialog, dialogProps } = useConfirm();
 
   const [classroom, setClassroom] = useState<ClassroomDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -114,7 +118,8 @@ const ClassroomDetailPage: React.FC = () => {
   }, [activeTab, classroomId]);
 
   const handleDeleteAssignment = async (assignmentId: number) => {
-    if (!window.confirm("Xóa bài giao này?")) return;
+    const ok = await confirm({ title: "Xác nhận", message: "Xóa bài giao này?", confirmText: "Xóa", cancelText: "Huỷ", variant: "danger" });
+    if (!ok) return;
     try {
       await deleteAssignment(assignmentId);
       showSuccess("Đã xóa bài giao");
@@ -125,7 +130,8 @@ const ClassroomDetailPage: React.FC = () => {
   };
 
   const handleActivatePeerReview = async (assignmentId: number) => {
-    if (!window.confirm("Kích hoạt tráo bài đánh giá chéo cho bài này?")) return;
+    const ok2 = await confirm({ title: "Xác nhận", message: "Kích hoạt tráo bài đánh giá chéo cho bài này?", confirmText: "Kích hoạt", cancelText: "Huỷ" });
+    if (!ok2) return;
     try {
       await activatePeerReview(assignmentId);
       showSuccess("Đã kích hoạt tráo bài");
@@ -207,7 +213,8 @@ const ClassroomDetailPage: React.FC = () => {
 
   // ========== REMOVE STUDENT ==========
   const handleRemove = async (studentId: number) => {
-    if (!window.confirm("Xóa học sinh này khỏi lớp?")) return;
+    const ok3 = await confirm({ title: "Xác nhận", message: "Xóa học sinh này khỏi lớp?", confirmText: "Xóa", cancelText: "Huỷ", variant: "danger" });
+    if (!ok3) return;
     try {
       await removeStudent(classroomId, studentId);
       showSuccess("Đã xóa học sinh");
@@ -254,7 +261,8 @@ const ClassroomDetailPage: React.FC = () => {
 
   // ========== DELETE GROUP ==========
   const handleDeleteGroup = async (groupId: number) => {
-    if (!window.confirm("Xóa nhóm này?")) return;
+    const ok4 = await confirm({ title: "Xác nhận", message: "Xóa nhóm này?", confirmText: "Xóa", cancelText: "Huỷ", variant: "danger" });
+    if (!ok4) return;
     try {
       await deleteGroup(classroomId, groupId);
       showSuccess("Đã xóa nhóm");
@@ -401,7 +409,7 @@ const ClassroomDetailPage: React.FC = () => {
               />
               <button
                 onClick={() => setShowAddForm(!showAddForm)}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+                className="flex items-center gap-2 px-4 py-2 bg-brand text-white rounded-lg hover:bg-brand-dark text-sm"
               >
                 <UserPlus className="w-4 h-4" />
                 Thêm thủ công
@@ -437,7 +445,7 @@ const ClassroomDetailPage: React.FC = () => {
                   <button
                     type="submit"
                     disabled={adding}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm flex items-center gap-2"
+                    className="px-4 py-2 bg-brand text-white rounded-lg hover:bg-brand-dark disabled:opacity-50 text-sm flex items-center gap-2"
                   >
                     {adding && <Loader2 className="w-4 h-4 animate-spin" />}
                     Thêm
@@ -632,7 +640,7 @@ const ClassroomDetailPage: React.FC = () => {
               </button>
               <button
                 onClick={() => setShowCreateGroup(!showCreateGroup)}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+                className="flex items-center gap-2 px-4 py-2 bg-brand text-white rounded-lg hover:bg-brand-dark text-sm"
               >
                 <Plus className="w-4 h-4" />
                 Tạo nhóm thủ công
@@ -721,7 +729,7 @@ const ClassroomDetailPage: React.FC = () => {
                     <button
                       type="submit"
                       disabled={creatingGroup}
-                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm flex items-center gap-2"
+                      className="px-4 py-2 bg-brand text-white rounded-lg hover:bg-brand-dark disabled:opacity-50 text-sm flex items-center gap-2"
                     >
                       {creatingGroup && <Loader2 className="w-4 h-4 animate-spin" />}
                       Tạo nhóm
@@ -789,6 +797,7 @@ const ClassroomDetailPage: React.FC = () => {
           </div>
         )}
       </div>
+      <ConfirmDialog {...dialogProps} />
     </div>
   );
 };

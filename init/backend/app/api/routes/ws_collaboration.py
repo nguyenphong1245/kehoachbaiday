@@ -192,15 +192,18 @@ def start_cleanup_task():
 
 
 async def authenticate_ws(websocket: WebSocket) -> Optional[int]:
-    """Extract user_id from WebSocket cookies (supports teacher_ and student_ prefixes)"""
-    cookies = websocket.cookies
+    """Extract user_id from WebSocket query param or cookies"""
+    # 1) Try query parameter token (from /auth/ws-token)
+    token = websocket.query_params.get("token")
 
-    # Try different cookie names (with prefixes for multi-session support)
-    token = (
-        cookies.get("student_access_token") or  # Student login
-        cookies.get("teacher_access_token") or  # Teacher login
-        cookies.get("access_token")              # Legacy/fallback
-    )
+    # 2) Fallback to cookies
+    if not token:
+        cookies = websocket.cookies
+        token = (
+            cookies.get("student_access_token") or
+            cookies.get("teacher_access_token") or
+            cookies.get("access_token")
+        )
 
     if not token:
         return None
@@ -226,12 +229,21 @@ async def get_user_display_name(user_id: int) -> str:
         if name:
             return name
 
-        # Fallback to User
+        # Fallback to User profile
+        from app.models.profile import UserProfile
         result = await db.execute(
-            select(User.full_name).where(User.id == user_id)
+            select(UserProfile.first_name).where(UserProfile.user_id == user_id)
         )
         name = result.scalar_one_or_none()
-        return name or f"User {user_id}"
+        if name:
+            return name
+
+        # Fallback to email
+        result = await db.execute(
+            select(User.email).where(User.id == user_id)
+        )
+        email = result.scalar_one_or_none()
+        return email.split("@")[0] if email else f"User {user_id}"
 
 
 async def verify_session_access(user_id: int, session_id: int) -> bool:
@@ -311,6 +323,23 @@ async def collaboration_ws(websocket: WebSocket, session_id: int):
     # Start periodic flush
     room.start_periodic_flush()
 
+    # Get chat status for initial state
+    chat_disabled = False
+    chat_enabled = True
+    async with AsyncSessionLocal() as db:
+        ws_result = await db.execute(
+            select(GroupWorkSession).where(GroupWorkSession.id == session_id)
+        )
+        ws = ws_result.scalar_one_or_none()
+        if ws:
+            chat_disabled = ws.chat_disabled
+            from app.models.class_assignment import ClassAssignment
+            a_result = await db.execute(
+                select(ClassAssignment.chat_enabled).where(ClassAssignment.id == ws.assignment_id)
+            )
+            ce = a_result.scalar() if a_result else True
+            chat_enabled = ce if ce is not None else True
+
     # Send current state to new user
     await room.send_to(user_id, {
         "type": "session_state",
@@ -318,6 +347,7 @@ async def collaboration_ws(websocket: WebSocket, session_id: int):
         "task_assignments": room.state["task_assignments"],
         "leader_id": room.state["leader_id"],
         "leader_votes": room.state["leader_votes"],
+        "chat_disabled": chat_disabled or not chat_enabled,
         "members_online": [
             {"user_id": uid, "name": name}
             for uid, name in room.user_names.items()
@@ -363,8 +393,28 @@ async def collaboration_ws(websocket: WebSocket, session_id: int):
             elif msg_type == "chat_message":
                 text = msg.get("message", "").strip()
                 if text:
-                    # Save to DB
+                    # Check chat permissions
                     async with AsyncSessionLocal() as db:
+                        # Check assignment-level chat_enabled
+                        ws_result = await db.execute(
+                            select(GroupWorkSession).where(GroupWorkSession.id == session_id)
+                        )
+                        ws = ws_result.scalar_one_or_none()
+                        if ws:
+                            # Check per-group chat_disabled
+                            if ws.chat_disabled:
+                                await websocket.send_json({"type": "chat_blocked", "reason": "Chat đã bị tắt bởi giáo viên"})
+                                continue
+                            # Check assignment-level chat_enabled
+                            from app.models.class_assignment import ClassAssignment
+                            a_result = await db.execute(
+                                select(ClassAssignment.chat_enabled).where(ClassAssignment.id == ws.assignment_id)
+                            )
+                            chat_enabled_val = a_result.scalar()
+                            if chat_enabled_val is False:
+                                await websocket.send_json({"type": "chat_blocked", "reason": "Chat đã bị tắt cho bài này"})
+                                continue
+
                         discussion = GroupDiscussion(
                             work_session_id=session_id,
                             user_id=user_id,
@@ -432,6 +482,16 @@ async def collaboration_ws(websocket: WebSocket, session_id: int):
                     "user_name": user_name,
                     "question_id": question_id,
                 }, exclude_user_id=user_id)
+
+            elif msg_type == "run_result":
+                # Broadcast test run results to all group members
+                await room.broadcast({
+                    "type": "run_result",
+                    "user_id": user_id,
+                    "user_name": user_name,
+                    "result": msg.get("result"),
+                    "error": msg.get("error"),
+                })
 
             elif msg_type == "peer_review_comment":
                 # Sync peer review comments in real-time

@@ -20,6 +20,8 @@ class AssignmentCreate(BaseModel):
     auto_peer_review: bool = False
     peer_review_start_time: Optional[str] = None  # ISO format
     peer_review_end_time: Optional[str] = None  # ISO format
+    peer_review_duration: Optional[int] = None  # Duration in minutes
+    chat_enabled: bool = True
 
 
 class AssignmentUpdate(BaseModel):
@@ -32,6 +34,8 @@ class AssignmentUpdate(BaseModel):
     auto_peer_review: Optional[bool] = None
     peer_review_start_time: Optional[str] = None
     peer_review_end_time: Optional[str] = None
+    peer_review_duration: Optional[int] = None
+    chat_enabled: Optional[bool] = None
 
 
 class AssignmentRead(BaseModel):
@@ -52,6 +56,8 @@ class AssignmentRead(BaseModel):
     peer_review_status: Optional[str] = None
     peer_review_start_time: Optional[datetime] = None
     peer_review_end_time: Optional[datetime] = None
+    peer_review_duration: Optional[int] = None
+    chat_enabled: bool = True
     submission_count: int = 0
     total_students: int = 0
     created_at: datetime

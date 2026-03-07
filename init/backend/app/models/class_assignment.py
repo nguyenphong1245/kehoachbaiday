@@ -34,6 +34,10 @@ class ClassAssignment(Base):
     peer_review_status = Column(String(20), nullable=True)  # None, 'active', 'completed'
     peer_review_start_time = Column(DateTime(timezone=True), nullable=True)
     peer_review_end_time = Column(DateTime(timezone=True), nullable=True)
+    peer_review_duration = Column(Integer, nullable=True)  # Duration in minutes for peer review
+
+    # Chat control
+    chat_enabled = Column(Boolean, default=True, nullable=False, server_default="true")
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

@@ -1,8 +1,10 @@
 import { Link } from "react-router-dom";
 
 import AuthCard from "@/components/layout/AuthCard";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const ServerErrorPage = () => {
+  usePageTitle("Lỗi hệ thống");
   return (
     <main className="flex min-h-screen items-center justify-center bg-stone-100 p-4">
       <AuthCard title="Something went wrong" description="An unexpected error occurred.">

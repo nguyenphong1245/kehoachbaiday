@@ -1,4 +1,5 @@
 import React, { useState, useRef } from "react";
+import { useConfirm } from "@/components/common/ConfirmDialog";
 import {
   UserPlus,
   Upload,
@@ -27,6 +28,7 @@ const StudentPanel: React.FC<StudentPanelProps> = ({
   onSuccess,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { confirm, ConfirmDialog, dialogProps } = useConfirm();
 
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<{
@@ -86,7 +88,8 @@ const StudentPanel: React.FC<StudentPanelProps> = ({
   };
 
   const handleRemove = async (studentId: number) => {
-    if (!window.confirm("Xóa học sinh này khỏi lớp?")) return;
+    const ok = await confirm({ title: "Xác nhận", message: "Xóa học sinh này khỏi lớp?", confirmText: "Xóa", cancelText: "Huỷ", variant: "danger" });
+    if (!ok) return;
     try {
       await removeStudent(classroomId, studentId);
       onSuccess("Đã xóa học sinh");
@@ -337,6 +340,7 @@ const StudentPanel: React.FC<StudentPanelProps> = ({
           </p>
         </>
       )}
+      <ConfirmDialog {...dialogProps} />
     </div>
   );
 };

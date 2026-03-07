@@ -8,8 +8,10 @@ import SubmitButton from "@/components/forms/SubmitButton";
 import TextInput from "@/components/forms/TextInput";
 import AuthCard from "@/components/layout/AuthCard";
 import { resetPassword, requestPasswordReset } from "@/services/authService";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const ResetPasswordPage = () => {
+  usePageTitle("Đặt lại mật khẩu");
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const email = (location.state as { email?: string })?.email;

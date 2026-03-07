@@ -6,8 +6,10 @@ import SubmitButton from "@/components/forms/SubmitButton";
 import TextInput from "@/components/forms/TextInput";
 import AuthCard from "@/components/layout/AuthCard";
 import { requestPasswordReset } from "@/services/authService";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const ForgotPasswordPage = () => {
+  usePageTitle("Quên mật khẩu");
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);

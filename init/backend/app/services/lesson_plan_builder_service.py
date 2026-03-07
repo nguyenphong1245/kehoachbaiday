@@ -229,7 +229,7 @@ class LessonPlanBuilderService:
                 RETURN elementId(bh) AS id,
                        bh.ten AS name,
                        bh.loai AS lesson_type,
-                       bh.markdown_content AS content,
+                       bh.noi_dung_sgk AS content,
                        l.lop AS grade,
                        cd.ten AS topic,
                        dh.ten AS orientation,

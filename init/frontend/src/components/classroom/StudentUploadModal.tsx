@@ -1,5 +1,5 @@
 import React, { useRef, useState } from "react";
-import { Upload, X, Loader2, FileText, AlertCircle, CheckCircle } from "lucide-react";
+import { Upload, X, Loader2 } from "lucide-react";
 import { uploadStudents } from "@/services/classroomService";
 
 interface StudentUploadModalProps {
@@ -30,7 +30,6 @@ const StudentUploadModal: React.FC<StudentUploadModalProps> = ({
   const handleFileChange = async (file: File | null) => {
     if (!file) return;
 
-    // Validate file type
     const validExtensions = ['.xlsx', '.xls', '.csv'];
     const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
     if (!validExtensions.includes(fileExtension)) {
@@ -49,7 +48,7 @@ const StudentUploadModal: React.FC<StudentUploadModalProps> = ({
       if (onUploadComplete) await onUploadComplete();
       onClose();
     } catch (err: any) {
-      onError(err.response?.data?.detail || "Lỗi khi upload file học sinh");
+      onError(err.response?.data?.detail || "Lỗi khi tải lên danh sách");
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -74,74 +73,47 @@ const StudentUploadModal: React.FC<StudentUploadModalProps> = ({
     if (file) handleFileChange(file);
   };
 
-  const handleSkip = () => {
-    onClose();
-  };
-
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       onClick={(e) => {
-        // Close modal if clicking backdrop (not the modal content)
-        if (e.target === e.currentTarget && !uploading) {
-          onClose();
-        }
+        if (e.target === e.currentTarget && !uploading) onClose();
       }}
     >
       <div
-        className="bg-white dark:bg-stone-800 rounded-xl shadow-2xl w-full max-w-2xl"
+        className="bg-white dark:bg-stone-800 rounded-xl shadow-2xl w-full max-w-md animate-in fade-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 dark:border-stone-700">
+        {/* Tiêu đề */}
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-stone-100 dark:border-stone-700">
           <div>
-            <h2 className="text-xl font-bold text-stone-900 dark:text-white">
-              Upload danh sách học sinh
+            <h2 className="text-sm font-semibold text-stone-900 dark:text-white">
+              Tải lên danh sách học sinh
             </h2>
-            <p className="text-sm text-stone-500 dark:text-stone-400 mt-1">
-              Lớp: <span className="font-medium text-stone-700 dark:text-stone-300">{classroomName}</span>
-            </p>
+            <p className="text-xs text-stone-400 dark:text-stone-500 mt-0.5">{classroomName}</p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-300 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-700 transition-colors"
             disabled={uploading}
+            className="p-1.5 text-stone-400 hover:text-stone-600 dark:hover:text-stone-300 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-700 transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Body */}
-        <div className="px-6 py-6">
-          {/* Instructions */}
-          <div className="mb-5 p-4 bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-lg">
-            <h3 className="text-sm font-semibold text-sky-900 dark:text-sky-300 mb-2 flex items-center gap-2">
-              <FileText className="w-4 h-4" />
-              Định dạng file Excel/CSV
-            </h3>
-            <ul className="text-sm text-sky-800 dark:text-sky-400 space-y-1.5 ml-1">
-              <li className="flex items-start gap-2">
-                <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <span><strong>Tên học sinh</strong> (bắt buộc): Họ và tên đầy đủ</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <span><strong>Ngày sinh</strong> (bắt buộc): DD/MM/YYYY (VD: 07/01/2015)</span>
-              </li>
-            </ul>
-          </div>
-
-          {/* Upload Area */}
+        {/* Nội dung */}
+        <div className="px-5 py-4">
+          {/* Vùng kéo thả */}
           <div
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
             onDragOver={handleDrag}
             onDrop={handleDrop}
             className={`
-              border-2 border-dashed rounded-xl p-10 text-center transition-all
+              border-2 border-dashed rounded-lg p-6 text-center transition-all
               ${dragActive
-                ? "border-brand bg-sky-50 dark:bg-sky-900/20 scale-[1.02]"
-                : "border-stone-300 dark:border-stone-600 hover:border-brand-light dark:hover:border-brand"
+                ? "border-brand bg-sky-50 dark:bg-sky-900/20"
+                : "border-stone-200 dark:border-stone-600 hover:border-stone-300 dark:hover:border-stone-500"
               }
               ${uploading ? "opacity-50 pointer-events-none" : "cursor-pointer"}
             `}
@@ -158,72 +130,51 @@ const StudentUploadModal: React.FC<StudentUploadModalProps> = ({
 
             {uploading ? (
               <div className="flex flex-col items-center">
-                <Loader2 className="w-14 h-14 text-brand animate-spin mb-4" />
-                <p className="text-base font-medium text-stone-700 dark:text-stone-300">
-                  Đang xử lý file...
-                </p>
-                <p className="text-sm text-stone-500 dark:text-stone-400 mt-1">
-                  Vui lòng chờ trong giây lát
-                </p>
+                <Loader2 className="w-8 h-8 text-brand animate-spin mb-2" />
+                <p className="text-sm text-stone-600 dark:text-stone-300">Đang xử lý...</p>
               </div>
             ) : (
               <div className="flex flex-col items-center">
-                <div className="w-16 h-16 rounded-full bg-sky-100 dark:bg-sky-900/30 flex items-center justify-center mb-4">
-                  <Upload className="w-8 h-8 text-brand dark:text-sky-400" />
-                </div>
-                <p className="text-lg font-semibold text-stone-800 dark:text-stone-200 mb-2">
-                  {dragActive ? "Thả file vào đây" : "Kéo thả file hoặc click để chọn"}
+                <Upload className="w-8 h-8 text-stone-300 dark:text-stone-500 mb-2" />
+                <p className="text-sm text-stone-700 dark:text-stone-300">
+                  {dragActive ? "Thả file vào đây" : "Kéo thả hoặc nhấn để chọn file"}
                 </p>
-                <p className="text-sm text-stone-500 dark:text-stone-400 mb-4">
-                  Hỗ trợ: Excel (.xlsx, .xls) hoặc CSV
+                <p className="text-xs text-stone-400 dark:text-stone-500 mt-1">
+                  Hỗ trợ .xlsx, .xls, .csv
                 </p>
-                <button
-                  type="button"
-                  className="px-6 py-2.5 bg-brand text-white rounded-lg hover:bg-brand-dark transition-colors text-sm font-medium shadow-sm hover:shadow-md"
-                >
-                  Chọn file từ máy tính
-                </button>
               </div>
             )}
           </div>
 
-          {/* Info Note */}
-          <div className="mt-4 flex items-start gap-2 p-3 bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-lg">
-            <AlertCircle className="w-5 h-5 text-brand dark:text-sky-400 flex-shrink-0 mt-0.5" />
-            <div className="text-xs text-sky-800 dark:text-sky-300">
-              <p className="font-medium mb-1">Lưu ý:</p>
-              <p>
-                Hệ thống sẽ tự động tạo tài khoản đăng nhập cho mỗi học sinh.
-                Mã HS: <code className="px-1 py-0.5 bg-sky-100 dark:bg-sky-900 rounded">DDMMYYYY + 3 số</code> (VD: 07012015123).
-                Tài khoản: <code className="px-1 py-0.5 bg-sky-100 dark:bg-sky-900 rounded">HS + Mã HS</code> (VD: HS07012015123).
-                Mật khẩu: <code className="px-1 py-0.5 bg-sky-100 dark:bg-sky-900 rounded">DDMMYYYY</code> (VD: 07012015).
-              </p>
-            </div>
+          {/* Hướng dẫn ngắn gọn */}
+          <div className="mt-3 text-xs text-stone-400 dark:text-stone-500 space-y-0.5">
+            <p>File cần có cột <span className="text-stone-600 dark:text-stone-300 font-medium">Họ tên</span> và <span className="text-stone-600 dark:text-stone-300 font-medium">Ngày sinh</span> (DD/MM/YYYY)</p>
+            <p>Hệ thống sẽ tự tạo tài khoản cho mỗi học sinh. Mật khẩu mặc định là ngày sinh.</p>
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-900/50 rounded-b-xl">
+        {/* Chân trang */}
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-stone-100 dark:border-stone-700">
           <button
-            onClick={handleSkip}
+            onClick={onClose}
             disabled={uploading}
-            className="px-4 py-2 text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-stone-700 rounded-lg transition-colors text-sm font-medium disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-700 rounded-lg transition-colors"
           >
-            Bỏ qua, upload sau
+            Bỏ qua
           </button>
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className="px-6 py-2.5 bg-brand text-white rounded-lg hover:bg-brand-dark disabled:opacity-50 transition-colors text-sm font-medium flex items-center gap-2 shadow-sm"
+            className="px-4 py-2 bg-brand hover:bg-brand/90 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-colors flex items-center gap-1.5"
           >
             {uploading ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 Đang xử lý...
               </>
             ) : (
               <>
-                <Upload className="w-4 h-4" />
+                <Upload className="w-3.5 h-3.5" />
                 Chọn file
               </>
             )}

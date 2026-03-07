@@ -34,6 +34,7 @@ export const TOOLBAR: ToolbarItem[] = [
   { type: "separator" },
   { type: "button", icon: List, label: "Danh sách", command: "insertUnorderedList" },
   { type: "button", icon: ListOrdered, label: "Danh sách số", command: "insertOrderedList" },
+  { type: "button", icon: ListOrdered, label: "Kiểu danh sách", command: "__listStyle" },
   { type: "button", icon: Indent, label: "Tăng thụt lề", command: "indent" },
   { type: "button", icon: Outdent, label: "Giảm thụt lề", command: "outdent" },
   { type: "separator" },
@@ -47,6 +48,17 @@ export const TOOLBAR: ToolbarItem[] = [
   { type: "button", icon: Type, label: "Màu chữ", command: "__textColor" },
   { type: "button", icon: Highlighter, label: "Tô sáng", command: "__highlight" },
   { type: "button", icon: Image, label: "Chèn ảnh", command: "__image" },
+];
+
+export const LIST_STYLES = [
+  { type: "decimal", label: "1, 2, 3", preview: "1." },
+  { type: "lower-alpha", label: "a, b, c", preview: "a." },
+  { type: "upper-alpha", label: "A, B, C", preview: "A." },
+  { type: "lower-roman", label: "i, ii, iii", preview: "i." },
+  { type: "upper-roman", label: "I, II, III", preview: "I." },
+  { type: "disc", label: "● Tròn đặc", preview: "●" },
+  { type: "circle", label: "○ Tròn rỗng", preview: "○" },
+  { type: "square", label: "■ Vuông", preview: "■" },
 ];
 
 export const FONT_SIZES = [

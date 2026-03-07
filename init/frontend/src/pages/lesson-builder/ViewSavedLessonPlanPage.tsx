@@ -11,8 +11,10 @@ import {
 import { getSavedLessonPlan } from "@/services/lessonBuilderService";
 import type { SavedLessonPlan, LessonPlanSection } from "@/types/lessonBuilder";
 import { LessonPlanOutput } from "@/components/lesson-builder/LessonPlanOutput";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const ViewSavedLessonPlanPage: React.FC = () => {
+  usePageTitle("Xem kế hoạch bài dạy");
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [lessonPlan, setLessonPlan] = useState<SavedLessonPlan | null>(null);

@@ -2,7 +2,7 @@
 GroupWorkSession, IndividualSubmission, GroupDiscussion Models
 Phiên làm bài nhóm/cá nhân
 """
-from sqlalchemy import Column, Integer, Float, String, Text, DateTime, ForeignKey, JSON, UniqueConstraint
+from sqlalchemy import Column, Integer, Float, String, Text, Boolean, DateTime, ForeignKey, JSON, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base import Base
@@ -26,6 +26,7 @@ class GroupWorkSession(Base):
     member_grades = Column(JSON, nullable=True)  # {student_id: {score: float, comment: str}}
     teacher_score = Column(Float, nullable=True)  # Overall group score (optional)
     teacher_comment = Column(Text, nullable=True)
+    chat_disabled = Column(Boolean, default=False, nullable=False, server_default="false")
     submitted_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

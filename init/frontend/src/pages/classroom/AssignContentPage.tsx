@@ -67,6 +67,8 @@ const AssignContentPage: React.FC = () => {
   const [autoPeerReview, setAutoPeerReview] = useState(false);
   const [peerReviewStartTime, setPeerReviewStartTime] = useState("");
   const [peerReviewEndTime, setPeerReviewEndTime] = useState("");
+  const [peerReviewDuration, setPeerReviewDuration] = useState<number | "">("");
+  const [chatEnabled, setChatEnabled] = useState(true);
 
   useEffect(() => {
     loadData();
@@ -142,6 +144,8 @@ const AssignContentPage: React.FC = () => {
         auto_peer_review: autoPeerReview,
         peer_review_start_time: peerReviewStartTime || undefined,
         peer_review_end_time: peerReviewEndTime || undefined,
+        peer_review_duration: peerReviewDuration ? Number(peerReviewDuration) : undefined,
+        chat_enabled: chatEnabled,
       });
       navigate(`/classes/${classroomId}`);
     } catch {
@@ -206,7 +210,15 @@ const AssignContentPage: React.FC = () => {
                   <button
                     key={item.value}
                     type="button"
-                    onClick={() => { setContentType(item.value); setContentId(null); }}
+                    onClick={() => {
+                      setContentType(item.value);
+                      setContentId(null);
+                      if (item.value === "quiz") {
+                        setWorkType("individual");
+                        setAutoPeerReview(false);
+                        setChatEnabled(false);
+                      }
+                    }}
                     className={`p-4 rounded-lg border-2 text-center transition-all ${
                       isActive
                         ? colors.active
@@ -284,8 +296,8 @@ const AssignContentPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Work Type */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+          {/* Work Type - hidden for quiz */}
+          {contentType !== "quiz" && <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
             <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Hình thức làm bài</h2>
             <div className="grid grid-cols-2 gap-3">
               <button
@@ -319,7 +331,7 @@ const AssignContentPage: React.FC = () => {
                 <p className="text-xs text-slate-400 mt-1">Làm theo nhóm đã chia</p>
               </button>
             </div>
-          </div>
+          </div>}
 
           {/* Schedule & Options */}
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 space-y-4">
@@ -348,58 +360,90 @@ const AssignContentPage: React.FC = () => {
                 />
               </div>
             </div>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={autoPeerReview}
-                onChange={(e) => setAutoPeerReview(e.target.checked)}
-                className="rounded text-orange-500"
-              />
-              <span className="text-sm text-slate-700 dark:text-slate-300">
-                Tráo bài tự động (khi tất cả nộp xong → kích hoạt đánh giá chéo)
-              </span>
-            </label>
+            {contentType !== "quiz" && (
+              <>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={autoPeerReview}
+                    onChange={(e) => setAutoPeerReview(e.target.checked)}
+                    className="rounded text-orange-500"
+                  />
+                  <span className="text-sm text-slate-700 dark:text-slate-300">
+                    Tráo bài tự động (khi tất cả nộp xong → kích hoạt đánh giá chéo)
+                  </span>
+                </label>
 
-            {/* Peer Review Timing */}
-            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-              <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
-                Thời gian đánh giá chéo (tùy chọn)
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-                Nếu cài đặt thời gian, hệ thống sẽ tự động nộp bài và chuyển sang đánh giá chéo khi đến giờ.
-              </p>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-                    Bắt đầu đánh giá chéo
+                {workType === "group" && (
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={chatEnabled}
+                      onChange={(e) => setChatEnabled(e.target.checked)}
+                      className="rounded text-blue-500"
+                    />
+                    <span className="text-sm text-slate-700 dark:text-slate-300">
+                      Cho phép học sinh chat trong nhóm
+                    </span>
                   </label>
-                  <input
-                    type="datetime-local"
-                    value={peerReviewStartTime}
-                    onChange={(e) => setPeerReviewStartTime(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
-                  />
+                )}
+
+                {/* Peer Review Timing */}
+                <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                  <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
+                    Thời gian đánh giá chéo (tùy chọn)
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                    Nếu cài đặt thời gian, hệ thống sẽ tự động nộp bài và chuyển sang đánh giá chéo khi đến giờ.
+                  </p>
+                  <div className="mb-3">
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                      Thời gian chấm chéo (phút)
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="120"
+                      value={peerReviewDuration}
+                      onChange={(e) => setPeerReviewDuration(e.target.value ? Number(e.target.value) : "")}
+                      placeholder="VD: 10"
+                      className="w-32 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                        Bắt đầu đánh giá chéo
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={peerReviewStartTime}
+                        onChange={(e) => setPeerReviewStartTime(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                        Kết thúc đánh giá chéo
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={peerReviewEndTime}
+                        onChange={(e) => setPeerReviewEndTime(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-                    Kết thúc đánh giá chéo
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={peerReviewEndTime}
-                    onChange={(e) => setPeerReviewEndTime(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
-                  />
-                </div>
-              </div>
-            </div>
+              </>
+            )}
           </div>
 
           {/* Submit */}
           <button
             type="submit"
             disabled={submitting || !contentId || !title.trim()}
-            className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 font-medium text-lg"
+            className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-brand text-white rounded-xl hover:bg-brand-dark disabled:opacity-50 font-medium text-lg"
           >
             {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
             Giao bài cho lớp

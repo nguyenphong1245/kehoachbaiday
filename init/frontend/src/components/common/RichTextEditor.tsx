@@ -1,11 +1,12 @@
 import React, { useRef, useCallback, useEffect, useState } from "react";
 
-import { ArrowLeft, ListTree, ChevronLeft, ChevronRight, AlignLeft, AlignCenter, AlignRight, Maximize2, Minimize2 } from "lucide-react";
+import { ArrowLeft, ListTree, ChevronLeft, ChevronRight, AlignLeft, AlignCenter, AlignRight, Maximize2, Minimize2, ChevronDown } from "lucide-react";
 import {
   TOOLBAR,
   FONT_SIZES,
   TEXT_COLORS,
   HIGHLIGHT_COLORS,
+  LIST_STYLES,
   type OutlineHeading,
   type RichTextEditorProps,
 } from "./rich-editor/constants";
@@ -21,7 +22,7 @@ import {
   findClosestTable,
   getCellPosition,
 } from "./rich-editor/utils";
-import { TableContextMenu, TableGridPicker, ColorPickerPopup, TableInsertIndicators, TableCornerMenu, type ResizeHandleType, type TableAlignType } from "./rich-editor/SubComponents";
+import { TableContextMenu, TableGridPicker, ColorPickerPopup, ListStylePicker, TableInsertIndicators, TableCornerMenu, type ResizeHandleType, type TableAlignType } from "./rich-editor/SubComponents";
 import { sanitizeHTML } from "@/utils/sanitize";
 
 
@@ -54,6 +55,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   } | null>(null);
   const [showTextColorPicker, setShowTextColorPicker] = useState(false);
   const [showHighlightPicker, setShowHighlightPicker] = useState(false);
+  const [showListStylePicker, setShowListStylePicker] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [outlineHeadings, setOutlineHeadings] = useState<OutlineHeading[]>([]);
   const [showOutline, setShowOutline] = useState(() => window.innerWidth >= 768);
@@ -65,6 +67,11 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const [focusedCell, setFocusedCell] = useState<HTMLTableCellElement | null>(null);
   const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Track active formatting state for toolbar button highlighting
+  const [activeFormats, setActiveFormats] = useState<Record<string, boolean>>({});
+  const [currentTextColor, setCurrentTextColor] = useState("#000000");
+  const [currentHighlightColor, setCurrentHighlightColor] = useState("transparent");
 
   // Lock body scroll & Escape key when fullscreen
   useEffect(() => {
@@ -150,16 +157,58 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     isInternalUpdate.current = false;
   }, [value]);
 
-  // Detect font size on selection change
+  // Detect font size and active formatting on selection change
   useEffect(() => {
-    const updateFontSizeDisplay = () => {
-      if (!fontSizeRef.current) return;
-      const detected = detectCurrentFontSize();
-      fontSizeRef.current.value = detected;
+    const updateToolbarState = () => {
+      // Update font size display
+      if (fontSizeRef.current) {
+        const detected = detectCurrentFontSize();
+        fontSizeRef.current.value = detected;
+      }
+
+      // Update active formatting states
+      const commands = ["bold", "italic", "underline", "strikeThrough", "insertUnorderedList", "insertOrderedList", "justifyLeft", "justifyCenter", "justifyRight"];
+      const states: Record<string, boolean> = {};
+      for (const cmd of commands) {
+        try { states[cmd] = document.queryCommandState(cmd); } catch { states[cmd] = false; }
+      }
+
+      // Manual DOM-walk fallback for list detection (queryCommandState can be unreliable)
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        let node: Node | null = sel.anchorNode;
+        while (node && node !== editorRef.current) {
+          if (node.nodeName === "UL") { states["insertUnorderedList"] = true; break; }
+          if (node.nodeName === "OL") { states["insertOrderedList"] = true; break; }
+          node = node.parentNode;
+        }
+      }
+
+      setActiveFormats(states);
+
+      // Detect current text color
+      try {
+        const fColor = document.queryCommandValue("foreColor");
+        if (fColor) setCurrentTextColor(fColor);
+      } catch { /* ignore */ }
+
+      // Detect current highlight/background color
+      if (sel && sel.rangeCount > 0) {
+        let node: Node | null = sel.anchorNode;
+        let bgFound = "transparent";
+        while (node && node !== editorRef.current) {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            const bg = (node as HTMLElement).style?.backgroundColor;
+            if (bg && bg !== "transparent" && bg !== "") { bgFound = bg; break; }
+          }
+          node = node.parentNode;
+        }
+        setCurrentHighlightColor(bgFound);
+      }
     };
 
-    document.addEventListener("selectionchange", updateFontSizeDisplay);
-    return () => document.removeEventListener("selectionchange", updateFontSizeDisplay);
+    document.addEventListener("selectionchange", updateToolbarState);
+    return () => document.removeEventListener("selectionchange", updateToolbarState);
   }, []);
 
   // Save content to undo stack
@@ -318,16 +367,90 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     handleInput();
   }, [handleInput]);
 
+  // Apply list style type
+  const applyListStyle = useCallback((styleType: string) => {
+    editorRef.current?.focus();
+    restoreSelection(savedSelectionRef.current);
+
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+
+    // Check if cursor is already inside a list
+    let node: Node | null = sel.anchorNode;
+    let existingList: HTMLOListElement | HTMLUListElement | null = null;
+    while (node && node !== editorRef.current) {
+      if (node.nodeName === 'OL' || node.nodeName === 'UL') {
+        existingList = node as HTMLOListElement | HTMLUListElement;
+        break;
+      }
+      node = node.parentNode;
+    }
+
+    const isOrderedStyle = ['decimal', 'lower-alpha', 'upper-alpha', 'lower-roman', 'upper-roman'].includes(styleType);
+
+    if (existingList) {
+      // Change existing list type and style
+      if (isOrderedStyle && existingList.nodeName === 'UL') {
+        // Convert UL to OL
+        const ol = document.createElement('ol');
+        ol.style.listStyleType = styleType;
+        ol.innerHTML = existingList.innerHTML;
+        existingList.parentNode?.replaceChild(ol, existingList);
+      } else if (!isOrderedStyle && existingList.nodeName === 'OL') {
+        // Convert OL to UL
+        const ul = document.createElement('ul');
+        ul.style.listStyleType = styleType;
+        ul.innerHTML = existingList.innerHTML;
+        existingList.parentNode?.replaceChild(ul, existingList);
+      } else {
+        // Same tag type, just change style
+        (existingList as HTMLElement).style.listStyleType = styleType;
+      }
+    } else {
+      // Create new list
+      if (isOrderedStyle) {
+        document.execCommand('insertOrderedList', false);
+      } else {
+        document.execCommand('insertUnorderedList', false);
+      }
+      // Find the newly created list and apply style
+      const newSel = window.getSelection();
+      if (newSel && newSel.rangeCount > 0) {
+        let n: Node | null = newSel.anchorNode;
+        while (n && n !== editorRef.current) {
+          if (n.nodeName === 'OL' || n.nodeName === 'UL') {
+            (n as HTMLElement).style.listStyleType = styleType;
+            break;
+          }
+          n = n.parentNode;
+        }
+      }
+    }
+
+    savedSelectionRef.current = null;
+    handleInput();
+  }, [handleInput]);
+
   // --- Handle click to select/deselect table and images ---
   const handleEditorClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
 
     // Ctrl+Click on a link opens it in a new tab
     const anchor = target.closest('a') as HTMLAnchorElement | null;
-    if (anchor && (e.ctrlKey || e.metaKey)) {
+    if (anchor && editorRef.current?.contains(anchor) && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
+      e.stopPropagation();
       const href = anchor.getAttribute('href');
-      if (href) window.open(href, '_blank', 'noopener,noreferrer');
+      if (href) {
+        // Use a real anchor element click to avoid popup blockers
+        const tempLink = document.createElement('a');
+        tempLink.href = href;
+        tempLink.target = '_blank';
+        tempLink.rel = 'noopener noreferrer';
+        document.body.appendChild(tempLink);
+        tempLink.click();
+        document.body.removeChild(tempLink);
+      }
       return;
     }
     const clickedTable = target.closest('table') as HTMLTableElement | null;
@@ -530,6 +653,25 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   }, [detectBorder]);
 
   const handleEditorMouseDown = useCallback((e: React.MouseEvent) => {
+    // Ctrl+Click on a link opens it in a new tab (handle in mousedown for reliability)
+    const target = e.target as HTMLElement;
+    const anchor = target.closest('a') as HTMLAnchorElement | null;
+    if (anchor && editorRef.current?.contains(anchor) && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      e.stopPropagation();
+      const href = anchor.getAttribute('href');
+      if (href) {
+        const tempLink = document.createElement('a');
+        tempLink.href = href;
+        tempLink.target = '_blank';
+        tempLink.rel = 'noopener noreferrer';
+        document.body.appendChild(tempLink);
+        tempLink.click();
+        document.body.removeChild(tempLink);
+      }
+      return;
+    }
+
     const hit = detectBorder(e);
     if (!hit) return;
 
@@ -747,6 +889,33 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         }
         handleInput();
         return;
+      } else if (command === "outdent") {
+        // Prevent outdent from destroying top-level list items
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+          let node: Node | null = sel.anchorNode;
+          let li: HTMLLIElement | null = null;
+          let listParent: HTMLElement | null = null;
+          while (node && node !== editorRef.current) {
+            if (!li && node instanceof HTMLLIElement) li = node;
+            if (node.nodeName === "UL" || node.nodeName === "OL") {
+              listParent = node as HTMLElement;
+              break;
+            }
+            node = node.parentNode;
+          }
+          // Only allow outdent if the list is nested (parent of UL/OL is another LI)
+          if (li && listParent) {
+            const parentOfList = listParent.parentNode;
+            if (parentOfList && parentOfList instanceof HTMLLIElement) {
+              // Nested list → safe to outdent
+              document.execCommand("outdent", false);
+            }
+            // Top-level list → don't outdent (would destroy the list)
+          } else {
+            document.execCommand("outdent", false);
+          }
+        }
       } else {
         document.execCommand(command, false, arg);
       }
@@ -1215,11 +1384,12 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       if (e.key === "Tab") {
         e.preventDefault();
         if (e.shiftKey) {
-          document.execCommand("outdent");
+          // Use execCommand handler which protects top-level list items
+          execCommand("outdent");
         } else {
           document.execCommand("indent");
+          handleInput();
         }
-        handleInput();
         return;
       }
 
@@ -1241,8 +1411,17 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         }
         if (!li) return;
 
-        // Chỉ xử lý khi cursor ở đầu LI (offset = 0)
-        const isAtStart = range.collapsed && range.startOffset === 0;
+        // Chỉ xử lý khi cursor ở đầu LI (thực sự ở vị trí đầu tiên, không phải sau <br>)
+        const isAtStart = (() => {
+          if (!range.collapsed) return false;
+          // Tạo range từ đầu LI đến vị trí cursor
+          const preRange = document.createRange();
+          preRange.selectNodeContents(li);
+          preRange.setEnd(range.startContainer, range.startOffset);
+          // Nếu có text hoặc <br> trước cursor → không phải đầu LI
+          const fragment = preRange.cloneContents();
+          return preRange.toString().length === 0 && !fragment.querySelector('br, img, hr, table');
+        })();
         // Hoặc khi LI trống
         const isEmpty = (li.textContent || '').trim() === '';
 
@@ -1307,7 +1486,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         handleInput();
       }
     },
-    [handleInput, handleUndo, handleRedo]
+    [handleInput, handleUndo, handleRedo, execCommand]
   );
 
   const handlePaste = useCallback(
@@ -1374,9 +1553,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
         {/* Toolbar - directly below title, no gap */}
         <div className={`bg-stone-50 dark:bg-stone-900 border-b border-stone-200 dark:border-stone-700 shadow-sm ${isFullscreen ? '' : 'border-x'} ${!lessonTitle ? 'border-t rounded-t-lg' : ''}`}>
-          <div className="flex items-center justify-between px-2 sm:px-3 py-1.5">
+          <div className="flex flex-wrap items-center justify-between px-2 sm:px-3 py-1.5 gap-y-1">
             {/* Left: formatting tools */}
-            <div className="flex flex-wrap items-center gap-0.5">
+            <div className="flex flex-wrap items-center gap-0.5 min-w-0 flex-1">
               {/* Font size selector - shows current size */}
               <select
                 ref={fontSizeRef}
@@ -1425,6 +1604,34 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                 }
                 const Icon = item.icon;
 
+                // List style picker
+                if (item.command === "__listStyle") {
+                  return (
+                    <div key={item.label} className="relative">
+                      <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          savedSelectionRef.current = saveSelection();
+                          setShowListStylePicker(prev => !prev);
+                        }}
+                        className="p-1.5 rounded hover:bg-sky-50 dark:hover:bg-sky-900/30 text-stone-600 dark:text-stone-400 hover:text-brand dark:hover:text-sky-400 transition-colors flex items-center gap-0"
+                        title={item.label}
+                      >
+                        <Icon className="w-4 h-4" />
+                        <ChevronDown className="w-2.5 h-2.5" />
+                      </button>
+                      {showListStylePicker && (
+                        <ListStylePicker
+                          styles={LIST_STYLES}
+                          onSelect={applyListStyle}
+                          onClose={() => setShowListStylePicker(false)}
+                        />
+                      )}
+                    </div>
+                  );
+                }
+
                 // Special handling for table button with grid picker
                 if (item.command === "__table") {
                   return (
@@ -1467,7 +1674,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                         title={item.label}
                       >
                         <Icon className="w-4 h-4" />
-                        <div className="h-0.5 w-3 mx-auto mt-0 rounded" style={{ backgroundColor: '#dc2626' }} />
+                        <div className="h-0.5 w-3 mx-auto mt-0 rounded" style={{ backgroundColor: currentTextColor }} />
                       </button>
                       {showTextColorPicker && (
                         <ColorPickerPopup
@@ -1497,7 +1704,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                         title={item.label}
                       >
                         <Icon className="w-4 h-4" />
-                        <div className="h-0.5 w-3 mx-auto mt-0 rounded" style={{ backgroundColor: '#fef08a' }} />
+                        <div className="h-0.5 w-3 mx-auto mt-0 rounded" style={{ backgroundColor: currentHighlightColor === "transparent" ? '#e5e7eb' : currentHighlightColor }} />
                       </button>
                       {showHighlightPicker && (
                         <ColorPickerPopup
@@ -1530,6 +1737,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                   );
                 }
 
+                const isActive = activeFormats[item.command] || false;
+
                 return (
                   <button
                     key={item.label}
@@ -1538,7 +1747,11 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                       e.preventDefault();
                       execCommand(item.command, item.commandArg);
                     }}
-                    className="p-1.5 rounded hover:bg-sky-50 dark:hover:bg-sky-900/30 text-stone-600 dark:text-stone-400 hover:text-brand dark:hover:text-sky-400 transition-colors"
+                    className={`p-1.5 rounded transition-colors ${
+                      isActive
+                        ? "bg-sky-100 dark:bg-sky-900/50 text-brand dark:text-sky-400"
+                        : "hover:bg-sky-50 dark:hover:bg-sky-900/30 text-stone-600 dark:text-stone-400 hover:text-brand dark:hover:text-sky-400"
+                    }`}
                     title={item.label}
                   >
                     <Icon className="w-4 h-4" />
@@ -1549,7 +1762,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
             {/* Right: action buttons (Save, Export, etc.) */}
             {toolbarActions && (
-              <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
+              <div className="flex items-center gap-1.5 ml-2 flex-shrink-0 flex-wrap">
                 {toolbarActions}
               </div>
             )}
@@ -1574,7 +1787,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           style={{ top: isFullscreen ? '0px' : `${headerHeight}px`, maxHeight: `calc(100vh - ${headerHeight + 8}px)` }}
         >
           {showOutline && (
-            <div className="w-56 overflow-y-auto py-4 pl-3 pr-1 scrollbar-thin">
+            <div className="w-48 lg:w-56 overflow-y-auto py-4 pl-3 pr-1 scrollbar-thin bg-stone-200 dark:bg-stone-800">
               <div className="flex items-center gap-1.5 mb-3 px-1">
                 <ListTree className="w-4 h-4 text-stone-400 dark:text-stone-500 flex-shrink-0" />
                 <span className="text-xs font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wider">Mục lục</span>

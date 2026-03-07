@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useConfirm } from "@/components/common/ConfirmDialog";
 import {
   Loader2,
   Trash2,
@@ -68,6 +69,7 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
   onError,
   onSuccess,
 }) => {
+  const { confirm, ConfirmDialog, dialogProps } = useConfirm();
   // Classroom materials (staging area)
   const [materials, setMaterials] = useState<ClassroomMaterial[]>([]);
   const [materialsLoading, setMaterialsLoading] = useState(true);
@@ -82,6 +84,7 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
   const [assignStartAt, setAssignStartAt] = useState("");
   const [assignDueDate, setAssignDueDate] = useState("");
   const [assignAutoPeerReview, setAssignAutoPeerReview] = useState(false);
+  const [assignChatEnabled, setAssignChatEnabled] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   // Load classroom materials
@@ -156,6 +159,7 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
     setAssignStartAt("");
     setAssignDueDate("");
     setAssignAutoPeerReview(false);
+    setAssignChatEnabled(mat.content_type !== "quiz");
   };
 
   const handleAssign = async (mat: ClassroomMaterial) => {
@@ -172,6 +176,7 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
         start_at: assignStartAt || undefined,
         due_date: assignDueDate || undefined,
         auto_peer_review: assignAutoPeerReview,
+        chat_enabled: assignChatEnabled,
         lesson_info: mat.lesson_info || undefined,
       });
       onSuccess(`Đã giao "${assignTitle}" cho lớp ${classroomName}`);
@@ -187,7 +192,8 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
   };
 
   const handleRemoveMaterial = async (materialId: number) => {
-    if (!window.confirm("Xóa học liệu khỏi danh sách lớp?")) return;
+    const ok = await confirm({ title: "Xác nhận", message: "Xóa học liệu khỏi danh sách lớp?", confirmText: "Xóa", cancelText: "Huỷ", variant: "danger" });
+    if (!ok) return;
     try {
       await removeMaterialFromClass(classroomId, materialId);
       setMaterials((prev) => prev.filter((m) => m.id !== materialId));
@@ -198,7 +204,8 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
   };
 
   const handleDeleteAssignment = async (assignmentId: number) => {
-    if (!window.confirm("Xóa bài giao này?")) return;
+    const ok2 = await confirm({ title: "Xác nhận", message: "Xóa bài giao này?", confirmText: "Xóa", cancelText: "Huỷ", variant: "danger" });
+    if (!ok2) return;
     try {
       await deleteAssignment(assignmentId);
       onSuccess("Đã xóa bài giao");
@@ -209,8 +216,8 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
   };
 
   const handleActivatePeerReview = async (assignmentId: number) => {
-    if (!window.confirm("Kích hoạt tráo bài đánh giá chéo cho bài này?"))
-      return;
+    const ok3 = await confirm({ title: "Xác nhận", message: "Kích hoạt tráo bài đánh giá chéo cho bài này?", confirmText: "Kích hoạt", cancelText: "Huỷ" });
+    if (!ok3) return;
     try {
       await activatePeerReview(assignmentId);
       onSuccess("Đã kích hoạt tráo bài");
@@ -333,7 +340,7 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
                           </span>
                           {a.due_date && (
                             <span className="text-amber-600 dark:text-amber-400">
-                              Hạn: {new Date(a.due_date).toLocaleDateString("vi-VN")}
+                              Hạn: {new Date(a.due_date).toLocaleString("vi-VN", { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                             </span>
                           )}
                         </div>
@@ -344,19 +351,13 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
                         )}
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
-                        {!a.peer_review_status && a.submission_count > 0 && (
+                        {!a.peer_review_status && a.submission_count > 0 && a.content_type !== "quiz" && (
                           <button
                             onClick={() => handleActivatePeerReview(a.id)}
                             className="px-2 py-1 text-xs text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 rounded transition-colors"
                           >
                             Tráo bài
                           </button>
-                        )}
-                        {a.peer_review_status === "active" && (
-                          <span className="text-xs text-violet-500">Đang chấm</span>
-                        )}
-                        {a.peer_review_status === "completed" && (
-                          <span className="text-xs text-emerald-500">Đã chấm</span>
                         )}
                         <button
                           onClick={() => handleDeleteAssignment(a.id)}
@@ -467,13 +468,6 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
                               className="w-full px-3 py-1.5 border border-stone-200 dark:border-stone-600 rounded-lg bg-stone-50 dark:bg-stone-700 text-stone-900 dark:text-white text-sm focus:ring-2 focus:ring-brand focus:border-brand"
                               placeholder="Tiêu đề bài giao"
                             />
-                            <input
-                              type="text"
-                              value={assignDesc}
-                              onChange={(e) => setAssignDesc(e.target.value)}
-                              className="w-full px-3 py-1.5 border border-stone-200 dark:border-stone-600 rounded-lg bg-stone-50 dark:bg-stone-700 text-stone-900 dark:text-white text-sm focus:ring-2 focus:ring-brand focus:border-brand"
-                              placeholder="Mô tả (tùy chọn)"
-                            />
                             <div className="grid grid-cols-2 gap-2">
                               <label className="text-xs text-stone-500 dark:text-stone-400">
                                 Giờ bắt đầu
@@ -494,39 +488,52 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
                                 />
                               </label>
                             </div>
-                            <div className="flex items-center gap-4">
-                              <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                                <input
-                                  type="radio"
-                                  name={`wt-${itemKey}`}
-                                  checked={assignWorkType === "individual"}
-                                  onChange={() => setAssignWorkType("individual")}
-                                  className="text-brand"
-                                />
-                                <User className="w-3.5 h-3.5 text-stone-400" />
-                                Cá nhân
-                              </label>
-                              <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                                <input
-                                  type="radio"
-                                  name={`wt-${itemKey}`}
-                                  checked={assignWorkType === "group"}
-                                  onChange={() => setAssignWorkType("group")}
-                                  className="text-violet-600"
-                                />
-                                <Users className="w-3.5 h-3.5 text-stone-400" />
-                                Nhóm
-                              </label>
-                              <label className="flex items-center gap-1.5 text-sm cursor-pointer ml-auto">
-                                <input
-                                  type="checkbox"
-                                  checked={assignAutoPeerReview}
-                                  onChange={(e) => setAssignAutoPeerReview(e.target.checked)}
-                                  className="rounded text-orange-500"
-                                />
-                                Tráo bài tự động
-                              </label>
-                            </div>
+                            {mat.content_type !== "quiz" && (
+                              <div className="flex items-center gap-4">
+                                <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                                  <input
+                                    type="radio"
+                                    name={`wt-${itemKey}`}
+                                    checked={assignWorkType === "individual"}
+                                    onChange={() => setAssignWorkType("individual")}
+                                    className="text-brand"
+                                  />
+                                  <User className="w-3.5 h-3.5 text-stone-400" />
+                                  Cá nhân
+                                </label>
+                                <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                                  <input
+                                    type="radio"
+                                    name={`wt-${itemKey}`}
+                                    checked={assignWorkType === "group"}
+                                    onChange={() => setAssignWorkType("group")}
+                                    className="text-violet-600"
+                                  />
+                                  <Users className="w-3.5 h-3.5 text-stone-400" />
+                                  Nhóm
+                                </label>
+                                <label className="flex items-center gap-1.5 text-sm cursor-pointer ml-auto">
+                                  <input
+                                    type="checkbox"
+                                    checked={assignAutoPeerReview}
+                                    onChange={(e) => setAssignAutoPeerReview(e.target.checked)}
+                                    className="rounded text-orange-500"
+                                  />
+                                  Tráo bài tự động
+                                </label>
+                                {assignWorkType === "group" && (
+                                  <label className="flex items-center gap-1.5 text-xs text-stone-600 dark:text-stone-400 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={assignChatEnabled}
+                                      onChange={(e) => setAssignChatEnabled(e.target.checked)}
+                                      className="rounded text-blue-500"
+                                    />
+                                    Cho phép chat
+                                  </label>
+                                )}
+                              </div>
+                            )}
                             <div className="flex justify-end">
                               <button
                                 onClick={() => handleAssign(mat)}
@@ -590,6 +597,7 @@ const MaterialPanel: React.FC<MaterialPanelProps> = ({
           {renderPicker()}
         </div>
       </div>
+      <ConfirmDialog {...dialogProps} />
     </div>
   );
 };

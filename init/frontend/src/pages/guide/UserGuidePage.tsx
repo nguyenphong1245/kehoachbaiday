@@ -34,6 +34,7 @@ import {
   type GuideCardAdmin,
   type GuideCardUpdatePayload,
 } from "@/services/adminService";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 /* ---------- Icon lookup ---------- */
 const ICON_MAP: Record<string, React.FC<{ className?: string }>> = {
@@ -86,6 +87,7 @@ const isAdminUser = (): boolean => {
    MAIN COMPONENT
    ================================================================ */
 const UserGuidePage: React.FC = () => {
+  usePageTitle("Hướng dẫn sử dụng");
   const [cards, setCards] = useState<(GuideCardPublic | GuideCardAdmin)[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCardId, setSelectedCardId] = useState<number | null>(null);

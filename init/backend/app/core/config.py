@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     # LlamaParse API (PDF to Markdown conversion)
     llama_cloud_api_key: str | None = None
 
+
     # Internal API key for auto-submit and scheduled tasks
     internal_api_key: str = "CHANGE-ME-IN-ENV-FILE-INTERNAL-KEY"
 

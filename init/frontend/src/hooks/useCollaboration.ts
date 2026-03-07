@@ -36,9 +36,17 @@ interface CollaborationState {
   connecting: boolean;
   sessionSubmitted: boolean;
   submitterName: string | null;
+  chatDisabled: boolean;
   // Peer review real-time sync
   peerReviewComments: Record<string, string>;
   peerReviewScore: number | null;
+}
+
+export interface RunResultData {
+  user_id: number;
+  user_name: string;
+  result: any;
+  error: string | null;
 }
 
 interface UseCollaborationOptions {
@@ -48,11 +56,12 @@ interface UseCollaborationOptions {
   onSessionSubmitted?: (submitterName: string) => void;
   onPeerReviewComment?: (questionId: string, comment: string, userId: number, userName: string) => void;
   onPeerReviewScore?: (score: number, userId: number, userName: string) => void;
+  onRunResult?: (data: RunResultData) => void;
 }
 
-const WS_BASE = import.meta.env.VITE_WS_URL || `ws://${window.location.hostname}:8000`;
+const WS_BASE = import.meta.env.VITE_WS_URL || `ws://${window.location.host}`;
 
-export function useCollaboration({ sessionId, onAnswerUpdated, onLeaderElected, onSessionSubmitted, onPeerReviewComment, onPeerReviewScore }: UseCollaborationOptions) {
+export function useCollaboration({ sessionId, onAnswerUpdated, onLeaderElected, onSessionSubmitted, onPeerReviewComment, onPeerReviewScore, onRunResult }: UseCollaborationOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptsRef = useRef(0);
@@ -64,6 +73,7 @@ export function useCollaboration({ sessionId, onAnswerUpdated, onLeaderElected, 
     onSessionSubmitted,
     onPeerReviewComment,
     onPeerReviewScore,
+    onRunResult,
   });
 
   // Update refs when callbacks change
@@ -74,8 +84,9 @@ export function useCollaboration({ sessionId, onAnswerUpdated, onLeaderElected, 
       onSessionSubmitted,
       onPeerReviewComment,
       onPeerReviewScore,
+      onRunResult,
     };
-  }, [onAnswerUpdated, onLeaderElected, onSessionSubmitted, onPeerReviewComment, onPeerReviewScore]);
+  }, [onAnswerUpdated, onLeaderElected, onSessionSubmitted, onPeerReviewComment, onPeerReviewScore, onRunResult]);
 
   const [state, setState] = useState<CollaborationState>({
     answers: {},
@@ -89,6 +100,7 @@ export function useCollaboration({ sessionId, onAnswerUpdated, onLeaderElected, 
     connecting: false,
     sessionSubmitted: false,
     submitterName: null,
+    chatDisabled: false,
     peerReviewComments: {},
     peerReviewScore: null,
   });
@@ -105,7 +117,10 @@ export function useCollaboration({ sessionId, onAnswerUpdated, onLeaderElected, 
       wsRef.current = null;
     }
 
-    setState((prev) => ({ ...prev, connecting: true }));
+    // Only show "connecting" state on first attempt, not retries
+    if (reconnectAttemptsRef.current === 0) {
+      setState((prev) => ({ ...prev, connecting: true }));
+    }
 
     // Get WebSocket token from API (validates httpOnly cookie)
     let wsToken = "";
@@ -132,12 +147,15 @@ export function useCollaboration({ sessionId, onAnswerUpdated, onLeaderElected, 
       setState((prev) => ({ ...prev, connected: false, connecting: false }));
       wsRef.current = null;
 
-      // Exponential backoff reconnect
-      const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
+      // Exponential backoff reconnect (start at 3s to avoid rapid re-renders)
+      const delay = Math.min(3000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
       reconnectAttemptsRef.current += 1;
-      reconnectTimeoutRef.current = setTimeout(() => {
-        if (sessionId) connect();
-      }, delay);
+      // Stop retrying after 10 attempts
+      if (reconnectAttemptsRef.current <= 10) {
+        reconnectTimeoutRef.current = setTimeout(() => {
+          if (sessionId) connect();
+        }, delay);
+      }
     };
 
     ws.onerror = () => {
@@ -167,6 +185,7 @@ export function useCollaboration({ sessionId, onAnswerUpdated, onLeaderElected, 
           taskAssignments: msg.task_assignments || {},
           leaderId: msg.leader_id,
           leaderVotes: msg.leader_votes || {},
+          chatDisabled: msg.chat_disabled || false,
           membersOnline: msg.members_online || [],
         }));
         break;
@@ -287,6 +306,30 @@ export function useCollaboration({ sessionId, onAnswerUpdated, onLeaderElected, 
           peerReviewScore: msg.score,
         }));
         callbacks.onPeerReviewScore?.(msg.score, msg.user_id, msg.user_name);
+        break;
+
+      case "run_result":
+        // Another member ran code - show their results
+        callbacks.onRunResult?.({
+          user_id: msg.user_id,
+          user_name: msg.user_name,
+          result: msg.result,
+          error: msg.error,
+        });
+        break;
+
+      case "chat_toggled":
+        // Teacher toggled chat for this group
+        setState((prev) => ({
+          ...prev,
+          chatDisabled: msg.chat_disabled,
+        }));
+        break;
+
+      case "chat_blocked":
+        // Chat message was blocked by server - show alert
+        console.warn("[WS] Chat blocked:", msg.reason);
+        alert(msg.reason || "Chat đã bị tắt");
         break;
     }
   }, []); // No dependencies - uses refs for callbacks
@@ -416,6 +459,16 @@ export function useCollaboration({ sessionId, onAnswerUpdated, onLeaderElected, 
     }
   }, []);
 
+  const sendRunResult = useCallback((result: any, error: string | null) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: "run_result",
+        result,
+        error,
+      }));
+    }
+  }, []);
+
   const loadPeerReviewState = useCallback((comments: Record<string, string>, score: number | null) => {
     setState((prev) => ({
       ...prev,
@@ -432,6 +485,7 @@ export function useCollaboration({ sessionId, onAnswerUpdated, onLeaderElected, 
     assignTasks,
     sendTypingIndicator,
     loadChatHistory,
+    sendRunResult,
     sendPeerReviewComment,
     sendPeerReviewScore,
     loadPeerReviewState,

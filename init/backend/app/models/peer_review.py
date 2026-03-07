@@ -1,7 +1,7 @@
 """
 PeerReviewRound & PeerReview Models - Đánh giá chéo
 """
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, UniqueConstraint
+from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey, JSON, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base import Base
@@ -36,7 +36,9 @@ class PeerReview(Base):
     reviewer_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     comments = Column(JSON, server_default="{}")  # {"q1": "comment", "general": "..."}
-    score = Column(Integer, nullable=True)  # 1-10
+    score = Column(Float, nullable=True)  # 1-10 (average of member_scores)
+    member_scores = Column(JSON, server_default="{}")  # {"user_id": score, ...}
+    member_comments = Column(JSON, server_default="{}")  # {"user_id": {"key": "comment"}, ...}
     submitted_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

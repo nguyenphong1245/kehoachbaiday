@@ -21,6 +21,8 @@ export interface Assignment {
   peer_review_status?: string | null;
   peer_review_start_time?: string | null;
   peer_review_end_time?: string | null;
+  peer_review_duration?: number | null;
+  chat_enabled?: boolean;
   submission_count: number;
   total_students: number;
   created_at: string;
@@ -46,6 +48,8 @@ export async function createAssignment(data: {
   auto_peer_review?: boolean;
   peer_review_start_time?: string;
   peer_review_end_time?: string;
+  peer_review_duration?: number;
+  chat_enabled?: boolean;
 }): Promise<Assignment> {
   const res = await api.post("/assignments/", data);
   return res.data;
@@ -73,6 +77,8 @@ export async function updateAssignment(
     auto_peer_review?: boolean;
     peer_review_start_time?: string;
     peer_review_end_time?: string;
+    peer_review_duration?: number;
+    chat_enabled?: boolean;
   }
 ): Promise<Assignment> {
   const res = await api.patch(`/assignments/${id}`, data);
@@ -90,6 +96,14 @@ export async function getSubmissions(assignmentId: number): Promise<any> {
 
 export async function getClassroomStatistics(classroomId: number): Promise<any> {
   const res = await api.get(`/assignments/classroom/${classroomId}/statistics`);
+  return res.data;
+}
+
+export async function toggleGroupChat(
+  assignmentId: number,
+  sessionId: number
+): Promise<{ session_id: number; chat_disabled: boolean; message: string }> {
+  const res = await api.put(`/assignments/${assignmentId}/sessions/${sessionId}/toggle-chat`);
   return res.data;
 }
 

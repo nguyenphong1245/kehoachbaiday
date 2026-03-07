@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useConfirm } from "@/components/common/ConfirmDialog";
 import {
   ArrowLeft,
   Send,
@@ -20,6 +21,7 @@ import {
   type MyReviewResponse,
   type FeedbackItem,
 } from "@/services/peerReviewService";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 // ========== Worksheet parsing (same as CollaborativeWorkspacePage) ==========
 interface InteractiveBlock {
@@ -27,6 +29,7 @@ interface InteractiveBlock {
   text: string;
   questionLine: string;
   questionNum: string;
+  codeBlock?: string;
 }
 
 const buildInteractiveBlocks = (content: string): InteractiveBlock[] => {
@@ -34,6 +37,8 @@ const buildInteractiveBlocks = (content: string): InteractiveBlock[] => {
   const questionLinePattern = /^\s*\*{0,2}\s*(?:Câu|Bài|Question)\s+(\d+)\s*[.:]/i;
   const dotLinePattern = /^\s*\.{3,}\s*$/;
   const studentInfoPattern = /^\s*\*{0,2}\s*(?:Họ và tên|Họ tên|HỌ VÀ TÊN|HỌ TÊN|Nhóm|NHÓM|Lớp|LỚP)\s*\*{0,2}\s*:/i;
+  const sectionHeaderPattern = /^\s*#{1,4}\s*\*{0,2}\s*(?:I{1,3}V?|V?I{0,3})\.\s*PHỤ LỤC/i;
+  const worksheetTitlePattern = /^\s*\*{0,2}\s*PHIẾU HỌC TẬP\s*(?:SỐ\s*\d+)?\s*\*{0,2}\s*$/i;
 
   const lines = content.split("\n");
   let currentMarkdown: string[] = [];
@@ -50,13 +55,34 @@ const buildInteractiveBlocks = (content: string): InteractiveBlock[] => {
     if (line.trim().startsWith("```")) { inCodeBlock = !inCodeBlock; currentMarkdown.push(line); continue; }
     if (inCodeBlock) { currentMarkdown.push(line); continue; }
     if (dotLinePattern.test(line)) continue;
+    const stripped = line.replace(/\*/g, "").trim();
+    if (sectionHeaderPattern.test(line) || sectionHeaderPattern.test(stripped)) continue;
+    if (worksheetTitlePattern.test(line) || worksheetTitlePattern.test(stripped)) continue;
     if (studentInfoPattern.test(line)) {
       const withoutDots = line.replace(/\.{2,}/g, "").replace(/\*{1,2}/g, "").trim();
       if (/^(?:Họ và tên|Họ tên|Nhóm|Lớp)\s*:\s*$/i.test(withoutDots)) continue;
     }
     const cleanedLine = line.replace(/\.{3,}/g, "");
     const qMatch = cleanedLine.match(questionLinePattern);
-    if (qMatch) { flushMarkdown(); blocks.push({ type: "question_input", text: "", questionLine: cleanedLine, questionNum: qMatch[1] }); continue; }
+    if (qMatch) {
+      flushMarkdown();
+      let questionCode: string | undefined;
+      let j = i + 1;
+      while (j < lines.length && lines[j].trim() === "") j++;
+      if (j < lines.length && lines[j].trim().startsWith("```")) {
+        const codeLines: string[] = [lines[j]];
+        j++;
+        while (j < lines.length && !lines[j].trim().startsWith("```")) {
+          codeLines.push(lines[j]);
+          j++;
+        }
+        if (j < lines.length) { codeLines.push(lines[j]); j++; }
+        questionCode = codeLines.join("\n");
+        i = j - 1;
+      }
+      blocks.push({ type: "question_input", text: "", questionLine: cleanedLine, questionNum: qMatch[1], codeBlock: questionCode });
+      continue;
+    }
     currentMarkdown.push(cleanedLine);
   }
   flushMarkdown();
@@ -120,9 +146,11 @@ const mdComponents = {
 };
 
 const PeerReviewPage: React.FC = () => {
+  usePageTitle("Đánh giá chéo");
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const assignmentId = Number(id);
+  const { confirm, ConfirmDialog, dialogProps } = useConfirm();
 
   const [activeTab, setActiveTab] = useState<"review" | "feedback">("review");
   const [reviewData, setReviewData] = useState<MyReviewResponse | null>(null);
@@ -183,8 +211,13 @@ const PeerReviewPage: React.FC = () => {
         setWorksheetTitle(parseWorksheetTitle(reviewResult.worksheet_content));
         setWorksheetBlocks(buildInteractiveBlocks(reviewResult.worksheet_content));
       }
-    } catch {
-      setError("Lỗi khi tải dữ liệu đánh giá");
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status === 404) {
+        setError("Bài tập đã bị xóa hoặc không tồn tại.");
+      } else {
+        setError("Lỗi khi tải dữ liệu đánh giá");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -192,7 +225,8 @@ const PeerReviewPage: React.FC = () => {
 
   const handleSubmitReview = async () => {
     if (!reviewData?.review) return;
-    if (!window.confirm("Nộp nhận xét? Không thể sửa sau khi nộp.")) return;
+    const ok = await confirm({ title: "Nộp nhận xét", message: "Nộp nhận xét? Không thể sửa sau khi nộp.", confirmText: "Nộp", cancelText: "Huỷ" });
+    if (!ok) return;
 
     setSubmitting(true);
     try {
@@ -213,6 +247,20 @@ const PeerReviewPage: React.FC = () => {
           <Loader2 className="w-10 h-10 animate-spin text-brand mx-auto mb-3" />
           <p className="text-stone-600 dark:text-stone-300">Đang tải...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (error && !reviewData) {
+    return (
+      <div className="min-h-screen bg-stone-50 dark:bg-stone-900 flex flex-col items-center justify-center gap-4">
+        <p className="text-stone-500">{error}</p>
+        <button
+          onClick={() => navigate("/student/dashboard")}
+          className="px-4 py-2 bg-brand text-white rounded-lg hover:bg-brand-dark text-sm"
+        >
+          Về trang chủ
+        </button>
       </div>
     );
   }
@@ -353,93 +401,103 @@ const PeerReviewPage: React.FC = () => {
                     <p className="text-sky-100 text-sm mt-1">Bài làm của bạn khác</p>
                   </div>
 
-                  <div className="p-3 sm:p-6">
-                    {worksheetBlocks.length > 0 ? (
-                      <div className="space-y-6">
-                        {worksheetBlocks.map((block, blockIdx) => {
-                          if (block.type === "markdown") {
-                            return (
-                              <div key={`md-${blockIdx}`} className="prose prose-sm dark:prose-invert max-w-none">
-                                <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-                                  {block.text}
-                                </ReactMarkdown>
-                              </div>
-                            );
-                          }
+                  <div className="p-3 sm:p-6 space-y-5">
+                    {(() => {
+                      const answers = reviewData?.reviewee_answers || {};
+                      const hasBlocks = worksheetBlocks.length > 0;
+                      const questionKeys = !hasBlocks ? Object.entries(answers)
+                        .filter(([key]) => key.startsWith("q_"))
+                        .sort(([a], [b]) => parseInt(a.replace("q_", "")) - parseInt(b.replace("q_", ""))) : [];
 
-                          const answerKey = `q_${block.questionNum}`;
-                          const answer = reviewData?.reviewee_answers?.[answerKey] || "";
+                      return (
+                        <>
+                          {/* Worksheet card */}
+                          <div className="rounded-lg overflow-hidden border-2 border-sky-400">
+                            <div className="bg-sky-500 px-5 py-3">
+                              <h4 className="text-white font-bold text-base">{worksheetTitle}</h4>
+                            </div>
+                            <div className="bg-white dark:bg-stone-800 px-5 py-4 space-y-4">
+                              {hasBlocks ? (
+                                worksheetBlocks.map((block, idx) => {
+                                  if (block.type === "markdown") {
+                                    return (
+                                      <div key={`md-${idx}`}>
+                                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{block.text}</ReactMarkdown>
+                                      </div>
+                                    );
+                                  }
+                                  const answerKey = `q_${block.questionNum}`;
+                                  const answer = answers[answerKey] || "";
+                                  const answerLines = String(answer || "").split("\n");
+                                  return (
+                                    <div key={`q-${idx}`}>
+                                      <div className="mb-1">
+                                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{block.questionLine}</ReactMarkdown>
+                                      </div>
+                                      {block.codeBlock && (
+                                        <div className="mb-2">
+                                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{block.codeBlock}</ReactMarkdown>
+                                        </div>
+                                      )}
+                                      <div className="ml-1 mb-4">
+                                        {(answerLines.length > 0 && answer ? answerLines : [""]).map((line, li) => (
+                                          <div key={li} className="border-b border-stone-400 px-1 py-2 min-h-[2rem]">
+                                            <span className="text-sm text-blue-700 dark:text-blue-400">{line}</span>
+                                          </div>
+                                        ))}
+                                        {answerLines.length < 3 && [...Array(3 - Math.max(answerLines.length, answer ? 1 : 0))].map((_, li) => (
+                                          <div key={`empty-${li}`} className="border-b border-stone-400 px-1 py-2 min-h-[2rem]" />
+                                        ))}
+                                      </div>
+                                    </div>
+                                  );
+                                })
+                              ) : (
+                                questionKeys.map(([qId, answer]) => {
+                                  const qNum = qId.replace("q_", "");
+                                  const answerLines = String(answer || "").split("\n");
+                                  return (
+                                    <div key={qId}>
+                                      <p className="text-sm font-semibold text-stone-800 dark:text-stone-200 mb-1"><strong>Câu {qNum}:</strong></p>
+                                      <div className="ml-1 mb-4">
+                                        {(answerLines.length > 0 && answer ? answerLines : [""]).map((line, li) => (
+                                          <div key={li} className="border-b border-stone-400 px-1 py-2 min-h-[2rem]">
+                                            <span className="text-sm text-blue-700 dark:text-blue-400">{typeof line === "object" ? JSON.stringify(line) : String(line)}</span>
+                                          </div>
+                                        ))}
+                                        {answerLines.length < 3 && [...Array(3 - Math.max(answerLines.length, answer ? 1 : 0))].map((_, li) => (
+                                          <div key={`empty-${li}`} className="border-b border-stone-400 px-1 py-2 min-h-[2rem]" />
+                                        ))}
+                                      </div>
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </div>
 
-                          return (
-                            <div key={`q-${blockIdx}`} className="border-l-4 border-brand pl-4 py-2">
-                              <div className="prose prose-sm dark:prose-invert max-w-none mb-3">
-                                <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-                                  {block.questionLine}
-                                </ReactMarkdown>
-                              </div>
-                              <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-4 border border-emerald-200 dark:border-emerald-800">
-                                <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400 mb-2">
-                                  Câu trả lời:
-                                </p>
-                                <p className="text-stone-800 dark:text-stone-200 whitespace-pre-wrap">
-                                  {answer || "(Chưa trả lời)"}
-                                </p>
-                              </div>
-                              <div className="mt-3">
+                          {/* Review comments */}
+                          <div className="space-y-3">
+                            <p className="text-xs font-medium text-stone-500 uppercase tracking-wider">Nhận xét từng câu</p>
+                            {(hasBlocks
+                              ? worksheetBlocks.filter(b => b.type === "question_input").map(b => ({ num: b.questionNum }))
+                              : questionKeys.map(([qId]) => ({ num: qId.replace("q_", "") }))
+                            ).map(({ num }) => (
+                              <div key={num} className="flex items-center gap-2">
+                                <span className="text-xs font-medium text-stone-600 dark:text-stone-400 whitespace-nowrap">Câu {num}:</span>
                                 <input
                                   type="text"
-                                  placeholder={`Nhận xét cho câu ${block.questionNum}...`}
-                                  value={comments[block.questionNum] || ""}
-                                  onChange={(e) => setComments((prev) => ({ ...prev, [block.questionNum]: e.target.value }))}
-                                  className="w-full px-4 py-2 text-sm border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-700 text-stone-900 dark:text-white focus:ring-2 focus:ring-brand focus:border-transparent"
+                                  placeholder="Nhận xét..."
+                                  value={comments[num] || ""}
+                                  onChange={(e) => setComments((prev) => ({ ...prev, [num]: e.target.value }))}
+                                  className="flex-1 px-3 py-1.5 text-sm border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-700 text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent"
                                 />
                               </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="space-y-6">
-                        {reviewData?.reviewee_answers && Object.entries(reviewData.reviewee_answers)
-                          .filter(([key]) => !key.startsWith("_"))
-                          .map(([qId, answer]) => {
-                            const question = reviewData.questions?.find(
-                              (q) => q.id === qId || String(q.id) === qId
-                            );
-                            const questionText = question?.question || question?.text || question?.title || question?.description;
-
-                            return (
-                              <div key={qId} className="border-l-4 border-brand pl-4 py-2">
-                                <h4 className="font-medium text-stone-700 dark:text-stone-200 mb-2">
-                                  Câu {qId}
-                                </h4>
-                                {questionText && (
-                                  <div className="bg-sky-50 dark:bg-sky-900/20 rounded-lg p-3 mb-3 border-l-4 border-sky-400">
-                                    <p className="text-sm text-stone-700 dark:text-stone-300">{questionText}</p>
-                                  </div>
-                                )}
-                                <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-4 border border-emerald-200 dark:border-emerald-800">
-                                  <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400 mb-2">
-                                    Câu trả lời:
-                                  </p>
-                                  <p className="text-stone-800 dark:text-stone-200 whitespace-pre-wrap">
-                                    {String(answer) || "(Chưa trả lời)"}
-                                  </p>
-                                </div>
-                                <div className="mt-3">
-                                  <input
-                                    type="text"
-                                    placeholder={`Nhận xét cho câu ${qId}...`}
-                                    value={comments[qId] || ""}
-                                    onChange={(e) => setComments((prev) => ({ ...prev, [qId]: e.target.value }))}
-                                    className="w-full px-4 py-2 text-sm border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-700 text-stone-900 dark:text-white focus:ring-2 focus:ring-brand focus:border-transparent"
-                                  />
-                                </div>
-                              </div>
-                            );
-                          })}
-                      </div>
-                    )}
+                            ))}
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               )}
@@ -563,6 +621,7 @@ const PeerReviewPage: React.FC = () => {
           </div>
         )}
       </div>
+      <ConfirmDialog {...dialogProps} />
     </div>
   );
 };

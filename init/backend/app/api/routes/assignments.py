@@ -1,7 +1,7 @@
 """
 API Routes cho Giao bài cho lớp
 """
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -100,8 +100,11 @@ async def _build_assignment_read(
 
     # Count submissions
     if assignment.work_type == "group":
+        # Count students in groups that have submitted (not just group count)
         sub_count = await db.execute(
-            select(func.count(GroupWorkSession.id)).where(
+            select(func.count(GroupMember.id))
+            .join(GroupWorkSession, GroupWorkSession.group_id == GroupMember.group_id)
+            .where(
                 GroupWorkSession.assignment_id == assignment.id,
                 GroupWorkSession.status == "submitted",
             )
@@ -127,6 +130,8 @@ async def _build_assignment_read(
     peer_review_status = getattr(assignment, 'peer_review_status', None)
     peer_review_start = getattr(assignment, 'peer_review_start_time', None)
     peer_review_end = getattr(assignment, 'peer_review_end_time', None)
+    peer_review_duration = getattr(assignment, 'peer_review_duration', None)
+    chat_enabled = getattr(assignment, 'chat_enabled', True)
 
     return AssignmentRead(
         id=assignment.id,
@@ -146,6 +151,8 @@ async def _build_assignment_read(
         peer_review_status=peer_review_status,
         peer_review_start_time=peer_review_start,
         peer_review_end_time=peer_review_end,
+        peer_review_duration=peer_review_duration,
+        chat_enabled=chat_enabled,
         submission_count=submission_count,
         total_students=total_students,
         created_at=assignment.created_at,
@@ -175,12 +182,19 @@ async def create_assignment(
     if not content_title:
         raise HTTPException(status_code=404, detail=f"Không tìm thấy {data.content_type} với id {data.content_id}")
 
-    # Parse dates safely
+    # Parse dates safely — naive datetimes from datetime-local inputs are local time (UTC+7)
+    VN_TZ = timezone(timedelta(hours=7))
+
     def parse_date(date_str: str | None) -> datetime | None:
         if not date_str:
             return None
         try:
-            return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+            dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+            # datetime-local sends naive strings like "2026-03-05T15:08" without timezone
+            # These are local time (Vietnam UTC+7), so attach the timezone info
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=VN_TZ)
+            return dt
         except ValueError:
             return None
 
@@ -229,11 +243,20 @@ async def create_assignment(
         columns.append('peer_review_end_time')
         values.append(peer_review_end_time)
 
+    if data.peer_review_duration is not None:
+        columns.append('peer_review_duration')
+        values.append(data.peer_review_duration)
+
+    if data.chat_enabled is not None:
+        columns.append('chat_enabled')
+        values.append(data.chat_enabled)
+
     # Build SQL - column names are from a controlled list, not user input
     _SAFE_COLUMNS = {
         'classroom_id', 'content_type', 'content_id', 'title', 'description',
         'work_type', 'due_date', 'lesson_plan_id', 'lesson_info', 'start_at',
         'auto_peer_review', 'peer_review_start_time', 'peer_review_end_time',
+        'peer_review_duration', 'chat_enabled',
     }
     columns = [c for c in columns if c in _SAFE_COLUMNS]
     values = values[:len(columns)]
@@ -363,8 +386,10 @@ async def list_assignments(
     group_counts: dict[int, int] = {}
     individual_counts: dict[int, int] = {}
     if assignment_ids:
+        # Count students in submitted groups (not just group count)
         gc_result = await db.execute(
-            select(GroupWorkSession.assignment_id, func.count(GroupWorkSession.id))
+            select(GroupWorkSession.assignment_id, func.count(GroupMember.id))
+            .join(GroupMember, GroupMember.group_id == GroupWorkSession.group_id)
             .where(GroupWorkSession.assignment_id.in_(assignment_ids), GroupWorkSession.status == "submitted")
             .group_by(GroupWorkSession.assignment_id)
         )
@@ -395,6 +420,8 @@ async def list_assignments(
         peer_review_status = getattr(a, 'peer_review_status', None)
         peer_review_start = getattr(a, 'peer_review_start_time', None)
         peer_review_end = getattr(a, 'peer_review_end_time', None)
+        peer_review_duration = getattr(a, 'peer_review_duration', None)
+        chat_enabled = getattr(a, 'chat_enabled', True)
         items.append(AssignmentRead(
             id=a.id,
             classroom_id=a.classroom_id,
@@ -413,6 +440,8 @@ async def list_assignments(
             peer_review_status=peer_review_status,
             peer_review_start_time=peer_review_start,
             peer_review_end_time=peer_review_end,
+            peer_review_duration=peer_review_duration,
+            chat_enabled=chat_enabled,
             submission_count=sub_count,
             total_students=total_students,
             created_at=a.created_at,
@@ -473,18 +502,29 @@ async def update_assignment(
         assignment.work_type = data.work_type
     if data.is_active is not None:
         assignment.is_active = data.is_active
+    VN_TZ_UPDATE = timezone(timedelta(hours=7))
     if data.due_date is not None:
         try:
-            assignment.due_date = datetime.fromisoformat(data.due_date)
+            dt = datetime.fromisoformat(data.due_date)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=VN_TZ_UPDATE)
+            assignment.due_date = dt
         except ValueError:
             raise HTTPException(status_code=400, detail="due_date không đúng format ISO")
     if data.start_at is not None:
         try:
-            assignment.start_at = datetime.fromisoformat(data.start_at)
+            dt = datetime.fromisoformat(data.start_at)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=VN_TZ_UPDATE)
+            assignment.start_at = dt
         except ValueError:
             raise HTTPException(status_code=400, detail="start_at không đúng format ISO")
     if data.auto_peer_review is not None:
         assignment.auto_peer_review = data.auto_peer_review
+    if data.peer_review_duration is not None:
+        assignment.peer_review_duration = data.peer_review_duration
+    if data.chat_enabled is not None:
+        assignment.chat_enabled = data.chat_enabled
 
     await db.commit()
     await db.refresh(assignment)
@@ -514,6 +554,62 @@ async def delete_assignment(
 
     await db.delete(assignment)
     await db.commit()
+
+
+@router.put("/{assignment_id}/sessions/{session_id}/toggle-chat")
+@limiter.limit("20/minute")
+async def toggle_group_chat(
+    request: Request,
+    assignment_id: int,
+    session_id: int,
+    current_user: User = Depends(require_teacher()),
+    db: AsyncSession = Depends(get_db),
+):
+    """Bật/tắt chat cho một nhóm cụ thể"""
+    result = await db.execute(
+        select(ClassAssignment).where(ClassAssignment.id == assignment_id)
+    )
+    assignment = result.scalar_one_or_none()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Không tìm thấy bài giao")
+
+    await _verify_teacher_owns_classroom(assignment.classroom_id, current_user, db)
+
+    ws_result = await db.execute(
+        select(GroupWorkSession).where(
+            GroupWorkSession.id == session_id,
+            GroupWorkSession.assignment_id == assignment_id,
+        )
+    )
+    session = ws_result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Không tìm thấy phiên làm bài")
+
+    session.chat_disabled = not session.chat_disabled
+
+    # When enabling chat for a group, also ensure assignment-level chat is enabled
+    if not session.chat_disabled and hasattr(assignment, 'chat_enabled') and not assignment.chat_enabled:
+        assignment.chat_enabled = True
+
+    await db.commit()
+
+    # The effective chat_disabled state combines per-group and assignment-level settings
+    effective_disabled = session.chat_disabled or (not getattr(assignment, 'chat_enabled', True))
+
+    # Notify the group via WebSocket
+    from app.api.routes.ws_collaboration import rooms
+    room = rooms.get(session_id)
+    if room:
+        await room.broadcast({
+            "type": "chat_toggled",
+            "chat_disabled": effective_disabled,
+        })
+
+    return {
+        "session_id": session_id,
+        "chat_disabled": effective_disabled,
+        "message": "Đã tắt chat" if effective_disabled else "Đã bật chat",
+    }
 
 
 @router.put("/{assignment_id}/grade")
@@ -637,6 +733,7 @@ async def get_submissions(
         if worksheet:
             content_data = {
                 "title": worksheet.title,
+                "content": worksheet.content or "",  # Raw markdown for worksheet rendering
                 "questions": worksheet.questions or [],  # List of question objects
             }
     elif assignment.content_type == "quiz":
@@ -783,6 +880,7 @@ async def _get_classroom_statistics_impl(
             "created_at": a.created_at.isoformat() if a.created_at else None,
             "student_stats": [],
             "group_stats": [],
+            "chat_enabled": a.chat_enabled if hasattr(a, 'chat_enabled') else True,
         }
 
         if a.work_type == "group":
@@ -796,7 +894,11 @@ async def _get_classroom_statistics_impl(
                 )
             )
             sessions = ws_result.scalars().all()
-            submitted = sum(1 for s in sessions if s.status == "submitted")
+            # Count students in submitted groups (not just group count)
+            submitted = sum(
+                len(s.group.members) if s.group else 0
+                for s in sessions if s.status == "submitted"
+            )
             assignment_stats["submitted_count"] = submitted
 
             for ws in sessions:
@@ -831,19 +933,32 @@ async def _get_classroom_statistics_impl(
                                 "worksheet_score": 0, "worksheet_max": 0, "worksheet_count": 0,
                             }
                         student_ranking[sid]["assignments_submitted"] += 1
-                        # Use member grade if available
+
+                        score_earned = 0
+                        score_max = 0
+                        # Use member grade if available (teacher override)
                         if str(m.student_id) in member_grades:
                             mg = member_grades[str(m.student_id)]
-                            score = mg.get("score", 0)
-                            student_ranking[sid]["total_score"] += score
-                            student_ranking[sid]["total_max"] += 10
+                            score_earned = mg.get("score", 0)
+                            score_max = 10
+                        elif a.content_type == "code_exercise":
+                            # Fallback to auto-graded test result from group answers
+                            ws_answers = ws.answers or {}
+                            if "test_result" in ws_answers:
+                                tr = ws_answers["test_result"]
+                                score_earned = tr.get("passed_tests", 0)
+                                score_max = tr.get("total_tests", 0)
+
+                        if score_max > 0:
+                            student_ranking[sid]["total_score"] += score_earned
+                            student_ranking[sid]["total_max"] += score_max
                             if a.content_type == "code_exercise":
-                                student_ranking[sid]["code_score"] += score
-                                student_ranking[sid]["code_max"] += 10
+                                student_ranking[sid]["code_score"] += score_earned
+                                student_ranking[sid]["code_max"] += score_max
                                 student_ranking[sid]["code_count"] += 1
                             elif a.content_type == "worksheet":
-                                student_ranking[sid]["worksheet_score"] += score
-                                student_ranking[sid]["worksheet_max"] += 10
+                                student_ranking[sid]["worksheet_score"] += score_earned
+                                student_ranking[sid]["worksheet_max"] += score_max
                                 student_ranking[sid]["worksheet_count"] += 1
 
                 group_stat = {
@@ -856,6 +971,7 @@ async def _get_classroom_statistics_impl(
                     "teacher_score": ws.teacher_score,
                     "teacher_comment": ws.teacher_comment,
                     "session_id": ws.id,
+                    "chat_disabled": ws.chat_disabled if hasattr(ws, 'chat_disabled') else False,
                     "members": members_list,
                 }
                 # Score for code exercises

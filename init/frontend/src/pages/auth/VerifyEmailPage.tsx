@@ -6,8 +6,10 @@ import OtpInput from "@/components/forms/OtpInput";
 import SubmitButton from "@/components/forms/SubmitButton";
 import AuthCard from "@/components/layout/AuthCard";
 import { verifyEmail } from "@/services/authService";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const VerifyEmailPage = () => {
+  usePageTitle("Xác thực email");
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();

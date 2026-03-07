@@ -6,8 +6,10 @@ import SubmitButton from "@/components/forms/SubmitButton";
 import TextInput from "@/components/forms/TextInput";
 import AuthCard from "@/components/layout/AuthCard";
 import { resendVerificationEmail } from "@/services/authService";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const ResendVerificationPage = () => {
+  usePageTitle("Gửi lại xác thực");
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);

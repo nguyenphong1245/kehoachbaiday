@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useConfirm } from "@/components/common/ConfirmDialog";
 import {
   Plus,
   Users,
@@ -15,9 +16,12 @@ import {
   deleteClassroom,
 } from "@/services/classroomService";
 import type { Classroom } from "@/types/classroom";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const ClassroomListPage: React.FC = () => {
+  usePageTitle("Danh sách lớp học");
   const navigate = useNavigate();
+  const { confirm, ConfirmDialog, dialogProps } = useConfirm();
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +75,8 @@ const ClassroomListPage: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm("Xóa lớp học này? Tất cả dữ liệu liên quan sẽ bị xóa.")) return;
+    const ok = await confirm({ title: "Xóa lớp", message: "Xóa lớp học này? Tất cả dữ liệu liên quan sẽ bị xóa.", confirmText: "Xóa", cancelText: "Huỷ", variant: "danger" });
+    if (!ok) return;
     setDeletingId(id);
     try {
       await deleteClassroom(id);
@@ -141,7 +146,7 @@ const ClassroomListPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={creating}
-                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
+                className="px-6 py-2 bg-brand text-white rounded-lg hover:bg-brand-dark disabled:opacity-50 flex items-center gap-2"
               >
                 {creating && <Loader2 className="w-4 h-4 animate-spin" />}
                 Tạo
@@ -221,6 +226,7 @@ const ClassroomListPage: React.FC = () => {
           </div>
         )}
       </div>
+      <ConfirmDialog {...dialogProps} />
     </div>
   );
 };
