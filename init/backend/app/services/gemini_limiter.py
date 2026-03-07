@@ -4,10 +4,10 @@ Tránh vượt rate limit khi nhiều user dùng cùng lúc.
 """
 import asyncio
 
-# Max 10 Gemini API calls chạy song song
-# Gemini free tier: 15 RPM, paid tier cao hơn
-# 10 là con số an toàn cho cả hai
-_gemini_semaphore = asyncio.Semaphore(10)
+# Max 4 Gemini API calls chạy song song
+# Giới hạn thấp hơn để tiết kiệm RAM trên server 4GB
+# và tránh vượt rate limit khi nhiều user dùng cùng lúc
+_gemini_semaphore = asyncio.Semaphore(4)
 
 
 def get_gemini_semaphore() -> asyncio.Semaphore:

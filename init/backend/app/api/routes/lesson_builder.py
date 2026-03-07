@@ -10,6 +10,7 @@ import json
 import asyncio
 
 from app.api.deps import get_current_user, get_db
+from app.db.session import AsyncSessionLocal
 from app.core.logging import logger
 from app.core.rate_limiter import limiter
 from app.services.gemini_limiter import get_gemini_semaphore
@@ -318,6 +319,8 @@ async def generate_lesson_plan_stream(
 
     service = get_lesson_plan_builder_service()
     user_id = current_user.id  # Capture user_id for use in generator
+    # Capture user settings before entering generator (db may close)
+    user_settings = current_user.settings
 
     async def event_generator():
         loop = asyncio.get_event_loop()
@@ -368,9 +371,9 @@ async def generate_lesson_plan_stream(
 
             # Build teacher preferences section from user settings
             teacher_prefs = ""
-            if current_user.settings:
-                tools = current_user.settings.teaching_tools
-                style = current_user.settings.teaching_style
+            if user_settings:
+                tools = user_settings.teaching_tools
+                style = user_settings.teaching_style
                 safe_style = sanitize_prompt_input(style, max_length=2000) if style else None
                 teacher_prefs = build_teacher_preferences_section(tools, safe_style)
 
@@ -401,7 +404,17 @@ async def generate_lesson_plan_stream(
                 total_tokens_used += tokens
                 logger.info("Stream: main generation tokens=%d", tokens)
 
-            raw_response = (response.text or "").strip()
+            try:
+                raw_response = (response.text or "").strip()
+            except Exception as text_err:
+                logger.error("Failed to read Gemini response text: %s", text_err, exc_info=True)
+                # Check if response was blocked by safety filters
+                block_reason = getattr(getattr(response, 'prompt_feedback', None), 'block_reason', None)
+                if block_reason:
+                    yield f"data: {json.dumps({'type': 'error', 'message': f'AI từ chối xử lý nội dung (lý do: {block_reason}). Vui lòng thử lại.'}, ensure_ascii=False)}\n\n"
+                else:
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'AI trả về kết quả không hợp lệ. Vui lòng thử lại.'}, ensure_ascii=False)}\n\n"
+                return
 
             if not raw_response:
                 yield f"data: {json.dumps({'type': 'error', 'message': 'AI trả về kết quả rỗng'}, ensure_ascii=False)}\n\n"
@@ -513,11 +526,12 @@ async def generate_lesson_plan_stream(
             result_data['tokens_used'] = total_tokens_used
             yield f"data: {json.dumps({'type': 'result', 'data': result_data}, ensure_ascii=False)}\n\n"
 
-            # Deduct tokens after sending result
+            # Deduct tokens using a NEW db session (the Depends session may already be closed)
             if total_tokens_used > 0:
                 try:
-                    await _deduct_tokens(db, user_id, total_tokens_used)
-                    await db.commit()
+                    async with AsyncSessionLocal() as token_session:
+                        await _deduct_tokens(token_session, user_id, total_tokens_used)
+                        await token_session.commit()
                 except Exception as token_err:
                     logger.error("Failed to deduct tokens: %s", token_err)
 
