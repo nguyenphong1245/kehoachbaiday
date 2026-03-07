@@ -517,6 +517,19 @@ async def upload_students(
             )
 
             logger.info("Created student account: username=%s", email)
+        else:
+            # Ensure existing user has student role
+            existing_role = await db.execute(
+                select(user_roles_table).where(
+                    user_roles_table.c.user_id == user.id,
+                    user_roles_table.c.role_id == student_role.id,
+                )
+            )
+            if not existing_role.first():
+                await db.execute(
+                    user_roles_table.insert().values(user_id=user.id, role_id=student_role.id)
+                )
+                logger.info("Assigned student role to existing user: %s", email)
 
         # Create ClassStudent
         cs = ClassStudent(
