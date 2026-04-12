@@ -68,7 +68,7 @@ cd "$PROJECT_DIR"
 
 # 6. Clone repository
 print_status "Cloning repository from GitHub..."
-git clone https://github.com/nguyenphong1245/KHBD.git .
+git clone https://github.com/nguyenphong1245/kehoachbaiday.git .
 cd init
 
 # 7. Generate secrets

@@ -36,7 +36,7 @@ cd /root/khbd-app
 if [ -d ".git" ]; then
     git pull
 else
-    git clone https://github.com/nguyenphong1245/KHBD.git .
+    git clone https://github.com/nguyenphong1245/kehoachbaiday.git .
 fi
 
 cd init
