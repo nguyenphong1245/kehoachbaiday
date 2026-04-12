@@ -1,4 +1,4 @@
-import { KeyboardEvent, useRef, useState, ClipboardEvent, ChangeEvent } from "react";
+import { KeyboardEvent, useRef, useState, ClipboardEvent, ChangeEvent, useEffect } from "react";
 
 interface OtpInputProps {
   length?: number;
@@ -11,6 +11,11 @@ interface OtpInputProps {
 const OtpInput = ({ length = 6, value, onChange, label, error }: OtpInputProps) => {
   const [otp, setOtp] = useState<string[]>(value.split("").concat(Array(length).fill("")).slice(0, length));
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  useEffect(() => {
+    const next = value.split("").concat(Array(length).fill("")).slice(0, length);
+    setOtp(next);
+  }, [value, length]);
 
   const handleChange = (index: number, inputValue: string) => {
     const digit = inputValue.replace(/\D/g, "");
@@ -70,7 +75,7 @@ const OtpInput = ({ length = 6, value, onChange, label, error }: OtpInputProps) 
     handleChange(index, e.target.value);
   };
 
-  // Split into two groups for visual grouping (e.g., 4-4 for 8 digits, 3-3 for 6)
+  // Keep a small visual separation between halves (4-4 for 8 digits, 3-3 for 6)
   const midpoint = Math.ceil(length / 2);
 
   return (
@@ -80,32 +85,38 @@ const OtpInput = ({ length = 6, value, onChange, label, error }: OtpInputProps) 
           {label}
         </label>
       )}
-      <div className="flex items-center justify-center gap-1.5">
+      <div className={`rounded-2xl border px-3 py-3 ${
+        error
+          ? "border-red-300 bg-red-50/30 dark:border-red-700 dark:bg-red-900/10"
+          : "border-stone-200 bg-stone-50/70 dark:border-stone-700 dark:bg-stone-800/40"
+      }`}>
+        <div className="flex items-center justify-center gap-2">
         {otp.map((digit, index) => (
-          <div key={index} className="flex items-center">
-            {index === midpoint && (
-              <span className="mx-1.5 text-stone-400 dark:text-stone-500 font-medium select-none">
-                —
-              </span>
-            )}
+          <div
+            key={index}
+            className={`flex items-center ${index === midpoint ? "ml-2" : ""}`}
+          >
             <input
               ref={(el) => (inputRefs.current[index] = el)}
               type="text"
               inputMode="numeric"
               maxLength={1}
+              autoComplete={index === 0 ? "one-time-code" : "off"}
               value={digit}
               onChange={(e) => handleInputChange(index, e)}
               onKeyDown={(e) => handleKeyDown(index, e)}
               onPaste={handlePaste}
-              className={`w-10 h-12 text-center text-lg font-semibold rounded-lg border ${
+              className={`h-12 w-10 rounded-xl border text-center text-lg font-semibold tracking-[0.04em] caret-transparent transition focus:outline-none focus:ring-2 ${
                 error
-                  ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
-                  : "border-stone-300 dark:border-stone-600 focus:border-brand focus:ring-brand/30"
-              } bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-sm transition focus:outline-none focus:ring-2`}
+                  ? "border-red-400 bg-white text-red-700 focus:border-red-500 focus:ring-red-500/20 dark:border-red-700 dark:bg-stone-900 dark:text-red-300"
+                  : "border-stone-300 bg-white text-stone-900 focus:border-stone-500 focus:ring-stone-400/20 dark:border-stone-600 dark:bg-stone-900 dark:text-stone-100 dark:focus:border-stone-400"
+              }`}
               aria-label={`Chữ số ${index + 1}`}
+              aria-invalid={Boolean(error)}
             />
           </div>
         ))}
+        </div>
       </div>
     </div>
   );

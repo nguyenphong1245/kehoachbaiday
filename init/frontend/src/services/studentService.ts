@@ -8,8 +8,10 @@ export interface StudentClassroomInfo {
   classroom_name: string;
   grade?: string | null;
   school_year?: string | null;
-  student_id: number;
+  student_id?: number | null;
   student_code?: string | null;
+  teacher_id?: number | null;
+  teacher_name?: string | null;
 }
 
 export interface StudentAssignmentInfo {
@@ -26,6 +28,8 @@ export interface StudentAssignmentInfo {
   lesson_info?: Record<string, string> | null;
   classroom_id: number;
   classroom_name: string;
+  teacher_id?: number | null;
+  teacher_name?: string | null;
   status: string;
   created_at: string;
 }

@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertCircle,
+  AlertTriangle,
   FolderOpen,
 } from "lucide-react";
 import {
@@ -33,6 +34,7 @@ const SavedLessonPlansPage: React.FC = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SavedLessonPlanListItem | null>(null);
 
   const PAGE_SIZE = 10;
 
@@ -59,13 +61,14 @@ const SavedLessonPlansPage: React.FC = () => {
     fetchLessonPlans();
   }, [page, searchQuery]);
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("Bạn có chắc muốn xóa KHBD này?")) return;
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
 
-    setDeletingId(id);
+    setDeletingId(deleteTarget.id);
     try {
-      await deleteSavedLessonPlan(String(id));
-      fetchLessonPlans();
+      await deleteSavedLessonPlan(String(deleteTarget.id));
+      setDeleteTarget(null);
+      await fetchLessonPlans();
     } catch (err: any) {
       setError(err.response?.data?.detail || "Lỗi xóa KHBD");
     } finally {
@@ -99,8 +102,6 @@ const SavedLessonPlansPage: React.FC = () => {
         <div className="px-5 py-2.5 flex items-center justify-between">
           {/* Breadcrumb */}
           <div className="flex items-center gap-1.5 text-sm">
-            <span className="text-stone-500 dark:text-stone-400">Kế hoạch bài dạy</span>
-            <ChevronRight className="w-4 h-4 text-stone-300" />
             <span className="text-stone-700 dark:text-stone-300 font-medium">KHBD đã lưu</span>
           </div>
 
@@ -201,7 +202,7 @@ const SavedLessonPlansPage: React.FC = () => {
                           <Eye className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => handleDelete(plan.id)}
+                          onClick={() => setDeleteTarget(plan)}
                           disabled={deletingId === plan.id}
                           className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-colors disabled:opacity-50"
                           title="Xóa"
@@ -244,6 +245,60 @@ const SavedLessonPlansPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Delete confirm modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            type="button"
+            aria-label="Đóng"
+            onClick={() => setDeleteTarget(null)}
+            className="absolute inset-0 bg-black/40"
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative w-full max-w-md rounded-2xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 shadow-2xl overflow-hidden"
+          >
+            <div className="px-5 py-4 border-b border-stone-100 dark:border-stone-700 bg-stone-50 dark:bg-stone-900/50">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-xl bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300 flex items-center justify-center flex-shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-stone-900 dark:text-stone-100">Xác nhận xóa</h3>
+                  <p className="text-sm text-stone-500 dark:text-stone-400 mt-0.5">Thao tác này không thể hoàn tác.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-5 py-4">
+              <p className="text-sm text-stone-700 dark:text-stone-300">Bạn có chắc muốn xóa bài đã lưu này?</p>
+              <p className="mt-2 text-sm font-medium text-stone-900 dark:text-stone-100 line-clamp-2">{deleteTarget.lesson_name}</p>
+            </div>
+
+            <div className="px-5 py-4 border-t border-stone-100 dark:border-stone-700 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                disabled={deletingId === deleteTarget.id}
+                className="px-4 py-2 text-sm rounded-lg text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-700 disabled:opacity-50"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={deletingId === deleteTarget.id}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {deletingId === deleteTarget.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                Xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

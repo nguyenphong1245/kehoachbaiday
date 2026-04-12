@@ -1,11 +1,9 @@
 import type { RouteObject } from "react-router-dom";
 
-import AccountLayout from "@/components/layout/AccountLayout";
 import AdminLayout from "@/components/layout/AdminLayout";
 import { MainLayout } from "@/components/layout/MainLayout";
 import StudentLayout from "@/components/layout/StudentLayout";
 import RequireAuth from "@/components/routes/RequireAuth";
-import AccountPage from "@/pages/account/AccountPage";
 import AdminDashboardPage from "@/pages/admin/AdminDashboardPage";
 import AdminAIModelsPage from "@/pages/admin/AdminAIModelsPage";
 import AdminUsersPage from "@/pages/admin/AdminUsersPage";
@@ -21,7 +19,7 @@ export const protectedRoutes: RouteObject[] = [
   {
     path: "/admin",
     element: (
-      <RequireAuth requiredRoles={["admin"]} unauthorizedPath="/unauthorized">
+      <RequireAuth requiredRoles={["admin"]} unauthorizedPath="/lesson-builder">
         <AdminLayout />
       </RequireAuth>
     ),
@@ -74,7 +72,7 @@ export const protectedRoutes: RouteObject[] = [
   {
     path: "/student",
     element: (
-      <RequireAuth requiredRoles={["student"]} unauthorizedPath="/unauthorized">
+      <RequireAuth requiredRoles={["student", "teacher", "user", "admin"]} unauthorizedPath="/lesson-builder">
         <StudentLayout />
       </RequireAuth>
     ),
@@ -86,14 +84,5 @@ export const protectedRoutes: RouteObject[] = [
       { path: "assignment/:id/peer-review", element: <PeerReviewPage /> },
       { path: "assignment/:id/group-peer-review", element: <GroupPeerReviewPage /> },
     ],
-  },
-  {
-    path: "/account",
-    element: (
-      <RequireAuth>
-        <AccountLayout />
-      </RequireAuth>
-    ),
-    children: [{ index: true, element: <AccountPage /> }],
   },
 ];

@@ -15,41 +15,31 @@ logger = logging.getLogger("app.lesson_builder.parser")
 
 
 def convert_bullet_points(content: str) -> str:
-    """Convert bullet points (•) to dashes (-) for level 1 and plus (+) for level 2.
+    """Normalize bullet markers to '-' (level 1) and '+' (level 2).
 
-    LLM often uses • for bullet points. This function converts them based on indentation:
-    - Level 1 (no or minimal indentation): • → -
-    - Level 2 (more indentation): • → +
+    LLM output can contain several markers (•, –, —, -). We normalize based
+    on indentation:
+    - Level 1 (0-3 spaces): marker -> -
+    - Level 2 (4+ spaces): marker -> +
     """
-    if not content or "•" not in content:
+    if not content:
         return content
+
+    marker_pattern = re.compile(r"^([ \t]*)([•●◦▪▫\-–—])\s+(.+)$")
 
     lines = content.split("\n")
     result_lines = []
 
     for line in lines:
-        if "•" not in line:
+        match = marker_pattern.match(line)
+        if not match:
             result_lines.append(line)
             continue
 
-        # Count leading whitespace to determine nesting level
-        stripped = line.lstrip()
-        leading_spaces = len(line) - len(stripped)
-
-        # Determine bullet type based on indentation
-        # Level 1: 0-3 spaces before •
-        # Level 2: 4+ spaces before •
-        if stripped.startswith("•"):
-            if leading_spaces >= 4:
-                # Level 2: replace • with +
-                new_line = line[:leading_spaces] + "+" + stripped[1:]
-            else:
-                # Level 1: replace • with -
-                new_line = line[:leading_spaces] + "-" + stripped[1:]
-            result_lines.append(new_line)
-        else:
-            # • appears mid-line, replace all with -
-            result_lines.append(line.replace("•", "-"))
+        indent, _, body = match.groups()
+        indent_width = len(indent.expandtabs(4))
+        marker = "+" if indent_width >= 4 else "-"
+        result_lines.append(f"{indent}{marker} {body}")
 
     return "\n".join(result_lines)
 

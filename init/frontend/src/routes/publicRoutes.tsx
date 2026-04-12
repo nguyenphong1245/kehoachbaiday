@@ -10,7 +10,6 @@ import ResetPasswordPage from "@/pages/auth/ResetPasswordPage";
 import VerifyEmailPage from "@/pages/auth/VerifyEmailPage";
 import StudentLoginPage from "@/pages/auth/StudentLoginPage";
 import ServerErrorPage from "@/pages/error/ServerErrorPage";
-import UnauthorizedPage from "@/pages/error/UnauthorizedPage";
 import { PublicCodeExercisePage } from "@/pages/code-exercise";
 import UserGuidePage from "@/pages/guide/UserGuidePage";
 
@@ -30,7 +29,7 @@ export const publicRoutes: RouteObject[] = [
       { path: "forgot-password", element: <ForgotPasswordPage /> },
       { path: "reset-password", element: <ResetPasswordPage /> },
       { path: "student/login", element: <StudentLoginPage /> },
-      { path: "unauthorized", element: <UnauthorizedPage /> },
+      { path: "unauthorized", element: <Navigate to="/lesson-builder" replace /> },
       { path: "server-error", element: <ServerErrorPage /> },
     ],
   },

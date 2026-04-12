@@ -14,10 +14,10 @@ import {
   Plus,
   X,
   Loader2,
-  RotateCcw,
   MapPin,
   MessageSquare,
   Brain,
+  Monitor,
 } from "lucide-react";
 import {
   TEACHING_METHODS,
@@ -44,6 +44,8 @@ interface ActivityConfigPanelProps {
   onActivitiesChange: (activities: ActivityConfig[]) => void;
   cognitiveLevel?: string;
   onCognitiveLevelChange?: (level: string) => void;
+  onOpenNlsModal?: () => void;
+  nlsSelectionsCount?: number;
 }
 
 // Icon mapping for activity types
@@ -512,6 +514,8 @@ export const ActivityConfigPanel: React.FC<ActivityConfigPanelProps> = ({
   onActivitiesChange,
   cognitiveLevel = "",
   onCognitiveLevelChange,
+  onOpenNlsModal,
+  nlsSelectionsCount = 0,
 }) => {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(0);
   
@@ -659,44 +663,57 @@ export const ActivityConfigPanel: React.FC<ActivityConfigPanelProps> = ({
 
   return (
     <div className="space-y-3">
-      {/* Header with Reset */}
-      <div className="flex items-center justify-between pb-3 border-b border-stone-200 dark:border-stone-700">
-        <div>
-          <h3 className="text-sm font-semibold text-stone-800 dark:text-white">
-            Danh sách hoạt động dạy học
-          </h3>
-          <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-            Click vào từng hoạt động để chọn phương pháp và kỹ thuật
-          </p>
-        </div>
-        <button
-          onClick={handleResetActivities}
-          className="p-1.5 text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-700 transition-colors"
-          title="Đặt lại"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-        </button>
-      </div>
+      {/* Mức độ nhận thức học sinh + Năng lực số */}
+      <div className="p-3 bg-stone-100 dark:bg-stone-700/50 border border-stone-200 dark:border-stone-600 rounded-lg">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-3 items-stretch">
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-stone-200 dark:border-stone-600 bg-white dark:bg-stone-700 px-3 py-2.5">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <Brain className="w-4 h-4 text-brand flex-shrink-0" />
+                <span className="text-xs font-semibold text-stone-600 dark:text-stone-300 uppercase tracking-wide">
+                  Mức nhận thức HS
+                </span>
+              </div>
+            </div>
+            <select
+              value={cognitiveLevel}
+              onChange={(e) => onCognitiveLevelChange?.(e.target.value)}
+              className="text-xs border border-stone-200 dark:border-stone-500 rounded-md px-2 py-1.5 bg-white dark:bg-stone-600 text-stone-700 dark:text-stone-200 focus:outline-none focus:ring-1 focus:ring-brand cursor-pointer"
+            >
+              {COGNITIVE_LEVELS.map((level) => (
+                <option key={level.value} value={level.value}>
+                  {level.label}
+                </option>
+              ))}
+            </select>
+          </div>
 
-      {/* Mức độ nhận thức học sinh */}
-      <div className="flex items-center gap-3 p-3 bg-stone-100 dark:bg-stone-700/50 border border-stone-200 dark:border-stone-600 rounded-lg">
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <Brain className="w-4 h-4 text-brand" />
-          <span className="text-xs font-semibold text-stone-600 dark:text-stone-300 uppercase tracking-wide">
-            Mức nhận thức HS
-          </span>
+          <div className="hidden lg:block w-px bg-stone-200 dark:bg-stone-600 my-1" />
+
+          {onOpenNlsModal ? (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-stone-200 dark:border-stone-600 bg-white dark:bg-stone-700 px-3 py-2.5">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <Monitor className="w-4 h-4 text-brand flex-shrink-0" />
+                  <span className="text-xs font-semibold text-stone-600 dark:text-stone-300 uppercase tracking-wide">
+                    Năng lực số
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={onOpenNlsModal}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-stone-100 dark:bg-stone-600 dark:hover:bg-stone-500 border border-stone-200 dark:border-stone-500 rounded-lg text-stone-700 dark:text-stone-200 transition-colors text-xs font-medium flex-shrink-0"
+              >
+                Mở
+                {nlsSelectionsCount > 0 && (
+                  <span className="bg-brand text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none">
+                    {nlsSelectionsCount}
+                  </span>
+                )}
+              </button>
+            </div>
+          ) : null}
         </div>
-        <select
-          value={cognitiveLevel}
-          onChange={(e) => onCognitiveLevelChange?.(e.target.value)}
-          className="ml-auto text-xs border border-stone-200 dark:border-stone-500 rounded-md px-2 py-1.5 bg-white dark:bg-stone-600 text-stone-700 dark:text-stone-200 focus:outline-none focus:ring-1 focus:ring-brand cursor-pointer"
-        >
-          {COGNITIVE_LEVELS.map((level) => (
-            <option key={level.value} value={level.value}>
-              {level.label}
-            </option>
-          ))}
-        </select>
       </div>
 
       {/* Group 1: Khởi động + Hình thành kiến thức */}

@@ -26,6 +26,7 @@ import {
   X,
   List,
   Sparkles,
+  MoreHorizontal,
 } from "lucide-react";
 import type { LessonPlanSection, GenerateLessonPlanResponse, ActivityConfig, EditRelatedChange } from "@/types/lessonBuilder";
 import { exportToPDF, generateMindmap, saveLessonPlan, updateSavedLessonPlan } from "@/services/lessonBuilderService";
@@ -175,7 +176,33 @@ const formatQuizAnswersToTable = (html: string): string => {
   const tempDiv = document.createElement('div');
   tempDiv.innerHTML = html;
 
+  const isHeadingTag = (el: Element): boolean => /^H[1-6]$/i.test(el.tagName);
+
+  // Only convert answer-key patterns inside the quiz appendix/context.
+  // This avoids transforming lines like "Dự kiến câu trả lời" in activity content.
+  const isInQuizContext = (node: Element): boolean => {
+    let current: Element | null = node;
+
+    while (current) {
+      let sibling = current.previousElementSibling;
+
+      while (sibling) {
+        if (isHeadingTag(sibling)) {
+          const headingText = (sibling.textContent || '').toLowerCase();
+          return /trắc\s*nghiệm/.test(headingText);
+        }
+        sibling = sibling.previousElementSibling;
+      }
+
+      current = current.parentElement;
+    }
+
+    return false;
+  };
+
   const processNode = (node: Element) => {
+    if (!isInQuizContext(node)) return;
+
     const text = (node.textContent || '').trim();
 
     // Pattern: "Câu X: Y" where Y is a single letter A-D
@@ -732,9 +759,25 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
   savedLessonPlanId,
   hideFullscreen,
 }) => {
+  const fullSectionTitle = "Nội dung";
+
   const [sections, setSections] = useState<LessonPlanSection[]>(() => {
     if (result.sections && result.sections.length > 0) {
-      return result.sections;
+      return result.sections.map((section) => {
+        if (section.section_type !== "full") return section;
+
+        const normalized = (section.title || "")
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .trim();
+
+        if (normalized === "ke hoach bai day" || normalized === "khbd") {
+          return { ...section, title: fullSectionTitle };
+        }
+
+        return section;
+      });
     }
 
     const fc = (result.full_content || "").trim();
@@ -747,7 +790,7 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
       {
         section_id: "full_content",
         section_type: "full",
-        title: "Kế hoạch bài dạy",
+        title: fullSectionTitle,
         content: markdown,
         editable: true,
       },
@@ -794,6 +837,7 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
   // Teacher comments inline popover (Word-like)
   const [showCommentSidebar, setShowCommentSidebar] = useState(false);
   const [showCommentsList, setShowCommentsList] = useState(false);
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [commentComposerPosition, setCommentComposerPosition] = useState({ top: 120, left: 24 });
   const [activeThreadPopup, setActiveThreadPopup] = useState<{ threadId: number; top: number; left: number } | null>(null);
   const [activeCommentId, setActiveCommentId] = useState<number | null>(null);
@@ -818,7 +862,23 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
   } | null>(null);
   const [selectedTextForAIEdit, setSelectedTextForAIEdit] = useState("");
   const [fullLessonForAIEdit, setFullLessonForAIEdit] = useState("");
+  const actionsMenuRef = useRef<HTMLDivElement | null>(null);
   const canComment = Boolean(currentSavedId) && !hasPendingEdits;
+
+  useEffect(() => {
+    if (!showActionsMenu) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!actionsMenuRef.current) return;
+      if (actionsMenuRef.current.contains(event.target as Node)) return;
+      setShowActionsMenu(false);
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showActionsMenu]);
 
   // Insert mindmap placeholder before "d) Tổ chức thực hiện" in section content
   const insertMindmapPlaceholder = (sectionContent: string, sectionId: string, activityName?: string | null): string => {
@@ -1730,13 +1790,59 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
     };
 
     const normalizeActivitySubsectionFormatting = (text: string): string => {
-      const forceMarkerNewLine = (input: string, marker: "b" | "c" | "d") =>
-        input.replace(
-          new RegExp(`([^\\n])\\s+(${marker}\\s*(?:\\\\?[\\).]))\\s*`, "gi"),
-          "$1\n$2 ",
+      const bulletPrefix = "[-+*•–—]";
+      const bulletPrefixOptional = `(?:${bulletPrefix}\\s*)?`;
+
+      // Fix common broken option markers from AI output before subsection formatting.
+      // Example: "(\nB)" or "B. Nội dung:" inside expected answers.
+      const repairBrokenOptionMarkers = (input: string): string => {
+        let output = input;
+        output = output.replace(/\(\s*\n\s*([A-D])\s*\)/g, "($1)");
+        output = output.replace(/\b([A-D])\s*[.)]\s*Nội\s*dung\s*:\s*/g, "$1) ");
+        return output;
+      };
+
+      // Protect answer options like (A), (B) so they are never treated as b)/c)/d) markers.
+      const protectedOptionTokens: string[] = [];
+      const protectOptionMarkers = (input: string): string =>
+        input.replace(/\(\s*([A-D])\s*\)/g, (_match, option) => {
+          const token = `__OPTION_TOKEN_${protectedOptionTokens.length}__`;
+          protectedOptionTokens.push(`(${option})`);
+          return token;
+        });
+
+      const restoreOptionMarkers = (input: string): string =>
+        input.replace(/__OPTION_TOKEN_(\d+)__/g, (_match, idxText) => {
+          const idx = Number(idxText);
+          return protectedOptionTokens[idx] ?? _match;
+        });
+
+      const forceMarkerNewLine = (input: string, marker: "b" | "c" | "d") => {
+        let output = input;
+
+        // Case 1: marker is separated by spaces from previous sentence.
+        output = output.replace(
+          new RegExp(`([^\\n])\\s+(${marker}\\s*(?:\\\\?[\\).]))\\s*`, "g"),
+          "$1\n\n$2 ",
         );
 
-      let normalized = text;
+        // Case 2: marker is attached right after punctuation, e.g. "moi.b)".
+        output = output.replace(
+          new RegExp(`([.:;!?])\\s*(${marker}\\s*(?:\\\\?[\\).]))\\s*`, "g"),
+          "$1\n\n$2 ",
+        );
+
+        // Case 3: still inline (possibly with a bullet prefix), force marker to a new line.
+        output = output.replace(
+          new RegExp(`([^\\n\\(])\\s*${bulletPrefixOptional}(${marker}\\s*(?:\\\\?[\\).]))\\s*`, "g"),
+          "$1\n\n$2 ",
+        );
+
+        return output;
+      };
+
+      let normalized = repairBrokenOptionMarkers(text);
+      normalized = protectOptionMarkers(normalized);
       normalized = forceMarkerNewLine(normalized, "b");
       normalized = forceMarkerNewLine(normalized, "c");
       normalized = forceMarkerNewLine(normalized, "d");
@@ -1758,25 +1864,42 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
       };
 
       const lines = normalized.split("\n").map((line) => {
-        const markerMatch = line.match(/^\s*(?:[-+*]\s*)?(?:\*{0,3}\s*)?([bcd])\s*(?:\\?[\).])\s*(.*)$/i);
-        if (!markerMatch) return line;
+        const lineIndent = line.match(/^(\s*)/)?.[1] || "";
 
-        const marker = markerMatch[1].toLowerCase();
-        const markerPrefix = line.slice(0, markerMatch[0].length - markerMatch[2].length).replace(/\s+$/, "");
-        const rawTail = markerMatch[2] || "";
-        const tailWithoutLabel = stripLeadingLabel(marker, rawTail);
-        const sectionLabel = labelByMarker[marker] || "Nội dung";
+        const formatMarkerLine = (markerToken: string, rawTail: string) => {
+          const marker = markerToken.charAt(0).toLowerCase();
+          const tailWithoutLabel = stripLeadingLabel(marker, rawTail || "");
+          const sectionLabel = labelByMarker[marker] || "Nội dung";
+          const markerDisplay = markerToken.replace(/\s+/g, "").replace(/\\\./g, ".");
 
-        return `${markerPrefix} **${sectionLabel}:**${tailWithoutLabel ? ` ${tailWithoutLabel}` : ""}`;
+          return `${lineIndent}**${markerDisplay} ${sectionLabel}:**${tailWithoutLabel ? ` ${tailWithoutLabel}` : ""}`;
+        };
+
+        const markerMatch = line.match(new RegExp(`^\\s*${bulletPrefixOptional}(?:\\*{0,3}\\s*)?([bcd]\\s*(?:\\\\?[\\).]))\\s*(.*)$`));
+        if (markerMatch) {
+          return formatMarkerLine(markerMatch[1] || "", markerMatch[2] || "");
+        }
+
+        // Final fallback: if marker is still inline, split and normalize it.
+        const inlineMarkerMatch = line.match(new RegExp(`^(.*?)(?:\\s+)${bulletPrefixOptional}([bcd]\\s*(?:\\\\?[\\).]))\\s*(.*)$`));
+        if (!inlineMarkerMatch) return line;
+
+        const beforeText = inlineMarkerMatch[1].trimEnd();
+        const markerToken = inlineMarkerMatch[2] || "";
+        const rawTail = inlineMarkerMatch[3] || "";
+        const normalizedMarkerLine = formatMarkerLine(markerToken, rawTail);
+
+        return `${beforeText}\n\n${normalizedMarkerLine}`;
       });
 
-      return cleanupMarkdown(lines.join("\n"));
+      const cleaned = cleanupMarkdown(lines.join("\n"));
+      return restoreOptionMarkers(cleaned);
     };
 
     // AI only returns b) + c) + d). Preserve activity heading + a) Mục tiêu from original text.
     const originalText = selectedActivityTarget.originalText;
     const trimmedEditedText = editedText.trim();
-    const bMarkerRegex = /(?:^|\n)\s*(?:[-+*]\s*)?(?:\*{0,3}\s*)?b\s*(?:\\?[\).])\s*/i;
+    const bMarkerRegex = /(?:^|\n)\s*(?:[-+*]\s*)?(?:\*{0,3}\s*)?b\s*(?:\\?[\).])\s*/;
     const bMatch = bMarkerRegex.exec(originalText);
 
     let preservedPrefix = "";
@@ -1788,7 +1911,7 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
       // Fallback: keep everything before the first b)/c)/d) marker line.
       const lines = originalText.split("\n");
       const cutoff = lines.findIndex((line) =>
-        /^\s*(?:[-+*]\s*)?(?:\*{0,3}\s*)?[bcd]\s*(?:\\?[\).])\s*/i.test(line),
+        /^\s*(?:[-+*]\s*)?(?:\*{0,3}\s*)?[bcd]\s*(?:\\?[\).])\s*/.test(line),
       );
       if (cutoff > 0) {
         preservedPrefix = lines.slice(0, cutoff).join("\n").trimEnd();
@@ -2502,6 +2625,7 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
             if (s.section_type === "full") {
               return {
                 ...s,
+                title: fullSectionTitle,
                 content: markdown,
                 editable: true,
                 mindmap_data: s.mindmap_data ?? mindmapSection?.mindmap_data ?? undefined,
@@ -2513,7 +2637,7 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
         : [{
             section_id: "full_content",
             section_type: "full",
-            title: "Kế hoạch bài dạy",
+            title: fullSectionTitle,
             content: markdown,
             editable: true,
             mindmap_data: mindmapSection?.mindmap_data || undefined,
@@ -2883,52 +3007,75 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
         <span className="hidden sm:inline">Sơ đồ tư duy</span>
       </button>
 
-      {/* AI edit selected snippet button */}
-      <button
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={handleOpenAIEditPanel}
-        disabled={isSaving}
-        className="px-2.5 py-1 text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded flex items-center gap-1 transition-colors border border-indigo-200 dark:border-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        title="Chọn hoạt động rồi để AI chỉnh sửa từng phần"
-      >
-        <Sparkles className="w-3.5 h-3.5" />
-        <span className="hidden sm:inline">Sửa từng phần</span>
-      </button>
+      {/* Actions dropdown to avoid toolbar overflow on small screens */}
+      <div className="relative" ref={actionsMenuRef}>
+        <button
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => setShowActionsMenu((v) => !v)}
+          className="px-2.5 py-1 text-xs bg-stone-50 dark:bg-stone-900/30 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-900/50 rounded flex items-center gap-1 transition-colors border border-stone-200 dark:border-stone-700"
+          title="Hành động"
+        >
+          <MoreHorizontal className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Hành động</span>
+          {commentThreads.length > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full bg-stone-200 dark:bg-stone-700 text-[10px] leading-none font-semibold">
+              {commentThreads.length}
+            </span>
+          )}
+        </button>
 
-      {/* Teacher comments button */}
-      <button
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={handleToggleCommentSidebar}
-        disabled={!canComment || isSaving}
-        className="px-2.5 py-1 text-xs bg-sky-50 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-900/50 rounded flex items-center gap-1 transition-colors border border-sky-200 dark:border-sky-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        title={
-          !currentSavedId
-            ? "Cần lưu KHBD trước khi bình luận"
-            : hasPendingEdits
-              ? "Bạn đang có thay đổi chưa lưu. Hãy bấm Lưu trước khi bình luận"
-              : "Bôi đen đoạn văn rồi bấm để bình luận cạnh đoạn"
-        }
-      >
-        <MessageSquare className="w-3.5 h-3.5" />
-        <span className="hidden sm:inline">Bình luận GV</span>
-        {commentThreads.length > 0 && (
-          <span className="px-1.5 py-0.5 rounded-full bg-sky-200 dark:bg-sky-800 text-[10px] leading-none font-semibold">
-            {commentThreads.length}
-          </span>
+        {showActionsMenu && (
+          <div className="absolute right-0 mt-1.5 w-52 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 shadow-xl z-20 p-1">
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setShowActionsMenu(false);
+                handleOpenAIEditPanel();
+              }}
+              disabled={isSaving}
+              className="w-full px-2.5 py-2 text-xs rounded-md text-left text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              title="Chọn hoạt động rồi để AI chỉnh sửa từng phần"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Sửa từng phần</span>
+            </button>
+
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setShowActionsMenu(false);
+                handleToggleCommentSidebar();
+              }}
+              disabled={!canComment || isSaving}
+              className="w-full px-2.5 py-2 text-xs rounded-md text-left text-sky-700 dark:text-sky-300 hover:bg-sky-50 dark:hover:bg-sky-900/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              title={
+                !currentSavedId
+                  ? "Cần lưu KHBD trước khi bình luận"
+                  : hasPendingEdits
+                    ? "Bạn đang có thay đổi chưa lưu. Hãy bấm Lưu trước khi bình luận"
+                    : "Bôi đen đoạn văn rồi bấm để bình luận cạnh đoạn"
+              }
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Bình luận GV</span>
+            </button>
+
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setShowActionsMenu(false);
+                setShowCommentsList((v) => !v);
+              }}
+              disabled={commentThreads.length === 0}
+              className="w-full px-2.5 py-2 text-xs rounded-md text-left text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              title="Xem danh sách bình luận GV"
+            >
+              <List className="w-3.5 h-3.5" />
+              <span>DS bình luận GV</span>
+            </button>
+          </div>
         )}
-      </button>
-
-      {/* Comments list button */}
-      <button
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={() => setShowCommentsList((v) => !v)}
-        disabled={commentThreads.length === 0}
-        className="px-2.5 py-1 text-xs bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 rounded flex items-center gap-1 transition-colors border border-amber-200 dark:border-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        title="Xem danh sách bình luận GV"
-      >
-        <List className="w-3.5 h-3.5" />
-        <span className="hidden sm:inline">DS bình luận GV</span>
-      </button>
+      </div>
 
       <div className="w-px h-5 bg-gray-300 dark:bg-gray-600" />
 
@@ -3066,10 +3213,10 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
           position: absolute;
           left: 0.05em;
           top: 0.72em;
-          width: 0.55em;
+          width: 0.62em;
           border-top: 1px solid currentColor;
         }
-        .lesson-plan-output [contenteditable="true"] ul ul li::before {
+        .lesson-plan-output [contenteditable="true"] ul ul > li::before {
           content: "+";
           left: 0;
           top: 0;
@@ -3077,13 +3224,20 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
           border-top: none;
           font-weight: 600;
         }
-        .lesson-plan-output [contenteditable="true"] ul ul ul li::before {
-          content: "•";
+        .lesson-plan-output [contenteditable="true"] ul[data-list-style="plus"] > li::before {
+          content: "+";
           left: 0;
           top: 0;
           width: auto;
           border-top: none;
-          font-weight: 400;
+          font-weight: 600;
+        }
+        .lesson-plan-output [contenteditable="true"] ul[data-list-style="dash"] > li::before {
+          content: "";
+          left: 0.05em;
+          top: 0.72em;
+          width: 0.62em;
+          border-top: 1px solid currentColor;
         }
         @media print {
           .teacher-comment-anchor,

@@ -4,6 +4,7 @@
  */
 import React, { useState, useEffect } from "react";
 import { ChevronDown, Loader2, Check } from "lucide-react";
+import logoMark from "@/assets/Insight-Institute-favicon.svg";
 import {
   GRADES,
   type LessonBasicInfo,
@@ -107,8 +108,15 @@ export const LessonPlanBuilderSidebar: React.FC<LessonPlanBuilderSidebarProps> =
     <aside className="w-72 h-full bg-white border-r border-stone-200 flex flex-col overflow-hidden shadow-sm">
       {/* Header - Fixed */}
       <div className="px-4 py-4 border-b border-stone-200 bg-stone-50">
-        <h2 className="text-base font-semibold text-stone-800">Tìm kiếm bài học</h2>
-        <p className="text-xs text-stone-500 mt-1">Chọn môn, lớp và chủ đề</p>
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-xl bg-white border border-stone-200 shadow-sm flex items-center justify-center flex-shrink-0">
+            <img src={logoMark} alt="Logo" className="w-8 h-8 object-contain" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-stone-800 leading-tight">Chọn bài học</h2>
+            <p className="text-xs text-stone-500 mt-0.5">Môn · Lớp · Chủ đề</p>
+          </div>
+        </div>
       </div>
 
       {/* Selectors - Fixed */}

@@ -53,7 +53,22 @@ const SECTION_LABELS: Record<string, string> = {
 const previewMdToHtml = (text: string): string => {
   const lines = text.split("\n");
   const result: string[] = [];
-  let inUl = false;
+  let openUlLevels = 0;
+
+  const closeListsToLevel = (targetLevel: number) => {
+    while (openUlLevels > targetLevel) {
+      result.push("</ul>");
+      openUlLevels -= 1;
+    }
+  };
+
+  const openNextListLevel = () => {
+    const marker = openUlLevels === 0 ? "- " : "+ ";
+    result.push(
+      `<ul style="list-style-type:'${marker}';margin:4px 0 4px 18px;padding-left:0">`,
+    );
+    openUlLevels += 1;
+  };
 
   for (const line of lines) {
     let l = line;
@@ -62,19 +77,30 @@ const previewMdToHtml = (text: string): string => {
     l = l.replace(/\*(.+?)\*/g, "<em>$1</em>");
     l = l.replace(/`([^`]+)`/g, "<code style='background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:12px'>$1</code>");
 
-    const trimmed = l.trimStart();
+    const bulletMatch = l.match(/^(\s*)[-+]\s+(.+)$/);
 
-    if (/^[-+]\s/.test(trimmed)) {
-      if (!inUl) { result.push("<ul style='list-style-type:disc;margin:4px 0 4px 18px'>"); inUl = true; }
-      result.push(`<li style="margin:2px 0">${trimmed.replace(/^[-+]\s*/, "")}</li>`);
+    if (bulletMatch) {
+      const indent = bulletMatch[1].replace(/\t/g, "  ").length;
+      const requestedLevel = Math.floor(indent / 2) + 1;
+      const targetLevel = Math.max(1, Math.min(requestedLevel, openUlLevels + 1));
+
+      if (targetLevel > openUlLevels) {
+        while (openUlLevels < targetLevel) {
+          openNextListLevel();
+        }
+      } else if (targetLevel < openUlLevels) {
+        closeListsToLevel(targetLevel);
+      }
+
+      result.push(`<li style="margin:2px 0">${bulletMatch[2]}</li>`);
       continue;
     }
 
-    if (inUl) { result.push("</ul>"); inUl = false; }
+    closeListsToLevel(0);
     if (l.trim() === "") continue;
     result.push(`<p style="margin:4px 0">${l}</p>`);
   }
-  if (inUl) result.push("</ul>");
+  closeListsToLevel(0);
   return result.join("");
 };
 

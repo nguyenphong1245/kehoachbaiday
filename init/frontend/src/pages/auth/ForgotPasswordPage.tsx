@@ -7,6 +7,7 @@ import TextInput from "@/components/forms/TextInput";
 import AuthCard from "@/components/layout/AuthCard";
 import { requestPasswordReset } from "@/services/authService";
 import { usePageTitle } from "@/hooks/usePageTitle";
+import { parseAuthApiError } from "@/utils/authText";
 
 const ForgotPasswordPage = () => {
   usePageTitle("Quên mật khẩu");
@@ -25,7 +26,7 @@ const ForgotPasswordPage = () => {
       await requestPasswordReset({ email });
       navigate("/reset-password", { state: { email } });
     } catch (err: unknown) {
-      setError("Không thể xử lý yêu cầu. Vui lòng thử lại sau.");
+      setError(parseAuthApiError(err, "Không thể xử lý yêu cầu. Vui lòng thử lại sau."));
       console.error(err);
     } finally {
       setIsSubmitting(false);
@@ -52,7 +53,7 @@ const ForgotPasswordPage = () => {
         <SubmitButton label="Gửi liên kết đặt lại" isLoading={isSubmitting} />
       </form>
       <p className="mt-4 text-center text-sm text-stone-500 dark:text-stone-400">
-        Đã nhớ mật khẩu? <Link to="/login">Đăng nhập</Link>
+        Đã nhớ mật khẩu? <Link to="/login" state={{ prefillEmail: email }}>Đăng nhập</Link>
       </p>
     </AuthCard>
   );

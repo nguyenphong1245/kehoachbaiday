@@ -132,12 +132,12 @@ export const SavedLessonsSidebar: React.FC<SavedLessonsSidebarProps> = ({
               )}
             </button>
             <Link
-              to="/account"
+              to="/lesson-builder"
               onClick={onClose}
               className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm bg-white dark:bg-stone-700 rounded-md border border-stone-200 dark:border-stone-600 hover:bg-stone-50 dark:hover:bg-stone-600 transition-colors"
             >
               <Settings className="w-4 h-4 text-stone-500" />
-              <span className="text-stone-700 dark:text-stone-200">Cài đặt</span>
+              <span className="text-stone-700 dark:text-stone-200">Soạn KHBD</span>
             </Link>
           </div>
         </div>

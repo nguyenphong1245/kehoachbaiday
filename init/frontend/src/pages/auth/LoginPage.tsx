@@ -1,5 +1,5 @@
-import { FormEvent, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { FormEvent, useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import FormAlert from "@/components/forms/FormAlert";
 import SubmitButton from "@/components/forms/SubmitButton";
@@ -11,10 +11,26 @@ import { usePageTitle } from "@/hooks/usePageTitle";
 const LoginPage = () => {
   usePageTitle("Đăng nhập");
   const navigator = useNavigate();
+  const location = useLocation();
   const { login, isLoading, error, resetError } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [success, setSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    const navState = location.state as
+      | {
+          message?: string;
+          prefillEmail?: string;
+          prefillPassword?: string;
+        }
+      | null;
+
+    if (!navState) return;
+    if (navState.prefillEmail) setEmail(navState.prefillEmail);
+    if (navState.prefillPassword) setPassword(navState.prefillPassword);
+    if (navState.message) setSuccess(navState.message);
+  }, [location.state]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -58,11 +74,11 @@ const LoginPage = () => {
         <SubmitButton label="Đăng nhập" isLoading={isLoading} />
       </form>
       <div className="mt-4 flex flex-col gap-2 text-center text-sm text-stone-500 dark:text-stone-400">
-        <Link className="font-medium text-brand" to="/forgot-password">
+        <Link className="font-medium text-brand" to="/forgot-password" state={{ prefillEmail: email }}>
           Quên mật khẩu?
         </Link>
         <span>
-          Chưa có tài khoản? <Link className="font-medium text-brand" to="/register">Đăng ký ngay</Link>
+          Chưa có tài khoản? <Link className="font-medium text-brand" to="/register" state={{ prefillEmail: email, prefillPassword: password }}>Đăng ký ngay</Link>
         </span>
       </div>
     </AuthCard>

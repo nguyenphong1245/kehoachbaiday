@@ -40,6 +40,86 @@ body::-webkit-scrollbar {
   display: none; /* Chrome, Safari, Opera */
 }
 
+/* Refined app scrollbars (excluding html/body, which remain hidden) */
+:root {
+  --app-scrollbar-size: 9px;
+  --app-scrollbar-track: rgba(148, 163, 184, 0.14);
+  --app-scrollbar-thumb: rgba(120, 137, 162, 0.62);
+  --app-scrollbar-thumb-hover: rgba(90, 108, 133, 0.84);
+}
+
+*:not(html):not(body) {
+  scrollbar-width: thin;
+  scrollbar-color: var(--app-scrollbar-thumb) var(--app-scrollbar-track);
+}
+
+*:not(html):not(body)::-webkit-scrollbar {
+  width: var(--app-scrollbar-size);
+  height: var(--app-scrollbar-size);
+}
+
+*:not(html):not(body)::-webkit-scrollbar-button {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+*:not(html):not(body)::-webkit-scrollbar-track {
+  background: var(--app-scrollbar-track);
+  border-radius: 999px;
+}
+
+*:not(html):not(body)::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(148, 163, 184, 0.8) 0%, rgba(100, 116, 139, 0.85) 100%);
+  border: 2px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+  min-height: 32px;
+}
+
+*:not(html):not(body)::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(120, 137, 162, 0.95) 0%, rgba(71, 85, 105, 0.98) 100%);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.dark *:not(html):not(body) {
+  scrollbar-color: rgba(100, 116, 139, 0.85) rgba(71, 85, 105, 0.25);
+}
+
+.dark *:not(html):not(body)::-webkit-scrollbar-track {
+  background: rgba(71, 85, 105, 0.25);
+}
+
+.dark *:not(html):not(body)::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(120, 137, 162, 0.86) 0%, rgba(100, 116, 139, 0.9) 100%);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.dark *:not(html):not(body)::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(148, 163, 184, 0.98) 0%, rgba(120, 137, 162, 1) 100%);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+/* Keep parity for elements using Tailwind's `scrollbar-thin` utility. */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--app-scrollbar-thumb) var(--app-scrollbar-track);
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: var(--app-scrollbar-size);
+  height: var(--app-scrollbar-size);
+}
+
+.scrollbar-thin::-webkit-scrollbar-button {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
 #root {
   min-height: 100%;
 }

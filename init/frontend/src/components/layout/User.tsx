@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { getStoredAuthUser } from '@/utils/authStorage'
 import { logoutUser } from '@/services/authService'
-import { LogOut, BookOpen, Settings } from 'lucide-react'
+import { LogOut, BookOpen } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { User as UserType } from '@/types/auth'
 
@@ -117,14 +117,6 @@ const User: React.FC = () => {
           >
             <BookOpen className="w-4 h-4 text-stone-500 dark:text-stone-400" />
             <span>Soạn KHBD</span>
-          </button>
-
-          <button
-            className="w-full flex items-center gap-3 px-5 py-3 text-sm text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors"
-            onClick={() => { setOpen(false); navigate('/account'); }}
-          >
-            <Settings className="w-4 h-4 text-stone-500 dark:text-stone-400" />
-            <span>Cài đặt tài khoản</span>
           </button>
 
           <div className="my-2 mx-5 border-t border-stone-100 dark:border-stone-800"></div>

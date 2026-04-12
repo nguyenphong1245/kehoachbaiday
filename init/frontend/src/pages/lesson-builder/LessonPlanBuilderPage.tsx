@@ -12,6 +12,7 @@ import {
   Loader2,
   LogOut,
   Monitor,
+  RotateCcw,
   X,
   KeyRound,
   Wrench,
@@ -437,10 +438,8 @@ export const LessonPlanBuilderPage: React.FC = () => {
               >
                 <Menu className="w-5 h-5 text-stone-600" />
               </button>
-              <span className="text-stone-600 font-medium flex-shrink-0 hidden sm:inline">Kế hoạch bài dạy</span>
               {selectedLesson && (
                 <>
-                  <ChevronRight className="w-4 h-4 text-stone-400 flex-shrink-0" />
                   <span className="text-brand font-semibold truncate max-w-[120px] sm:max-w-[180px] md:max-w-[250px]">
                     {selectedLesson.name}
                   </span>
@@ -630,16 +629,11 @@ export const LessonPlanBuilderPage: React.FC = () => {
                     </p>
                   </div>
                   <button
-                    onClick={() => setShowNlsModal(true)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 hover:bg-teal-100 dark:bg-teal-900/30 dark:hover:bg-teal-900/50 border border-teal-200 dark:border-teal-700 rounded-lg text-teal-700 dark:text-teal-300 transition-colors text-xs font-medium"
+                    onClick={() => setActivities([])}
+                    className="p-1.5 text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-700 transition-colors"
+                    title="Đặt lại cấu hình hoạt động"
                   >
-                    <Monitor className="w-3.5 h-3.5" />
-                    Năng lực số
-                    {nlsSelections.length > 0 && (
-                      <span className="bg-teal-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none">
-                        {nlsSelections.length}
-                      </span>
-                    )}
+                    <RotateCcw className="w-3.5 h-3.5" />
                   </button>
                 </div>
                 <div className="p-5">
@@ -649,6 +643,8 @@ export const LessonPlanBuilderPage: React.FC = () => {
                     onActivitiesChange={handleActivitiesChange}
                     cognitiveLevel={cognitiveLevel}
                     onCognitiveLevelChange={setCognitiveLevel}
+                    onOpenNlsModal={() => setShowNlsModal(true)}
+                    nlsSelectionsCount={nlsSelections.length}
                   />
                 </div>
               </section>
@@ -764,96 +760,128 @@ export const LessonPlanBuilderPage: React.FC = () => {
 
       {/* Sidebar Panel - Slide in from right */}
       <div
-        className={`fixed top-0 right-0 h-screen w-full sm:w-72 bg-white border-l border-stone-200 shadow-lg z-50 transform transition-all duration-300 ease-out flex flex-col overflow-hidden ${
+        className={`fixed top-0 right-0 h-screen w-full sm:w-80 bg-white border-l border-stone-200 shadow-2xl z-50 transform transition-all duration-300 ease-out flex flex-col overflow-visible ${
           showUserMenu ? 'translate-x-0 opacity-100 visible' : 'translate-x-full opacity-0 invisible'
         }`}
       >
+        <button
+          onClick={() => setShowUserMenu(false)}
+          className="absolute top-6 left-2 sm:-left-3 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-700 shadow-[0_3px_8px_rgba(15,23,42,0.1)] transition-all duration-200 hover:scale-105 hover:border-stone-300 hover:text-stone-900"
+          title="Đóng"
+          aria-label="Đóng menu"
+        >
+          <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.4} />
+        </button>
+
         {/* Header với avatar và info */}
-        <div className="flex-shrink-0 px-5 py-5 border-b border-stone-100 bg-stone-50">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-stone-200 text-stone-600 font-semibold text-base">
-              {getInitials(user?.email || "U")}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-stone-800 truncate">{user?.email || "Tài khoản"}</p>
-              <p className="text-xs text-stone-500">
-                {user?.roles?.some((r) => r.name === "admin") ? "Admin" : "Giáo viên"}
-              </p>
+        <div className="flex-shrink-0 px-5 py-5 border-b border-stone-200 bg-gradient-to-b from-stone-50 to-white">
+          <div className="flex items-start gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-stone-200 text-stone-700 font-semibold text-base shadow-inner">
+                {getInitials(user?.email || "U")}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[15px] font-semibold text-stone-900 truncate">{user?.email || "Tài khoản"}</p>
+                <p className="text-xs text-stone-500 mt-0.5 inline-flex px-2 py-0.5 rounded-full bg-stone-100 border border-stone-200">
+                  {user?.roles?.some((r) => r.name === "admin") ? "Admin" : "Giáo viên"}
+                </p>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Menu Items */}
-        <div className="flex-1 overflow-y-auto py-2">
-          {/* Mobile-only nav links */}
-          <div className="md:hidden">
+        <div className="flex-1 min-h-0 flex flex-col">
+          <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
+            {/* Mobile-only nav links */}
+            <div className="md:hidden space-y-1.5">
+              <button
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-stone-700 hover:bg-stone-50 border border-transparent hover:border-stone-200 rounded-xl transition-colors"
+                onClick={() => { setShowUserMenu(false); window.open("/lesson-builder/saved", "_blank"); }}
+              >
+                <span className="w-8 h-8 rounded-lg bg-stone-100 border border-stone-200 flex items-center justify-center">
+                  <Save className="w-4 h-4 text-stone-500" />
+                </span>
+                <span>KHBD đã lưu</span>
+              </button>
+              <button
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-stone-700 hover:bg-stone-50 border border-transparent hover:border-stone-200 rounded-xl transition-colors"
+                onClick={() => { setShowUserMenu(false); window.open("/classes", "_blank"); }}
+              >
+                <span className="w-8 h-8 rounded-lg bg-stone-100 border border-stone-200 flex items-center justify-center">
+                  <FileText className="w-4 h-4 text-stone-500" />
+                </span>
+                <span>Quản lý lớp & học liệu</span>
+              </button>
+              <button
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-stone-700 hover:bg-stone-50 border border-transparent hover:border-stone-200 rounded-xl transition-colors"
+                onClick={() => { setShowUserMenu(false); window.open("/huong-dan", "_blank"); }}
+              >
+                <span className="w-8 h-8 rounded-lg bg-stone-100 border border-stone-200 flex items-center justify-center">
+                  <FileText className="w-4 h-4 text-stone-500" />
+                </span>
+                <span>Hướng dẫn sử dụng</span>
+              </button>
+              <div className="h-px bg-stone-200 my-2" />
+            </div>
             <button
-              className="w-full flex items-center gap-3 px-5 py-3 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
-              onClick={() => { setShowUserMenu(false); window.open("/lesson-builder/saved", "_blank"); }}
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-stone-700 hover:bg-stone-50 border border-transparent hover:border-stone-200 rounded-xl transition-colors"
+              onClick={() => openModal("password")}
             >
-              <Save className="w-4 h-4 text-stone-500" />
-              <span>KHBD đã lưu</span>
+              <span className="w-8 h-8 rounded-lg bg-stone-100 border border-stone-200 flex items-center justify-center">
+                <KeyRound className="w-4 h-4 text-stone-500" />
+              </span>
+              <span>Đổi mật khẩu</span>
             </button>
             <button
-              className="w-full flex items-center gap-3 px-5 py-3 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
-              onClick={() => { setShowUserMenu(false); window.open("/classes", "_blank"); }}
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-stone-700 hover:bg-stone-50 border border-transparent hover:border-stone-200 rounded-xl transition-colors"
+              onClick={() => openModal("tools")}
             >
-              <FileText className="w-4 h-4 text-stone-500" />
-              <span>Quản lý lớp & học liệu</span>
+              <span className="w-8 h-8 rounded-lg bg-stone-100 border border-stone-200 flex items-center justify-center">
+                <Wrench className="w-4 h-4 text-stone-500" />
+              </span>
+              <span>Công cụ dạy học</span>
             </button>
             <button
-              className="w-full flex items-center gap-3 px-5 py-3 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
-              onClick={() => { setShowUserMenu(false); window.open("/huong-dan", "_blank"); }}
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-stone-700 hover:bg-stone-50 border border-transparent hover:border-stone-200 rounded-xl transition-colors"
+              onClick={() => openModal("style")}
             >
-              <FileText className="w-4 h-4 text-stone-500" />
-              <span>Hướng dẫn sử dụng</span>
+              <span className="w-8 h-8 rounded-lg bg-stone-100 border border-stone-200 flex items-center justify-center">
+                <Palette className="w-4 h-4 text-stone-500" />
+              </span>
+              <span>Phong cách dạy học</span>
+            </button>
+            <button
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-stone-700 hover:bg-stone-50 border border-transparent hover:border-stone-200 rounded-xl transition-colors"
+              onClick={() => openModal("identity")}
+            >
+              <span className="w-8 h-8 rounded-lg bg-stone-100 border border-stone-200 flex items-center justify-center">
+                <School className="w-4 h-4 text-stone-500" />
+              </span>
+              <span>Thông tin giáo viên</span>
+            </button>
+            <button
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-stone-700 hover:bg-stone-50 border border-transparent hover:border-stone-200 rounded-xl transition-colors"
+              onClick={() => openModal("prompt")}
+            >
+              <span className="w-8 h-8 rounded-lg bg-stone-100 border border-stone-200 flex items-center justify-center">
+                <MessageSquareText className="w-4 h-4 text-stone-500" />
+              </span>
+              <span>Prompt</span>
             </button>
           </div>
-          <button
-            className="w-full flex items-center gap-3 px-5 py-3 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
-            onClick={() => openModal("password")}
-          >
-            <KeyRound className="w-4 h-4 text-stone-500" />
-            <span>Đổi mật khẩu</span>
-          </button>
-          <button
-            className="w-full flex items-center gap-3 px-5 py-3 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
-            onClick={() => openModal("tools")}
-          >
-            <Wrench className="w-4 h-4 text-stone-500" />
-            <span>Công cụ dạy học</span>
-          </button>
-          <button
-            className="w-full flex items-center gap-3 px-5 py-3 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
-            onClick={() => openModal("style")}
-          >
-            <Palette className="w-4 h-4 text-stone-500" />
-            <span>Phong cách dạy học</span>
-          </button>
-          <button
-            className="w-full flex items-center gap-3 px-5 py-3 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
-            onClick={() => openModal("identity")}
-          >
-            <School className="w-4 h-4 text-stone-500" />
-            <span>Thông tin giáo viên</span>
-          </button>
-          <button
-            className="w-full flex items-center gap-3 px-5 py-3 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
-            onClick={() => openModal("prompt")}
-          >
-            <MessageSquareText className="w-4 h-4 text-stone-500" />
-            <span>Prompt</span>
-          </button>
 
-          <div className="my-2 mx-5 border-t border-stone-100"></div>
-
-          <button
-            className="w-full flex items-center gap-3 px-5 py-3 text-sm text-red-600 hover:bg-red-50 transition-colors"
-            onClick={handleLogout}
-          >
-            <LogOut className="w-4 h-4" />
-            <span>Đăng xuất</span>
-          </button>
+          <div className="px-3 pt-2 pb-3 border-t border-stone-200 bg-white">
+            <button
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 border border-red-100 hover:border-red-200 rounded-xl transition-colors"
+              onClick={handleLogout}
+            >
+              <span className="w-8 h-8 rounded-lg bg-red-50 border border-red-100 flex items-center justify-center">
+                <LogOut className="w-4 h-4" />
+              </span>
+              <span>Đăng xuất</span>
+            </button>
+          </div>
         </div>
       </div>
 

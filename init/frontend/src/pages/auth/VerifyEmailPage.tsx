@@ -7,13 +7,16 @@ import SubmitButton from "@/components/forms/SubmitButton";
 import AuthCard from "@/components/layout/AuthCard";
 import { verifyEmail } from "@/services/authService";
 import { usePageTitle } from "@/hooks/usePageTitle";
+import { parseAuthApiError, translateAuthText } from "@/utils/authText";
 
 const VerifyEmailPage = () => {
   usePageTitle("Xác thực email");
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const email = (location.state as { email?: string })?.email;
+  const pageState = (location.state as { email?: string; password?: string } | null) ?? null;
+  const email = pageState?.email;
+  const password = pageState?.password;
   const [code, setCode] = useState(() => searchParams.get("code") ?? "");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -41,12 +44,18 @@ const VerifyEmailPage = () => {
     setIsSubmitting(true);
     try {
       const response = await verifyEmail({ email, token: code });
-      setSuccess(response.message);
+      setSuccess(translateAuthText(response.message));
       setTimeout(() => {
-        navigate("/login", { state: { message: "Xác minh email thành công! Bạn có thể đăng nhập." } });
+        navigate("/login", {
+          state: {
+            message: "Xác minh email thành công! Bạn có thể đăng nhập.",
+            prefillEmail: email,
+            prefillPassword: password,
+          },
+        });
       }, 2000);
     } catch (err: unknown) {
-      setError("Xác minh thất bại. Vui lòng kiểm tra lại mã và thử lại.");
+      setError(parseAuthApiError(err, "Xác minh thất bại. Vui lòng kiểm tra lại mã và thử lại."));
       console.error(err);
     } finally {
       setIsSubmitting(false);
@@ -65,7 +74,7 @@ const VerifyEmailPage = () => {
       <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
         {email && (
           <p className="text-sm text-stone-600 dark:text-stone-400">
-            Chúng tôi đã gửi mã 8 chữ số đến <strong>{email}</strong>. Kiểm tra hộp thư của bạn.
+            Mã xác minh đã gửi đến <strong>{email}</strong>
           </p>
         )}
         {error ? <FormAlert>{error}</FormAlert> : null}
@@ -74,13 +83,12 @@ const VerifyEmailPage = () => {
           length={8}
           value={code}
           onChange={setCode}
-          label="Nhập mã 8 chữ số"
           error={error}
         />
         <SubmitButton label="Xác minh email" isLoading={isSubmitting} />
       </form>
       <p className="mt-4 text-center text-sm text-stone-500 dark:text-stone-400">
-        Sẵn sàng đăng nhập? <Link to="/login">Đi đến đăng nhập</Link>
+        Sẵn sàng đăng nhập? <Link to="/login" state={{ prefillEmail: email, prefillPassword: password }}>Đi đến đăng nhập</Link>
       </p>
     </AuthCard>
   );

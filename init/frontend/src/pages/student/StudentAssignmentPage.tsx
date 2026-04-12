@@ -16,6 +16,7 @@ import {
 } from "@/services/studentService";
 import { getMyFeedback, type FeedbackItem } from "@/services/peerReviewService";
 import { usePageTitle } from "@/hooks/usePageTitle";
+import { getStoredAuthUser } from "@/utils/authStorage";
 
 // Worksheet parsing helpers
 interface InteractiveBlock {
@@ -146,6 +147,7 @@ const StudentAssignmentPage: React.FC = () => {
   const [worksheetBlocks, setWorksheetBlocks] = useState<InteractiveBlock[]>([]);
   const [worksheetTitle, setWorksheetTitle] = useState("Phiếu học tập");
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const canDoStudentActions = getStoredAuthUser()?.roles?.some((role) => role.name === "student") ?? false;
 
   useEffect(() => {
     if (assignmentId) loadAssignment();
@@ -295,12 +297,14 @@ const StudentAssignmentPage: React.FC = () => {
                   Xem bài làm
                 </button>
               )}
-              <button
-                onClick={handleViewFeedback}
-                className="px-4 py-2 text-sm bg-brand text-white rounded-lg hover:bg-brand-dark"
-              >
-                Xem đánh giá
-              </button>
+              {canDoStudentActions && (
+                <button
+                  onClick={handleViewFeedback}
+                  className="px-4 py-2 text-sm bg-brand text-white rounded-lg hover:bg-brand-dark"
+                >
+                  Xem đánh giá
+                </button>
+              )}
             </div>
           </div>
         ) : (
@@ -345,14 +349,20 @@ const StudentAssignmentPage: React.FC = () => {
             )}
 
             {/* Start button */}
-            <button
-              onClick={handleStartSession}
-              disabled={starting || (a.work_type === "group" && !data.my_group)}
-              className="w-full py-3 bg-brand text-white rounded-lg hover:bg-brand-dark disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors flex items-center justify-center gap-2"
-            >
-              {starting && <Loader2 className="w-4 h-4 animate-spin" />}
-              {a.status === "in_progress" ? "Tiếp tục làm bài" : "Bắt đầu làm bài"}
-            </button>
+            {canDoStudentActions ? (
+              <button
+                onClick={handleStartSession}
+                disabled={starting || (a.work_type === "group" && !data.my_group)}
+                className="w-full py-3 bg-brand text-white rounded-lg hover:bg-brand-dark disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors flex items-center justify-center gap-2"
+              >
+                {starting && <Loader2 className="w-4 h-4 animate-spin" />}
+                {a.status === "in_progress" ? "Tiếp tục làm bài" : "Bắt đầu làm bài"}
+              </button>
+            ) : (
+              <div className="w-full py-3 px-4 rounded-lg bg-stone-100 dark:bg-stone-700/60 text-sm text-stone-600 dark:text-stone-300 text-center">
+                Chế độ xem dành cho giáo viên/quản trị viên
+              </div>
+            )}
           </div>
         )}
       </div>

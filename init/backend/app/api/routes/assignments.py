@@ -467,6 +467,28 @@ async def get_assignment(
     if not assignment:
         raise HTTPException(status_code=404, detail="Không tìm thấy bài giao")
 
+    classroom_result = await db.execute(
+        select(Classroom).where(Classroom.id == assignment.classroom_id)
+    )
+    classroom = classroom_result.scalar_one_or_none()
+    if not classroom:
+        raise HTTPException(status_code=404, detail="Không tìm thấy lớp học")
+
+    if user_has_role(current_user, "admin"):
+        pass
+    elif user_has_role(current_user, "teacher") or user_has_role(current_user, "user"):
+        if classroom.teacher_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Không có quyền xem bài giao này")
+    else:
+        enrollment_result = await db.execute(
+            select(ClassStudent).where(
+                ClassStudent.user_id == current_user.id,
+                ClassStudent.classroom_id == assignment.classroom_id,
+            )
+        )
+        if not enrollment_result.scalar_one_or_none():
+            raise HTTPException(status_code=403, detail="Không có quyền xem bài giao này")
+
     # Get classroom name
     cr = await db.execute(select(Classroom.name).where(Classroom.id == assignment.classroom_id))
     classroom_name = cr.scalar() or ""

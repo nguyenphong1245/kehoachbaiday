@@ -387,6 +387,11 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
 
     const isOrderedStyle = ['decimal', 'lower-alpha', 'upper-alpha', 'lower-roman', 'upper-roman'].includes(styleType);
+    const unorderedMarkerType: 'dash' | 'plus' = styleType === 'plus' ? 'plus' : 'dash';
+    const applyUnorderedStyle = (ul: HTMLUListElement, markerType: 'dash' | 'plus') => {
+      ul.setAttribute('data-list-style', markerType);
+      ul.style.removeProperty('list-style-type');
+    };
 
     if (existingList) {
       // Change existing list type and style
@@ -399,14 +404,13 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       } else if (!isOrderedStyle && existingList.nodeName === 'OL') {
         // Convert OL to UL
         const ul = document.createElement('ul');
-        // Don't set inline style for disc — let CSS handle "- " / "+ "
+        applyUnorderedStyle(ul, unorderedMarkerType);
         ul.innerHTML = existingList.innerHTML;
         existingList.parentNode?.replaceChild(ul, existingList);
       } else {
         // Same tag type, just change style
         if (!isOrderedStyle && existingList.nodeName === 'UL') {
-          // Remove inline style so CSS "- " / "+ " applies
-          (existingList as HTMLElement).style.listStyleType = '';
+          applyUnorderedStyle(existingList as HTMLUListElement, unorderedMarkerType);
         } else {
           (existingList as HTMLElement).style.listStyleType = styleType;
         }
@@ -426,6 +430,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           if (n.nodeName === 'OL' || n.nodeName === 'UL') {
             if (isOrderedStyle) {
               (n as HTMLElement).style.listStyleType = styleType;
+            } else {
+              applyUnorderedStyle(n as HTMLUListElement, unorderedMarkerType);
             }
             break;
           }
@@ -2025,12 +2031,45 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           word-break: break-word;
         }
         .rich-editor-content ul {
-          list-style-type: "- ";
+          list-style: none;
           padding-left: 1.5rem;
           margin: 6pt 0 8pt;
         }
-        .rich-editor-content ul ul {
-          list-style-type: "+ ";
+        .rich-editor-content ul li {
+          list-style: none;
+          position: relative;
+          padding-left: 1.1em;
+        }
+        .rich-editor-content ul li::before {
+          content: "";
+          position: absolute;
+          left: 0.05em;
+          top: 0.72em;
+          width: 0.62em;
+          border-top: 1px solid currentColor;
+        }
+        .rich-editor-content ul ul > li::before {
+          content: "+";
+          left: 0;
+          top: 0;
+          width: auto;
+          border-top: none;
+          font-weight: 600;
+        }
+        .rich-editor-content ul[data-list-style="plus"] > li::before {
+          content: "+";
+          left: 0;
+          top: 0;
+          width: auto;
+          border-top: none;
+          font-weight: 600;
+        }
+        .rich-editor-content ul[data-list-style="dash"] > li::before {
+          content: "";
+          left: 0.05em;
+          top: 0.72em;
+          width: 0.62em;
+          border-top: 1px solid currentColor;
         }
         .rich-editor-content ol {
           list-style: decimal;

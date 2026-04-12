@@ -16,7 +16,7 @@ const NotFoundPage = () => {
           <p>Vui lòng kiểm tra lại địa chỉ hoặc quay về:</p>
           <div className="flex flex-col gap-2 text-brand">
             <Link to="/login">Đăng nhập</Link>
-            <Link to="/account">Trang chủ</Link>
+            <Link to="/lesson-builder">Trang chủ</Link>
           </div>
         </div>
       </AuthCard>

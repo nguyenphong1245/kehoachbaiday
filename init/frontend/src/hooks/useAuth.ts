@@ -1,9 +1,9 @@
 import { useCallback, useState } from "react";
-import axios from "axios";
 
 import type { LoginPayload, LoginResponse, RegisterPayload, StudentLoginPayload, User } from "@/types/auth";
 import { loginUser, registerUser, studentLoginUser } from "@/services/authService";
 import { getUserSettings } from "@/services/accountService";
+import { parseAuthApiError } from "@/utils/authText";
 import { setStoredAuthUser } from "@/utils/authStorage";
 import { useTheme } from "@/contexts/Theme";
 
@@ -22,18 +22,7 @@ const useAuth = (): UseAuthResult => {
   const { setTheme } = useTheme();
 
   const parseError = useCallback((err: unknown) => {
-    if (axios.isAxiosError(err)) {
-      const detail = err.response?.data?.detail;
-      if (detail) {
-        if (Array.isArray(detail)) {
-          setError(detail.map((d: { msg?: string }) => d.msg ?? String(d)).join(", "));
-        } else {
-          setError(String(detail));
-        }
-        return;
-      }
-    }
-    setError("Unexpected error. Please try again.");
+    setError(parseAuthApiError(err, "Đã có lỗi xảy ra. Vui lòng thử lại."));
   }, []);
 
   const register = useCallback(async (payload: RegisterPayload) => {

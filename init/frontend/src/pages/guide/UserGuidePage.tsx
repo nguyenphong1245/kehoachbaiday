@@ -207,8 +207,6 @@ const UserGuidePage: React.FC = () => {
       {/* Header breadcrumb */}
       <header className="bg-white dark:bg-stone-800 border-b border-stone-200 dark:border-stone-700">
         <div className="px-5 py-2.5 flex items-center gap-1.5 text-sm">
-          <span className="text-stone-500 dark:text-stone-400">Kế hoạch bài dạy</span>
-          <ChevronRight className="w-4 h-4 text-stone-300" />
           <span className="text-stone-700 dark:text-stone-300 font-medium">Hướng dẫn sử dụng</span>
         </div>
       </header>

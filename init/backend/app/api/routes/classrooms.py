@@ -208,15 +208,18 @@ async def list_classrooms(
     db: AsyncSession = Depends(get_db),
 ):
     """Danh sách lớp học của giáo viên"""
-    result = await db.execute(
+    stmt = (
         select(Classroom)
-        .where(Classroom.teacher_id == current_user.id)
         .options(
             selectinload(Classroom.students),
             selectinload(Classroom.groups),
         )
         .order_by(Classroom.created_at.desc())
     )
+    if not user_has_role(current_user, "admin"):
+        stmt = stmt.where(Classroom.teacher_id == current_user.id)
+
+    result = await db.execute(stmt)
     classrooms = result.scalars().all()
 
     items = []

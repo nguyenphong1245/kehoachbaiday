@@ -3,6 +3,7 @@ import json
 
 from app.services.response_parser import (
     clean_section_content,
+    convert_bullet_points,
     parse_response_to_sections,
     repair_truncated_json,
     sanitize_json_response,
@@ -36,6 +37,22 @@ def test_clean_section_content_decodes_literal_newlines():
 
 def test_clean_section_content_empty():
     assert clean_section_content("", "test") == ""
+
+
+def test_convert_bullet_points_nested_level_uses_plus():
+    content = "- Muc 1\n    - Muc 2"
+    result = convert_bullet_points(content)
+    assert result.splitlines()[0] == "- Muc 1"
+    assert result.splitlines()[1] == "    + Muc 2"
+
+
+def test_convert_bullet_points_supports_dash_variants():
+    content = "– Muc 1\n    — Muc 2\n• Muc 3"
+    result = convert_bullet_points(content)
+    lines = result.splitlines()
+    assert lines[0] == "- Muc 1"
+    assert lines[1] == "    + Muc 2"
+    assert lines[2] == "- Muc 3"
 
 
 def test_repair_truncated_json_valid():

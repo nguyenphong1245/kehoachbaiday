@@ -46,8 +46,10 @@ class StudentClassroomInfo(BaseModel):
     classroom_name: str
     grade: Optional[str] = None
     school_year: Optional[str] = None
-    student_id: int  # class_student.id
+    student_id: Optional[int] = None  # class_student.id (null for teacher/admin preview)
     student_code: Optional[str] = None
+    teacher_id: Optional[int] = None
+    teacher_name: Optional[str] = None
 
 
 class StudentAssignmentInfo(BaseModel):
@@ -64,6 +66,8 @@ class StudentAssignmentInfo(BaseModel):
     lesson_info: Optional[Dict[str, Any]] = None
     classroom_id: int
     classroom_name: str
+    teacher_id: Optional[int] = None
+    teacher_name: Optional[str] = None
     status: str = "not_started"  # not_started, in_progress, submitted
     created_at: str
 
@@ -127,12 +131,28 @@ class AssignmentContentResponse(BaseModel):
 
 # ==================== Helpers ====================
 
+def _is_admin(user: User) -> bool:
+    return user_has_role(user, "admin")
+
+
+def _is_teacher(user: User) -> bool:
+    return user_has_role(user, "teacher") or user_has_role(user, "user")
+
+
+def _is_student(user: User) -> bool:
+    return user_has_role(user, "student")
+
+
+def _ensure_student_portal_access(user: User) -> None:
+    if not (_is_student(user) or _is_teacher(user) or _is_admin(user)):
+        raise HTTPException(status_code=403, detail="Không có quyền truy cập")
+
 async def _get_student_enrollment(user: User, db: AsyncSession) -> list[ClassStudent]:
     """Get all ClassStudent records for this user"""
     result = await db.execute(
         select(ClassStudent)
         .where(ClassStudent.user_id == user.id)
-        .options(selectinload(ClassStudent.classroom))
+        .options(selectinload(ClassStudent.classroom).selectinload(Classroom.teacher))
     )
     return list(result.scalars().all())
 
@@ -205,56 +225,116 @@ async def _get_submission_status(
 @limiter.limit("30/minute")
 async def student_dashboard(
     request: Request,
-    current_user: User = Depends(require_role("student")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Dashboard học sinh - lấy lớp và bài được giao"""
-    enrollments = await _get_student_enrollment(current_user, db)
+    """Dashboard học sinh/giáo viên/admin với phạm vi dữ liệu theo vai trò."""
+    _ensure_student_portal_access(current_user)
 
     classrooms_info = []
     all_assignments = []
 
-    for enrollment in enrollments:
-        cr = enrollment.classroom
-        classrooms_info.append(StudentClassroomInfo(
-            classroom_id=cr.id,
-            classroom_name=cr.name,
-            grade=cr.grade,
-            school_year=cr.school_year,
-            student_id=enrollment.id,
-            student_code=enrollment.student_code,
-        ))
+    # Student: only enrolled classrooms.
+    if _is_student(current_user) and not (_is_teacher(current_user) or _is_admin(current_user)):
+        enrollments = await _get_student_enrollment(current_user, db)
 
-        # Get active assignments for this classroom
-        result = await db.execute(
-            select(ClassAssignment)
-            .where(
-                ClassAssignment.classroom_id == cr.id,
-                ClassAssignment.is_active == True,
-            )
-            .order_by(ClassAssignment.created_at.desc())
-        )
-        assignments = result.scalars().all()
-
-        for a in assignments:
-            status = await _get_submission_status(a, enrollment, db)
-            all_assignments.append(StudentAssignmentInfo(
-                id=a.id,
-                title=a.title,
-                content_type=a.content_type,
-                content_id=a.content_id,
-                work_type=a.work_type,
-                is_active=a.is_active,
-                start_at=a.start_at.isoformat() if a.start_at else None,
-                due_date=a.due_date.isoformat() if a.due_date else None,
-                auto_peer_review=a.auto_peer_review,
-                peer_review_status=a.peer_review_status,
-                lesson_info=a.lesson_info,
+        for enrollment in enrollments:
+            cr = enrollment.classroom
+            teacher_name = cr.teacher.email if getattr(cr, "teacher", None) else "Không rõ giáo viên"
+            classrooms_info.append(StudentClassroomInfo(
                 classroom_id=cr.id,
                 classroom_name=cr.name,
-                status=status,
-                created_at=a.created_at.isoformat() if a.created_at else "",
+                grade=cr.grade,
+                school_year=cr.school_year,
+                student_id=enrollment.id,
+                student_code=enrollment.student_code,
+                teacher_id=cr.teacher_id,
+                teacher_name=teacher_name,
             ))
+
+            result = await db.execute(
+                select(ClassAssignment)
+                .where(
+                    ClassAssignment.classroom_id == cr.id,
+                    ClassAssignment.is_active == True,
+                )
+                .order_by(ClassAssignment.created_at.desc())
+            )
+            assignments = result.scalars().all()
+
+            for a in assignments:
+                status = await _get_submission_status(a, enrollment, db)
+                all_assignments.append(StudentAssignmentInfo(
+                    id=a.id,
+                    title=a.title,
+                    content_type=a.content_type,
+                    content_id=a.content_id,
+                    work_type=a.work_type,
+                    is_active=a.is_active,
+                    start_at=a.start_at.isoformat() if a.start_at else None,
+                    due_date=a.due_date.isoformat() if a.due_date else None,
+                    auto_peer_review=a.auto_peer_review,
+                    peer_review_status=a.peer_review_status,
+                    lesson_info=a.lesson_info,
+                    classroom_id=cr.id,
+                    classroom_name=cr.name,
+                    teacher_id=cr.teacher_id,
+                    teacher_name=teacher_name,
+                    status=status,
+                    created_at=a.created_at.isoformat() if a.created_at else "",
+                ))
+    else:
+        # Teacher: only own classrooms. Admin: all classrooms.
+        classroom_stmt = select(Classroom).options(selectinload(Classroom.teacher)).order_by(Classroom.created_at.desc())
+        if _is_teacher(current_user) and not _is_admin(current_user):
+            classroom_stmt = classroom_stmt.where(Classroom.teacher_id == current_user.id)
+
+        classroom_result = await db.execute(classroom_stmt)
+        classrooms = classroom_result.scalars().all()
+
+        for cr in classrooms:
+            teacher_name = cr.teacher.email if getattr(cr, "teacher", None) else "Không rõ giáo viên"
+            classrooms_info.append(StudentClassroomInfo(
+                classroom_id=cr.id,
+                classroom_name=cr.name,
+                grade=cr.grade,
+                school_year=cr.school_year,
+                student_id=None,
+                student_code=None,
+                teacher_id=cr.teacher_id,
+                teacher_name=teacher_name,
+            ))
+
+            result = await db.execute(
+                select(ClassAssignment)
+                .where(
+                    ClassAssignment.classroom_id == cr.id,
+                    ClassAssignment.is_active == True,
+                )
+                .order_by(ClassAssignment.created_at.desc())
+            )
+            assignments = result.scalars().all()
+
+            for a in assignments:
+                all_assignments.append(StudentAssignmentInfo(
+                    id=a.id,
+                    title=a.title,
+                    content_type=a.content_type,
+                    content_id=a.content_id,
+                    work_type=a.work_type,
+                    is_active=a.is_active,
+                    start_at=a.start_at.isoformat() if a.start_at else None,
+                    due_date=a.due_date.isoformat() if a.due_date else None,
+                    auto_peer_review=a.auto_peer_review,
+                    peer_review_status=a.peer_review_status,
+                    lesson_info=a.lesson_info,
+                    classroom_id=cr.id,
+                    classroom_name=cr.name,
+                    teacher_id=cr.teacher_id,
+                    teacher_name=teacher_name,
+                    status="not_started",
+                    created_at=a.created_at.isoformat() if a.created_at else "",
+                ))
 
     return StudentDashboardResponse(
         classrooms=classrooms_info,
@@ -267,10 +347,12 @@ async def student_dashboard(
 async def get_assignment_detail(
     request: Request,
     assignment_id: int,
-    current_user: User = Depends(require_role("student")),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Chi tiết bài giao + nội dung cho học sinh"""
+    """Chi tiết bài giao cho student/teacher/admin theo phạm vi dữ liệu."""
+    _ensure_student_portal_access(current_user)
+
     result = await db.execute(
         select(ClassAssignment).where(ClassAssignment.id == assignment_id)
     )
@@ -278,20 +360,31 @@ async def get_assignment_detail(
     if not assignment:
         raise HTTPException(status_code=404, detail="Không tìm thấy bài giao")
 
-    student = await _get_student_record_for_assignment(current_user, assignment, db)
+    cr_result = await db.execute(
+        select(Classroom).where(Classroom.id == assignment.classroom_id).options(selectinload(Classroom.teacher))
+    )
+    classroom = cr_result.scalar_one_or_none()
+    if not classroom:
+        raise HTTPException(status_code=404, detail="Không tìm thấy lớp học")
+
+    student_record: Optional[ClassStudent] = None
+    if _is_admin(current_user):
+        pass
+    elif _is_teacher(current_user):
+        if classroom.teacher_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Không có quyền xem bài giao này")
+    else:
+        student_record = await _get_student_record_for_assignment(current_user, assignment, db)
 
     # Check start_at - chặn nếu chưa đến giờ
-    if assignment.start_at and datetime.now(timezone.utc) < assignment.start_at:
+    if student_record and assignment.start_at and datetime.now(timezone.utc) < assignment.start_at:
         raise HTTPException(status_code=403, detail="Chưa đến giờ làm bài")
 
-    # Get classroom name
-    cr_result = await db.execute(
-        select(Classroom.name).where(Classroom.id == assignment.classroom_id)
-    )
-    classroom_name = cr_result.scalar() or ""
+    classroom_name = classroom.name
+    teacher_name = classroom.teacher.email if getattr(classroom, "teacher", None) else "Không rõ giáo viên"
 
     # Get submission status
-    status = await _get_submission_status(assignment, student, db)
+    status = await _get_submission_status(assignment, student_record, db) if student_record else "not_started"
 
     assignment_info = StudentAssignmentInfo(
         id=assignment.id,
@@ -307,6 +400,8 @@ async def get_assignment_detail(
         lesson_info=assignment.lesson_info,
         classroom_id=assignment.classroom_id,
         classroom_name=classroom_name,
+        teacher_id=classroom.teacher_id,
+        teacher_name=teacher_name,
         status=status,
         created_at=assignment.created_at.isoformat() if assignment.created_at else "",
     )
@@ -351,12 +446,12 @@ async def get_assignment_detail(
 
     # Get group info if group work
     my_group = None
-    if assignment.work_type == "group":
-        my_group = await _get_my_group_for_assignment(student, assignment, db)
+    if assignment.work_type == "group" and student_record:
+        my_group = await _get_my_group_for_assignment(student_record, assignment, db)
 
     # Get existing work session
     work_session = None
-    if assignment.work_type == "group" and my_group and my_group.work_session_id:
+    if assignment.work_type == "group" and student_record and my_group and my_group.work_session_id:
         ws_result = await db.execute(
             select(GroupWorkSession).where(GroupWorkSession.id == my_group.work_session_id)
         )
@@ -371,11 +466,11 @@ async def get_assignment_detail(
                 "leader_votes": ws.leader_votes or {},
                 "submitted_at": ws.submitted_at.isoformat() if ws.submitted_at else None,
             }
-    elif assignment.work_type == "individual":
+    elif assignment.work_type == "individual" and student_record:
         sub_result = await db.execute(
             select(IndividualSubmission).where(
                 IndividualSubmission.assignment_id == assignment.id,
-                IndividualSubmission.student_id == student.id,
+                IndividualSubmission.student_id == student_record.id,
             )
         )
         sub = sub_result.scalar_one_or_none()

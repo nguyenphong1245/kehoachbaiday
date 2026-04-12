@@ -7,6 +7,7 @@ import TextInput from "@/components/forms/TextInput";
 import AuthCard from "@/components/layout/AuthCard";
 import { resendVerificationEmail } from "@/services/authService";
 import { usePageTitle } from "@/hooks/usePageTitle";
+import { parseAuthApiError } from "@/utils/authText";
 
 const ResendVerificationPage = () => {
   usePageTitle("Gửi lại xác thực");
@@ -25,7 +26,7 @@ const ResendVerificationPage = () => {
       await resendVerificationEmail({ email });
       navigate("/verify-email", { state: { email } });
     } catch (err: unknown) {
-      setError("Không thể gửi email xác minh. Vui lòng thử lại sau.");
+      setError(parseAuthApiError(err, "Không thể gửi email xác minh. Vui lòng thử lại sau."));
       console.error(err);
     } finally {
       setIsSubmitting(false);

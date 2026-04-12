@@ -31,7 +31,7 @@ const RegisterPage = () => {
 
     try {
       await registerUser({ email, password });
-      navigate("/verify-email", { state: { email } });
+      navigate("/verify-email", { state: { email, password } });
     } catch (err) {
       console.error("Registration failed", err);
     }
@@ -42,7 +42,7 @@ const RegisterPage = () => {
       title="ĐĂNG KÝ"
       description={
         <span>
-          Đã có tài khoản? <Link to="/login">Đăng nhập</Link>
+          Đã có tài khoản? <Link to="/login" state={{ prefillEmail: email, prefillPassword: password }}>Đăng nhập</Link>
         </span>
       }
     >

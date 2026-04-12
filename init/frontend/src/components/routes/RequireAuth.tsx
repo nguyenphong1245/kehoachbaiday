@@ -18,7 +18,7 @@ interface RequireAuthProps {
 const RequireAuth = ({
   children,
   unauthenticatedPath = "/login",
-  unauthorizedPath = "/unauthorized",
+  unauthorizedPath = "/lesson-builder",
   requiredRoles,
 }: RequireAuthProps) => {
   const location = useLocation();

@@ -50,6 +50,7 @@ export const TOOLBAR: ToolbarItem[] = [
 export const LIST_STYLES = [
   { type: "decimal", label: "1, 2, 3", preview: "1." },
   { type: "disc", label: "Gạch ngang", preview: "-" },
+  { type: "plus", label: "Dấu cộng", preview: "+" },
 ];
 
 export const FONT_SIZES = [
