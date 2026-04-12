@@ -822,7 +822,7 @@ async def get_classroom_statistics(
         raise
     except Exception as e:
         logger.exception(f"Error in statistics endpoint for classroom {classroom_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Lỗi server: {str(e)}")
+        raise HTTPException(status_code=500, detail="Lỗi server")
 
 
 async def _get_classroom_statistics_impl(

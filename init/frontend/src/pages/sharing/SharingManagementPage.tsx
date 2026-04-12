@@ -71,7 +71,7 @@ const getLessonGroupKey = (info?: LessonInfoType | null): string => {
 };
 
 const SharingManagementPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
-  usePageTitle("Chia sẻ tài liệu");
+  usePageTitle("Chia sẻ");
   const [activeTab, setActiveTab] = useState<TabType>("worksheets");
   const [sortMode, setSortMode] = useState<SortMode>("newest");
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());

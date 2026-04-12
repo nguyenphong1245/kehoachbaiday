@@ -7,7 +7,10 @@ const AdminLayout = () => {
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <header className="w-full border-b bg-white dark:bg-stone-900 dark:border-stone-800 shrink-0">
-          <div className="mx-auto px-3 sm:px-4 py-2 flex items-center justify-end gap-2">
+          <div className="mx-auto px-3 sm:px-4 py-2 flex items-center justify-between gap-3">
+            <span className="text-sm sm:text-base font-semibold text-stone-800 dark:text-stone-100">
+              Quản trị viên
+            </span>
             <Link
               to="/lesson-builder"
               className="text-sm text-stone-600 dark:text-stone-300 hover:text-sky-600 dark:hover:text-sky-400 no-underline transition-colors"

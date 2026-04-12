@@ -192,10 +192,10 @@ describe("useTeachingData", () => {
       });
 
       // Find the call that targets the static-data endpoint
-      const staticDataCall = mockFetch.mock.calls.find(
-        ([url]: [string]) =>
-          typeof url === "string" && url.includes("/lesson-builder/static-data")
-      );
+      const staticDataCall = mockFetch.mock.calls.find((call) => {
+        const [url] = call;
+        return typeof url === "string" && url.includes("/lesson-builder/static-data");
+      });
       expect(staticDataCall).toBeDefined();
 
       const [url, options] = staticDataCall!;

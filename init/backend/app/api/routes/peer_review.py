@@ -6,7 +6,7 @@ import random
 from datetime import datetime, timezone
 from typing import Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -848,7 +848,7 @@ async def get_my_feedback(
 async def auto_activate_peer_review(
     request: Request,
     assignment_id: int,
-    api_key: str,
+    x_internal_api_key: str | None = Header(default=None, alias="X-Internal-Api-Key"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -860,7 +860,7 @@ async def auto_activate_peer_review(
 
     # Verify internal API key (constant-time comparison)
     import hmac as _hmac
-    if not _hmac.compare_digest(api_key, settings.internal_api_key):
+    if not _hmac.compare_digest(x_internal_api_key or "", settings.internal_api_key):
         raise HTTPException(status_code=403, detail="Invalid API key")
 
     # Get assignment

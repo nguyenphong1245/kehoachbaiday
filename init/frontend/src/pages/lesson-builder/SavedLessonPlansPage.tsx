@@ -23,7 +23,7 @@ import type { SavedLessonPlanListItem } from "@/types/lessonBuilder";
 import { usePageTitle } from "@/hooks/usePageTitle";
 
 const SavedLessonPlansPage: React.FC = () => {
-  usePageTitle("Kế hoạch đã lưu");
+  usePageTitle("KHBD đã lưu");
   const navigate = useNavigate();
   const [lessonPlans, setLessonPlans] = useState<SavedLessonPlanListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);

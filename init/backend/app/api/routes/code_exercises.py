@@ -36,6 +36,10 @@ from app.schemas.code_exercise import (
 )
 from app.services.piston_service import execute_code, run_test_cases
 from app.services.code_extraction_service import get_code_extraction_service
+from app.services.admin_ai_model_registry import (
+    FEATURE_CODE_EXTRACTION,
+    get_effective_model_for_feature,
+)
 from app.core.config import get_settings
 
 router = APIRouter(prefix="/code-exercises", tags=["Code Exercises"])
@@ -329,6 +333,8 @@ async def extract_code_exercises_from_lesson(
     logger.info(f"Extracting code exercises from lesson plan for user {current_user.id}")
 
     service = get_code_extraction_service()
+    extraction_model = await get_effective_model_for_feature(db, FEATURE_CODE_EXTRACTION)
+    service.configure_model(extraction_model)
     result = service.extract_exercises(
         lesson_plan_content=request.lesson_plan_content,
         lesson_info=request.lesson_info,

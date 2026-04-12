@@ -78,9 +78,10 @@ const AdminDashboardPage = () => {
 
   const formatTokens = (n: number) => n.toLocaleString("vi-VN");
 
-  const usagePercent = stats && stats.total_tokens_allocated > 0
-    ? Math.round((stats.total_tokens_used / stats.total_tokens_allocated) * 100)
-    : 0;
+  const usagePercent =
+    stats && stats.total_tokens_allocated > 0
+      ? Math.round((stats.total_tokens_used / stats.total_tokens_allocated) * 100)
+      : 0;
 
   if (loading) {
     return (
@@ -101,12 +102,10 @@ const AdminDashboardPage = () => {
 
   return (
     <section className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-5">
-      {/* Header */}
       <h1 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white">
-        Tổng quan hệ thống
+        Quản trị hệ thống
       </h1>
 
-      {/* Token Overview - unified card */}
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 sm:p-5">
         <div className="flex items-center gap-2 mb-4">
           <Coins className="w-4.5 h-4.5 text-amber-500" />
@@ -150,16 +149,17 @@ const AdminDashboardPage = () => {
         )}
       </div>
 
-      {/* Quick Stats - compact grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
         {[
           { icon: Users, label: "Người dùng", value: stats.total_users, color: "text-slate-500" },
           { icon: Activity, label: "Hoạt động", value: stats.active_users, color: "text-emerald-500" },
           { icon: UserCheck, label: "Đã xác thực", value: stats.verified_users, color: "text-blue-500" },
-          ...(summaryStats ? [
-            { icon: School, label: "Lớp học", value: summaryStats.classrooms, color: "text-violet-500" },
-            { icon: GraduationCap, label: "Học sinh", value: summaryStats.students, color: "text-pink-500" },
-          ] : []),
+          ...(summaryStats
+            ? [
+                { icon: School, label: "Lớp học", value: summaryStats.classrooms, color: "text-violet-500" },
+                { icon: GraduationCap, label: "Học sinh", value: summaryStats.students, color: "text-pink-500" },
+              ]
+            : []),
         ].map((item, i) => (
           <div key={i} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2.5">
             <div className="flex items-center gap-1.5 mb-1">
@@ -171,7 +171,6 @@ const AdminDashboardPage = () => {
         ))}
       </div>
 
-      {/* Content Stats - inline row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         {[
           { icon: FileText, label: "Giáo án", value: stats.total_lesson_plans, color: "text-blue-500" },
@@ -189,13 +188,9 @@ const AdminDashboardPage = () => {
         ))}
       </div>
 
-      {/* Bottom panels */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Recent Teachers */}
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 sm:p-5">
-          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">
-            Giáo viên gần đây
-          </h2>
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">Giáo viên gần đây</h2>
           {stats.recent_users.length === 0 ? (
             <p className="text-sm text-slate-400">Chưa có giáo viên</p>
           ) : (
@@ -209,9 +204,7 @@ const AdminDashboardPage = () => {
                       </span>
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm text-slate-700 dark:text-slate-200 truncate">
-                        {user.email}
-                      </p>
+                      <p className="text-sm text-slate-700 dark:text-slate-200 truncate">{user.email}</p>
                       <p className="text-[11px] text-slate-400">{formatDate(user.created_at)}</p>
                     </div>
                   </div>
@@ -226,11 +219,8 @@ const AdminDashboardPage = () => {
           )}
         </div>
 
-        {/* Top Token Usage */}
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 sm:p-5">
-          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">
-            Top sử dụng token
-          </h2>
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">Top sử dụng token</h2>
           {stats.top_teachers.length === 0 ? (
             <p className="text-sm text-slate-400">Chưa có dữ liệu</p>
           ) : (
@@ -238,20 +228,20 @@ const AdminDashboardPage = () => {
               {stats.top_teachers.slice(0, 5).map((teacher, idx) => (
                 <div key={teacher.id} className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[11px] font-bold ${
-                      idx === 0 ? "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400" :
-                      idx === 1 ? "bg-slate-100 dark:bg-slate-600 text-slate-500 dark:text-slate-300" :
-                      "bg-slate-50 dark:bg-slate-700 text-slate-400 dark:text-slate-500"
-                    }`}>
+                    <div
+                      className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[11px] font-bold ${
+                        idx === 0
+                          ? "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400"
+                          : idx === 1
+                            ? "bg-slate-100 dark:bg-slate-600 text-slate-500 dark:text-slate-300"
+                            : "bg-slate-50 dark:bg-slate-700 text-slate-400 dark:text-slate-500"
+                      }`}
+                    >
                       {idx + 1}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm text-slate-700 dark:text-slate-200 truncate">
-                        {teacher.email}
-                      </p>
-                      <p className="text-[11px] text-slate-400">
-                        Còn {formatTokens(teacher.token_balance)}
-                      </p>
+                      <p className="text-sm text-slate-700 dark:text-slate-200 truncate">{teacher.email}</p>
+                      <p className="text-[11px] text-slate-400">Còn {formatTokens(teacher.token_balance)}</p>
                     </div>
                   </div>
                   <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 flex-shrink-0 tabular-nums">

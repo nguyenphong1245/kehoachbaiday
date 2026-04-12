@@ -7,6 +7,7 @@ import StudentLayout from "@/components/layout/StudentLayout";
 import RequireAuth from "@/components/routes/RequireAuth";
 import AccountPage from "@/pages/account/AccountPage";
 import AdminDashboardPage from "@/pages/admin/AdminDashboardPage";
+import AdminAIModelsPage from "@/pages/admin/AdminAIModelsPage";
 import AdminUsersPage from "@/pages/admin/AdminUsersPage";
 import AdminTeachersPage from "@/pages/admin/AdminTeachersPage";
 import { WorksheetManagementPage } from "@/pages/worksheet";
@@ -26,6 +27,7 @@ export const protectedRoutes: RouteObject[] = [
     ),
     children: [
       { index: true, element: <AdminDashboardPage /> },
+      { path: "ai-models", element: <AdminAIModelsPage /> },
       { path: "users", element: <AdminUsersPage /> },
       { path: "teachers", element: <AdminTeachersPage /> },
     ],

@@ -17,6 +17,7 @@ import {
   RotateCcw,
   MapPin,
   MessageSquare,
+  Brain,
 } from "lucide-react";
 import {
   TEACHING_METHODS,
@@ -28,10 +29,21 @@ import {
 } from "@/types/lessonBuilder";
 import { useTeachingData } from "@/hooks/useTeachingData";
 
+const COGNITIVE_LEVELS = [
+  { value: "", label: "Không chọn" },
+  { value: "weak", label: "Yếu" },
+  { value: "average", label: "Trung bình" },
+  { value: "fair", label: "Khá" },
+  { value: "good", label: "Giỏi" },
+  { value: "excellent", label: "Xuất sắc" },
+] as const;
+
 interface ActivityConfigPanelProps {
   lessonDetail: LessonDetail;
   activities: ActivityConfig[];
   onActivitiesChange: (activities: ActivityConfig[]) => void;
+  cognitiveLevel?: string;
+  onCognitiveLevelChange?: (level: string) => void;
 }
 
 // Icon mapping for activity types
@@ -498,6 +510,8 @@ export const ActivityConfigPanel: React.FC<ActivityConfigPanelProps> = ({
   lessonDetail,
   activities,
   onActivitiesChange,
+  cognitiveLevel = "",
+  onCognitiveLevelChange,
 }) => {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(0);
   
@@ -662,6 +676,27 @@ export const ActivityConfigPanel: React.FC<ActivityConfigPanelProps> = ({
         >
           <RotateCcw className="w-3.5 h-3.5" />
         </button>
+      </div>
+
+      {/* Mức độ nhận thức học sinh */}
+      <div className="flex items-center gap-3 p-3 bg-stone-100 dark:bg-stone-700/50 border border-stone-200 dark:border-stone-600 rounded-lg">
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <Brain className="w-4 h-4 text-brand" />
+          <span className="text-xs font-semibold text-stone-600 dark:text-stone-300 uppercase tracking-wide">
+            Mức nhận thức HS
+          </span>
+        </div>
+        <select
+          value={cognitiveLevel}
+          onChange={(e) => onCognitiveLevelChange?.(e.target.value)}
+          className="ml-auto text-xs border border-stone-200 dark:border-stone-500 rounded-md px-2 py-1.5 bg-white dark:bg-stone-600 text-stone-700 dark:text-stone-200 focus:outline-none focus:ring-1 focus:ring-brand cursor-pointer"
+        >
+          {COGNITIVE_LEVELS.map((level) => (
+            <option key={level.value} value={level.value}>
+              {level.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Group 1: Khởi động + Hình thành kiến thức */}

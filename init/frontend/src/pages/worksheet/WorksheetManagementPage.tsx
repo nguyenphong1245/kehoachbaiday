@@ -30,7 +30,7 @@ import {
 import { usePageTitle } from "@/hooks/usePageTitle";
 
 const WorksheetManagementPage: React.FC = () => {
-  usePageTitle("Quản lý phiếu học tập");
+  usePageTitle("Phiếu học tập");
   const [worksheets, setWorksheets] = useState<SharedWorksheet[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

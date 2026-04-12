@@ -13,6 +13,8 @@ import type {
   SaveLessonPlanResponse,
   SavedLessonPlanListResponse,
   SavedLessonPlan,
+  EditSuggestResponse,
+  EditApplyResponse,
 } from "@/types/lessonBuilder";
 
 /**
@@ -194,52 +196,38 @@ export const generateLessonPlanStream = (
   return controller;
 };
 
-/**
- * Cải thiện nội dung section với AI
- */
-export interface RelatedAppendix {
-  section_id: string;
-  section_type: string;
-  title: string;
-  content: string;
-}
-
-export interface UpdatedAppendix {
-  section_id: string;
-  improved_content: string;
-}
-
-export interface ImproveResult {
-  improved_content: string;
-  updated_appendices?: UpdatedAppendix[];
-}
-
-export const improveWithAI = async (
-  sectionType: string,
-  sectionTitle: string,
-  currentContent: string,
-  userRequest: string,
-  lessonInfo?: { book_type?: string; grade?: string; topic?: string; lesson_name?: string },
-  relatedAppendices?: RelatedAppendix[]
-): Promise<ImproveResult> => {
-  const { data } = await api.post<{
-    improved_content: string;
-    updated_appendices?: UpdatedAppendix[];
-  }>(
-    "/lesson-builder/improve-section",
+export const editSuggest = async (
+  selectedText: string,
+  fullLessonPlan: string,
+): Promise<EditSuggestResponse> => {
+  const { data } = await api.post<EditSuggestResponse>(
+    "/lesson-builder/edit-suggest",
     {
-      section_type: sectionType,
-      section_title: sectionTitle,
-      current_content: currentContent,
-      user_request: userRequest,
-      lesson_info: lessonInfo || {},
-      related_appendices: relatedAppendices || null,
+      selected_text: selectedText,
+      full_lesson_plan: fullLessonPlan,
     }
   );
-  return {
-    improved_content: data.improved_content,
-    updated_appendices: data.updated_appendices,
-  };
+  return data;
+};
+
+export const editApply = async (
+  selectedText: string,
+  suggestionType: string,
+  suggestionTitle: string,
+  suggestionDescription: string,
+  fullLessonPlan: string,
+): Promise<EditApplyResponse> => {
+  const { data } = await api.post<EditApplyResponse>(
+    "/lesson-builder/edit-apply",
+    {
+      selected_text: selectedText,
+      suggestion_type: suggestionType,
+      suggestion_title: suggestionTitle,
+      suggestion_description: suggestionDescription,
+      full_lesson_plan: fullLessonPlan,
+    }
+  );
+  return data;
 };
 
 // ============== MINDMAP GENERATION API ==============
@@ -389,7 +377,8 @@ export const lessonBuilderApi = {
   searchLessons,
   getLessonDetail,
   generateLessonPlan,
-  improveWithAI,
+  editSuggest,
+  editApply,
   generateMindmap,
   saveLessonPlan,
   getSavedLessonPlans,

@@ -10,6 +10,9 @@ class UserSettingsBase(BaseModel):
     teaching_tools: list[str] | None = None
     custom_tools: list[str] | None = None
     teaching_style: str | None = None
+    school_name: str | None = None
+    department_name: str | None = None
+    teacher_name: str | None = None
 
 
 class UserSettingsUpdate(BaseModel):
@@ -21,6 +24,9 @@ class UserSettingsUpdate(BaseModel):
     teaching_tools: list[str] | None = None
     custom_tools: list[str] | None = None
     teaching_style: str | None = None
+    school_name: str | None = None
+    department_name: str | None = None
+    teacher_name: str | None = None
 
     @field_validator("teaching_tools")
     @classmethod
@@ -41,6 +47,13 @@ class UserSettingsUpdate(BaseModel):
     def validate_teaching_style(cls, v):
         if v is not None and len(v) > 2000:
             raise ValueError("Phong cách dạy học tối đa 2000 ký tự")
+        return v
+
+    @field_validator("school_name", "department_name", "teacher_name")
+    @classmethod
+    def validate_identity_fields(cls, v):
+        if v is not None and len(v) > 255:
+            raise ValueError("Thông tin tối đa 255 ký tự")
         return v
 
 

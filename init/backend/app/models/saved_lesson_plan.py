@@ -45,6 +45,7 @@ class SavedLessonPlan(Base):
     
     # Relationships
     user = relationship("User", back_populates="saved_lesson_plans")
+    comments = relationship("LessonPlanComment", back_populates="lesson_plan", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<SavedLessonPlan(id={self.id}, title='{self.title}', user_id={self.user_id})>"

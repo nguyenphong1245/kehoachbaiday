@@ -20,4 +20,9 @@ class UserSettings(Base):
     custom_tools: list | None = Column(JSON, nullable=True)
     teaching_style: str | None = Column(Text, nullable=True)
 
+    # Default lesson plan identity info
+    school_name: str | None = Column(String(255), nullable=True)
+    department_name: str | None = Column(String(255), nullable=True)
+    teacher_name: str | None = Column(String(255), nullable=True)
+
     user = relationship("User", back_populates="settings")

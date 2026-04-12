@@ -15,7 +15,8 @@ from app.api.routes import (
     student,
     peer_review,
     guide_cards,
-
+    lesson_plan_comments,
+    teaching_rules,
 )
 
 api_router = APIRouter()
@@ -64,5 +65,11 @@ api_router.include_router(peer_review.router, prefix="/peer-review", tags=["peer
 
 # Guide cards routes
 api_router.include_router(guide_cards.router, prefix="/guide-cards", tags=["guide-cards"])
+
+# Lesson plan comments routes (nhận xét GV trên KHBD)
+api_router.include_router(lesson_plan_comments.router, tags=["lesson-plan-comments"])
+
+# Teaching rules routes (quản lý quy tắc AI)
+api_router.include_router(teaching_rules.router, tags=["teaching-rules"])
 
 

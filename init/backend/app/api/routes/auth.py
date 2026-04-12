@@ -7,7 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
-from app.core.cookies import set_auth_cookies, clear_auth_cookies, set_csrf_cookie, clear_csrf_cookie
+from app.core.cookies import (
+    set_auth_cookies,
+    clear_all_auth_cookies,
+    set_csrf_cookie,
+    clear_csrf_cookie,
+)
 from app.core.logging import logger
 from app.core.rate_limiter import limiter
 from app.core.security import (
@@ -449,11 +454,19 @@ async def refresh_tokens(
     session: AsyncSession = Depends(get_db),
 ) -> AuthMessage:
     """Use refresh_token cookie to issue a new access_token (token rotation)."""
-    raw_refresh = (
-        request.cookies.get("teacher_refresh_token") or
-        request.cookies.get("student_refresh_token") or
-        request.cookies.get("refresh_token")
-    )
+    raw_refresh = None
+    role_prefix = ""
+    for cookie_name, candidate_prefix in (
+        ("teacher_refresh_token", "teacher_"),
+        ("student_refresh_token", "student_"),
+        ("refresh_token", ""),
+    ):
+        token = request.cookies.get(cookie_name)
+        if token:
+            raw_refresh = token
+            role_prefix = candidate_prefix
+            break
+
     if not raw_refresh:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No refresh token")
 
@@ -491,7 +504,7 @@ async def refresh_tokens(
     access_token = create_access_token(subject=str(rt.user_id))
     await session.commit()
 
-    set_auth_cookies(response, access_token, new_raw)
+    set_auth_cookies(response, access_token, new_raw, role_prefix=role_prefix)
     # Renew CSRF token on refresh
     set_csrf_cookie(response)
     logger.info("user.token_refreshed user_id=%s", rt.user_id)
@@ -549,12 +562,12 @@ async def logout(
     session: AsyncSession = Depends(get_db),
 ) -> AuthMessage:
     """Revoke refresh token and clear auth cookies."""
-    raw_refresh = (
-        request.cookies.get("teacher_refresh_token") or
-        request.cookies.get("student_refresh_token") or
-        request.cookies.get("refresh_token")
-    )
-    if raw_refresh:
+    has_revocation = False
+    for cookie_name in ("teacher_refresh_token", "student_refresh_token", "refresh_token"):
+        raw_refresh = request.cookies.get(cookie_name)
+        if not raw_refresh:
+            continue
+
         token_hash = hash_refresh_token(raw_refresh)
         result = await session.execute(
             select(RefreshToken).where(RefreshToken.token_hash == token_hash)
@@ -562,9 +575,12 @@ async def logout(
         rt = result.scalar_one_or_none()
         if rt and not rt.revoked:
             rt.revoked = True
-            await session.commit()
+            has_revocation = True
 
-    clear_auth_cookies(response)
+    if has_revocation:
+        await session.commit()
+
+    clear_all_auth_cookies(response)
     clear_csrf_cookie(response)
     logger.info("user.logout")
     return AuthMessage(message="Logged out")

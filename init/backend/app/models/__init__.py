@@ -19,6 +19,7 @@ from .work_session import GroupWorkSession, IndividualSubmission, GroupDiscussio
 from .peer_review import PeerReviewRound, PeerReview
 from .classroom_material import ClassroomMaterial
 from .audit_log import AuditLog
+from .admin_ai_model_setting import AdminAIModelSetting
 
 __all__ = [
     "User",
@@ -48,4 +49,5 @@ __all__ = [
     "PeerReview",
     "ClassroomMaterial",
     "AuditLog",
+    "AdminAIModelSetting",
 ]

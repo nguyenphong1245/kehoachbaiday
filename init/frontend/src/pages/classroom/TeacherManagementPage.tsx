@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useConfirm } from "@/components/common/ConfirmDialog";
 import {
   Plus,
@@ -48,6 +49,7 @@ const tabs: { key: TabType; label: string; icon: React.ReactNode }[] = [
 
 const TeacherManagementPage: React.FC = () => {
   usePageTitle("Quản lý lớp học");
+  const navigate = useNavigate();
   const user = getStoredAuthUser();
   const { confirm, ConfirmDialog, dialogProps } = useConfirm();
 
@@ -353,6 +355,17 @@ const TeacherManagementPage: React.FC = () => {
                   </span>
                 )}
               </div>
+            </div>
+
+            <div className="flex items-center">
+              <button
+                onClick={() => navigate("/student/login")}
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-sm font-medium"
+                title="Sang trang học sinh"
+              >
+                <User className="w-4 h-4" />
+                <span className="hidden sm:inline">Trang học sinh</span>
+              </button>
             </div>
 
           </div>

@@ -180,7 +180,10 @@ export interface GenerateLessonPlanRequest {
   lesson_id: string;
   lesson_name: string;
   activities: ActivityConfig[];
+  cognitive_level?: CognitiveLevel;
 }
+
+export type CognitiveLevel = "weak" | "average" | "fair" | "good" | "excellent";
 
 export interface GenerateLessonPlanResponse {
   lesson_info: {
@@ -321,4 +324,37 @@ export interface SavedLessonPlan {
   };
   full_content?: string;
   activities?: ActivityConfig[];
+}
+
+// ============== INLINE AI EDIT INTERFACES ==============
+
+export interface EditAnalysis {
+  activity_type: string;
+  current_method: string;
+  position: string;
+  issue: string;
+}
+
+export interface EditSuggestion {
+  id: number;
+  type: "doi_tro_choi" | "doi_ky_thuat" | "doi_phuong_phap" | "cai_thien" | string;
+  title: string;
+  description: string;
+}
+
+export interface EditSuggestResponse {
+  analysis: EditAnalysis;
+  suggestions: EditSuggestion[];
+}
+
+export interface EditRelatedChange {
+  section: string;
+  action: "update" | "add" | "remove";
+  old_text: string;
+  new_text: string;
+}
+
+export interface EditApplyResponse {
+  edited_text: string;
+  related_changes: EditRelatedChange[];
 }

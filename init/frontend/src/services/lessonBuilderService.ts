@@ -15,7 +15,9 @@ export {
   getLessonDetail,
   generateLessonPlan,
   generateLessonPlanStream,
-  improveWithAI,
+  editSuggest,
+  editApply,
+  generateMindmap,
   saveLessonPlan,
   getSavedLessonPlans,
   getSavedLessonPlan,
@@ -30,9 +32,6 @@ export type {
   SSEResultEvent,
   SSEErrorEvent,
   SSEEvent,
-  RelatedAppendix,
-  UpdatedAppendix,
-  ImproveResult,
 } from "./lessonBuilderApi";
 
 // Export functions

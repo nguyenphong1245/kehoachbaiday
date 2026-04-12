@@ -65,7 +65,7 @@ async def trigger_auto_submit(assignment_id: int):
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"http://{settings.backend_host}:{settings.backend_port}/api/v1/student/assignments/{assignment_id}/auto-submit",
-                params={"api_key": settings.internal_api_key},
+                headers={"X-Internal-Api-Key": settings.internal_api_key},
                 timeout=30.0
             )
 
@@ -90,7 +90,7 @@ async def trigger_peer_review_activation(assignment_id: int):
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"http://{settings.backend_host}:{settings.backend_port}/api/v1/peer-review/assignments/{assignment_id}/auto-activate",
-                params={"api_key": settings.internal_api_key},
+                headers={"X-Internal-Api-Key": settings.internal_api_key},
                 timeout=30.0
             )
 

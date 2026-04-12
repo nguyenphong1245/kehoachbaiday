@@ -28,6 +28,9 @@ def load_all_models() -> None:
     import app.models.work_session  # noqa: F401
     import app.models.peer_review  # noqa: F401
     import app.models.guide_card  # noqa: F401
+    import app.models.teaching_rule  # noqa: F401
+    import app.models.lesson_plan_comment  # noqa: F401
+    import app.models.admin_ai_model_setting  # noqa: F401
 
 
 load_all_models()

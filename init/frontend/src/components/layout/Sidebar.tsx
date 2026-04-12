@@ -1,9 +1,11 @@
 import React, { useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { LayoutDashboard, Users, PanelLeftOpen, PanelLeftClose, X, School } from 'lucide-react'
+import { LayoutDashboard, Users, PanelLeftOpen, PanelLeftClose, X, School, Bot } from 'lucide-react'
+import logoImage from '@/assets/Insight-Institute-tight.svg'
 
 const items = [
   { key: 'dashboard', label: 'Tổng quan', href: '/admin', icon: LayoutDashboard },
+  { key: 'ai-models', label: 'Cấu hình AI', href: '/admin/ai-models', icon: Bot },
   { key: 'users', label: 'Tài khoản', href: '/admin/users', icon: Users },
   { key: 'teachers', label: 'Lớp học', href: '/admin/teachers', icon: School },
 ]
@@ -21,13 +23,14 @@ const SidebarContent: React.FC<SidebarContentProps> = ({ expanded, setExpanded }
 
   return (
     <>
-      <div className="h-16 flex items-center justify-center">
-        <img src="/favicon.ico" alt="Logo" className="h-10 w-10" />
-        {expanded && (
-          <span className="ml-2 text-lg font-semibold text-stone-800 dark:text-stone-200">Admin</span>
-        )}
+      <div className="h-24 flex items-center justify-center">
+        <img
+          src={logoImage}
+          alt="Logo"
+          className={`${expanded ? 'h-20 w-20' : 'h-12 w-12'} object-contain shrink-0`}
+        />
       </div>
-      <nav className="flex-1 px-2 py-4">
+      <nav className="flex-1 px-2 pt-1 pb-3">
         <ul className="space-y-1.5 flex flex-col items-center xl:items-stretch">
           {items.map((it) => {
             const Icon = it.icon as any

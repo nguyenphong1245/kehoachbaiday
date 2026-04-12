@@ -8,7 +8,6 @@ Write-Host ""
 
 $server = "14.225.204.15"
 $username = "root"
-$password = "ySoJnFdbsuU9bFOga5cP"
 
 # Create deployment script
 $deployScript = @'
@@ -92,9 +91,6 @@ OPENAI_API_KEY=
 OPENAI_MODEL=gpt-3.5-turbo
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=llama2
-YOUTUBE_API_KEY=
-GOOGLE_CSE_API_KEY=
-GOOGLE_CSE_CX=
 PISTON_API_URL=http://piston:2000/api/v2
 NEO4J_URI=bolt://localhost:7687
 NEO4J_USER=neo4j

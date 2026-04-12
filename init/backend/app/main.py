@@ -41,6 +41,9 @@ async def lifespan(app: FastAPI):
     if "CHANGE-ME" in _settings.secret_key:
         logger.critical("SECRET_KEY chưa được đổi! Hãy đặt SECRET_KEY trong file .env")
         raise RuntimeError("SECRET_KEY chưa được cấu hình. Không thể khởi động ứng dụng.")
+    if "CHANGE-ME" in _settings.internal_api_key:
+        logger.critical("INTERNAL_API_KEY chưa được đổi! Hãy đặt INTERNAL_API_KEY trong file .env")
+        raise RuntimeError("INTERNAL_API_KEY chưa được cấu hình. Không thể khởi động ứng dụng.")
 
     await create_default_roles()
 

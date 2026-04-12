@@ -63,6 +63,23 @@ export interface ContentListResponse {
   limit: number;
 }
 
+export interface AIModelFeatureSetting {
+  feature_key: string;
+  feature_label: string;
+  description: string;
+  model_name: string;
+}
+
+export interface AIModelSettings {
+  allowed_models: string[];
+  settings: AIModelFeatureSetting[];
+}
+
+export interface AIModelSettingUpdateItem {
+  feature_key: string;
+  model_name: string;
+}
+
 // ============== API CALLS ==============
 
 export const getDashboardStats = async (): Promise<DashboardStats> => {
@@ -96,6 +113,18 @@ export const updateTokenBalance = async (
   const { data } = await api.put(`/admin/users/${userId}/token-balance`, {
     token_balance: tokenBalance,
   });
+  return data;
+};
+
+export const getAIModelSettings = async (): Promise<AIModelSettings> => {
+  const { data } = await api.get("/admin/ai-model-settings");
+  return data;
+};
+
+export const updateAIModelSettings = async (
+  settings: AIModelSettingUpdateItem[]
+): Promise<AIModelSettings> => {
+  const { data } = await api.put("/admin/ai-model-settings", { settings });
   return data;
 };
 

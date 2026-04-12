@@ -4,7 +4,7 @@ API Routes cho Student Portal - Trang học sinh
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from sqlalchemy import select, func, and_
@@ -1202,7 +1202,7 @@ async def get_discussion(
         raise
     except Exception as e:
         logger.error(f"Error in get_discussion: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal error")
 
 
 @router.post("/change-password")
@@ -1228,7 +1228,7 @@ async def change_password(
 async def auto_submit_assignment(
     request: Request,
     assignment_id: int,
-    api_key: str,
+    x_internal_api_key: str | None = Header(default=None, alias="X-Internal-Api-Key"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -1240,7 +1240,7 @@ async def auto_submit_assignment(
 
     # Verify internal API key (constant-time comparison)
     import hmac as _hmac
-    if not _hmac.compare_digest(api_key, settings.internal_api_key):
+    if not _hmac.compare_digest(x_internal_api_key or "", settings.internal_api_key):
         raise HTTPException(status_code=403, detail="Invalid API key")
 
     # Get assignment

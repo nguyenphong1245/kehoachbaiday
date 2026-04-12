@@ -30,8 +30,10 @@ from app.schemas.lesson_plan_builder import (
     SavedLessonPlanRead,
     SavedLessonPlanListItem,
     SavedLessonPlanListResponse,
-    ImproveSectionRequest,
-    ImproveSectionResponse,
+    EditSuggestRequest,
+    EditSuggestResponse,
+    EditApplyRequest,
+    EditApplyResponse,
     UpdateLessonPlanRequest,
     GenerateMindmapRequest,
     GenerateMindmapResponse,
@@ -40,6 +42,13 @@ from app.schemas.lesson_plan_builder import (
     NLSChiBaoResponse,
 )
 from app.services.lesson_plan_builder_service import get_lesson_plan_builder_service
+from app.services.lesson_plan_edit_service import get_lesson_plan_edit_service
+from app.services.admin_ai_model_registry import (
+    FEATURE_LESSON_PLAN_GENERATION,
+    FEATURE_LESSON_PLAN_MINDMAP,
+    FEATURE_LESSON_PLAN_EDIT,
+    get_effective_model_for_feature,
+)
 from app.services.response_parser import parse_response_to_sections
 from app.prompts.lesson_plan_generation import build_teacher_preferences_section
 from app.utils.prompt_sanitize import sanitize_prompt_input
@@ -48,8 +57,9 @@ router = APIRouter()
 
 # Token tracking constants
 _LESSON_PLAN_RESERVE_TOKENS = 5000  # Reserve more tokens for lesson plan generation
-_IMPROVE_RESERVE_TOKENS = 1000      # Reserve for section improvement
 _MINDMAP_RESERVE_TOKENS = 500       # Reserve for mindmap generation
+_EDIT_SUGGEST_RESERVE_TOKENS = 1000  # Reserve for edit-suggest
+_EDIT_APPLY_RESERVE_TOKENS = 1500    # Reserve for edit-apply
 
 
 async def _deduct_tokens(session: AsyncSession, user_id: int, amount: int) -> bool:
@@ -263,9 +273,30 @@ async def generate_lesson_plan(
             payload.lesson_name
         )
 
+        # Build cognitive level + dynamic rules
+        from app.prompts.cognitive_levels import build_cognitive_level_section
+        from app.prompts.dynamic_rules import build_dynamic_rules_section
+        from app.services.comment_analysis_service import get_rules_for_prompt
+
+        cognitive_section = build_cognitive_level_section(
+            getattr(payload, "cognitive_level", None)
+        )
+        general_rules, lesson_rules = await get_rules_for_prompt(
+            db, current_user.id, payload.lesson_id
+        )
+        rules_section = build_dynamic_rules_section(general_rules, lesson_rules)
+
+        generation_model = await get_effective_model_for_feature(
+            db,
+            FEATURE_LESSON_PLAN_GENERATION,
+        )
+        service.configure_models(json_model_name=generation_model)
+
         async with get_gemini_semaphore():
             response, tokens_used = await loop.run_in_executor(
-                None, service.generate_lesson_plan, payload, reference_documents, teacher_prefs
+                None, service.generate_lesson_plan,
+                payload, reference_documents, teacher_prefs,
+                cognitive_section, rules_section,
             )
 
         # Deduct actual tokens used
@@ -321,6 +352,14 @@ async def generate_lesson_plan_stream(
     user_id = current_user.id  # Capture user_id for use in generator
     # Capture user settings before entering generator (db may close)
     user_settings = current_user.settings
+    generation_model = await get_effective_model_for_feature(
+        db,
+        FEATURE_LESSON_PLAN_GENERATION,
+    )
+    mindmap_model = await get_effective_model_for_feature(
+        db,
+        FEATURE_LESSON_PLAN_MINDMAP,
+    )
 
     async def event_generator():
         loop = asyncio.get_event_loop()
@@ -381,13 +420,40 @@ async def generate_lesson_plan_stream(
             current_step += 1
             yield f"data: {json.dumps({'type': 'progress', 'step': current_step, 'total_steps': total_steps, 'message': 'Đang xây dựng prompt...'}, ensure_ascii=False)}\n\n"
 
-            prompt = service._build_prompt(payload, lesson_detail, reference_documents, lesson_detail.content, teacher_prefs)
+            # Build cognitive level + dynamic rules sections
+            from app.prompts.cognitive_levels import build_cognitive_level_section
+            from app.prompts.dynamic_rules import build_dynamic_rules_section
+            from app.services.comment_analysis_service import get_rules_for_prompt
+
+            cognitive_section = build_cognitive_level_section(
+                getattr(payload, "cognitive_level", None)
+            )
+
+            # Query teaching rules (cần DB session riêng vì đang trong generator)
+            general_rules, lesson_rules = [], []
+            try:
+                from app.db.session import AsyncSessionLocal
+                async with AsyncSessionLocal() as rules_db:
+                    general_rules, lesson_rules = await get_rules_for_prompt(
+                        rules_db, user_id, payload.lesson_id
+                    )
+            except Exception as rules_err:
+                logger.warning("Failed to load teaching rules: %s", rules_err)
+
+            rules_section = build_dynamic_rules_section(general_rules, lesson_rules)
+
+            prompt = service._build_prompt(
+                payload, lesson_detail, reference_documents,
+                lesson_detail.content, teacher_prefs,
+                cognitive_section, rules_section,
+            )
 
             # Step N+1: Gọi AI sinh nội dung (giới hạn concurrent qua semaphore)
             current_step += 1
             yield f"data: {json.dumps({'type': 'progress', 'step': current_step, 'total_steps': total_steps, 'message': 'AI đang sinh kế hoạch bài dạy...'}, ensure_ascii=False)}\n\n"
 
             try:
+                service.configure_models(json_model_name=generation_model)
                 async with get_gemini_semaphore():
                     response = await asyncio.wait_for(
                         loop.run_in_executor(None, service.model.generate_content, prompt),
@@ -474,6 +540,7 @@ async def generate_lesson_plan_stream(
             if mindmap_activities:
                 current_step += 1
                 yield f"data: {json.dumps({'type': 'progress', 'step': current_step, 'total_steps': total_steps, 'message': 'Đang tạo sơ đồ tư duy...'}, ensure_ascii=False)}\n\n"
+                service.configure_models(text_model_name=mindmap_model)
 
                 for activity in mindmap_activities:
                     # Find section matching this activity's type
@@ -592,6 +659,12 @@ async def generate_mindmap_endpoint(
     loop = asyncio.get_event_loop()
 
     try:
+        mindmap_model = await get_effective_model_for_feature(
+            db,
+            FEATURE_LESSON_PLAN_MINDMAP,
+        )
+        service.configure_models(text_model_name=mindmap_model)
+
         async with get_gemini_semaphore():
             mindmap_data, tokens_used = await loop.run_in_executor(
                 None,
@@ -616,7 +689,7 @@ async def generate_mindmap_endpoint(
         logger.error("Mindmap generation error: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Lỗi sinh sơ đồ tư duy: {str(e)}"
+            detail="Lỗi sinh sơ đồ tư duy"
         )
 
 
@@ -984,79 +1057,114 @@ async def mark_lesson_plan_printed(
         )
 
 
-@router.post("/improve-section", response_model=ImproveSectionResponse)
+@router.post("/edit-suggest", response_model=EditSuggestResponse)
 @limiter.limit("10/minute")
-async def improve_section_with_ai(
+async def suggest_edit_for_selected_text(
     request: Request,
-    payload: ImproveSectionRequest,
+    payload: EditSuggestRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> ImproveSectionResponse:
-    """
-    Cải thiện nội dung một section với AI dựa trên yêu cầu của người dùng.
-    Nếu có phụ lục liên quan, sẽ cập nhật đồng bộ.
-    Tự động lấy tài liệu tham khảo (năng lực, phẩm chất) từ Neo4j.
-    """
-    # Check token balance
-    if not await _check_token_balance(db, current_user.id, _IMPROVE_RESERVE_TOKENS):
+) -> EditSuggestResponse:
+    """Đề xuất các hướng chỉnh sửa cho đoạn KHBD được giáo viên bôi đen."""
+    if not await _check_token_balance(db, current_user.id, _EDIT_SUGGEST_RESERVE_TOKENS):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Bạn đã hết token. Vui lòng liên hệ quản trị viên để nâng hạn mức.",
         )
 
-    service = get_lesson_plan_builder_service()
+    edit_service = get_lesson_plan_edit_service()
+    loop = asyncio.get_event_loop()
 
     try:
-        loop = asyncio.get_event_loop()
-        reference_documents = await loop.run_in_executor(
-            None, service.get_reference_documents_from_neo4j
+        suggest_model = await get_effective_model_for_feature(
+            db,
+            FEATURE_LESSON_PLAN_EDIT,
         )
-
-        related_appendices = None
-        if payload.related_appendices:
-            related_appendices = [
-                {
-                    "section_id": appendix.section_id,
-                    "section_type": appendix.section_type,
-                    "title": appendix.title,
-                    "content": appendix.content
-                }
-                for appendix in payload.related_appendices
-            ]
-
-        def _do_improve():
-            return service.improve_section(
-                section_type=payload.section_type,
-                section_title=payload.section_title,
-                current_content=payload.current_content,
-                user_request=payload.user_request,
-                lesson_info=payload.lesson_info,
-                related_appendices=related_appendices,
-                reference_documents=reference_documents if reference_documents else None
-            )
+        edit_service.configure_models(suggest_model_name=suggest_model)
 
         async with get_gemini_semaphore():
-            result, tokens_used = await loop.run_in_executor(None, _do_improve)
+            parsed, tokens_used = await loop.run_in_executor(
+                None,
+                lambda: edit_service.suggest_edits(
+                    selected_text=payload.selected_text,
+                    full_lesson_plan=payload.full_lesson_plan,
+                )
+            )
 
-        # Deduct tokens
         if tokens_used > 0:
             await _deduct_tokens(db, current_user.id, tokens_used)
             await db.commit()
 
         logger.info(
-            "lesson_builder.improve_section user_id=%s section=%s appendices=%s tokens=%d",
+            "lesson_builder.edit_suggest user_id=%s suggestions=%d tokens=%d",
             current_user.id,
-            payload.section_type,
-            len(related_appendices) if related_appendices else 0,
-            tokens_used
+            len(parsed.get("suggestions", [])),
+            tokens_used,
         )
 
-        return result
+        return EditSuggestResponse.model_validate(parsed)
     except Exception as e:
-        logger.error(f"Error improving section: {e}")
+        logger.error("Error suggesting edit: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Lỗi cải thiện section"
+            detail="Lỗi đề xuất chỉnh sửa nội dung",
+        )
+
+
+@router.post("/edit-apply", response_model=EditApplyResponse)
+@limiter.limit("10/minute")
+async def apply_edit_for_selected_text(
+    request: Request,
+    payload: EditApplyRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> EditApplyResponse:
+    """Thực hiện chỉnh sửa đoạn KHBD theo hướng giáo viên đã chọn."""
+    if not await _check_token_balance(db, current_user.id, _EDIT_APPLY_RESERVE_TOKENS):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bạn đã hết token. Vui lòng liên hệ quản trị viên để nâng hạn mức.",
+        )
+
+    edit_service = get_lesson_plan_edit_service()
+    loop = asyncio.get_event_loop()
+
+    try:
+        apply_model = await get_effective_model_for_feature(
+            db,
+            FEATURE_LESSON_PLAN_EDIT,
+        )
+        edit_service.configure_models(apply_model_name=apply_model)
+
+        async with get_gemini_semaphore():
+            parsed, tokens_used = await loop.run_in_executor(
+                None,
+                lambda: edit_service.apply_edit(
+                    selected_text=payload.selected_text,
+                    suggestion_type=payload.suggestion_type,
+                    suggestion_title=payload.suggestion_title,
+                    suggestion_description=payload.suggestion_description,
+                    full_lesson_plan=payload.full_lesson_plan,
+                )
+            )
+
+        if tokens_used > 0:
+            await _deduct_tokens(db, current_user.id, tokens_used)
+            await db.commit()
+
+        logger.info(
+            "lesson_builder.edit_apply user_id=%s related_changes=%d tokens=%d",
+            current_user.id,
+            len(parsed.get("related_changes", [])),
+            tokens_used,
+        )
+
+        return EditApplyResponse.model_validate(parsed)
+    except Exception as e:
+        logger.error("Error applying edit: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Lỗi thực hiện chỉnh sửa nội dung",
         )
 
 

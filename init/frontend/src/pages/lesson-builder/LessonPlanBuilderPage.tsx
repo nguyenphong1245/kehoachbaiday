@@ -20,6 +20,9 @@ import {
   Check,
   Save,
   Menu,
+  MessageSquareText,
+  Trash2,
+  School,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { getStoredAuthUser } from "@/utils/authStorage";
@@ -39,8 +42,15 @@ import type {
   ActivityConfig,
   GenerateLessonPlanResponse,
   NLSSelectionItem,
+  CognitiveLevel,
 } from "@/types/lessonBuilder";
 import { generateLessonPlanStream, type SSEProgressEvent } from "@/services/lessonBuilderService";
+import {
+  getMyTeachingRules,
+  deleteTeachingRule,
+  type TeachingRule,
+} from "@/services/teachingRuleService";
+import lessonDocIcon from "@/assets/tl.svg";
 
 type PageStep = "select" | "configure" | "result";
 
@@ -51,10 +61,10 @@ const STEPS = [
   { key: "result", label: "Kết quả" },
 ];
 
-type SettingsModal = "password" | "tools" | "style" | null;
+type SettingsModal = "password" | "tools" | "style" | "prompt" | "identity" | null;
 
 export const LessonPlanBuilderPage: React.FC = () => {
-  usePageTitle("Soạn kế hoạch bài dạy");
+  usePageTitle("Soạn KHBD");
   const navigate = useNavigate();
   const user = getStoredAuthUser();
   const toast = useToast();
@@ -94,6 +104,26 @@ export const LessonPlanBuilderPage: React.FC = () => {
   const [originalStyle, setOriginalStyle] = useState("");
   const [savingStyle, setSavingStyle] = useState(false);
 
+  // Teacher identity state
+  const [schoolName, setSchoolName] = useState("");
+  const [departmentName, setDepartmentName] = useState("");
+  const [teacherName, setTeacherName] = useState("");
+  const [originalIdentity, setOriginalIdentity] = useState({
+    schoolName: "",
+    departmentName: "",
+    teacherName: "",
+  });
+  const [savingIdentity, setSavingIdentity] = useState(false);
+
+  // Cognitive level state
+  const [cognitiveLevel, setCognitiveLevel] = useState("");
+
+  // Teaching rules (Prompt modal)
+  const [teachingRules, setTeachingRules] = useState<TeachingRule[]>([]);
+  const [loadingRules, setLoadingRules] = useState(false);
+  const [rulesError, setRulesError] = useState<string | null>(null);
+  const [activeRuleTab, setActiveRuleTab] = useState<"general" | "lesson">("general");
+
   // AbortController for SSE stream
   const abortRef = useRef<AbortController | null>(null);
 
@@ -104,6 +134,18 @@ export const LessonPlanBuilderPage: React.FC = () => {
     setCustomTools(settings.custom_tools ?? []);
     setTeachingStyle(settings.teaching_style ?? "");
     setOriginalStyle(settings.teaching_style ?? "");
+
+    const nextSchoolName = settings.school_name ?? "";
+    const nextDepartmentName = settings.department_name ?? "";
+    const nextTeacherName = settings.teacher_name ?? "";
+    setSchoolName(nextSchoolName);
+    setDepartmentName(nextDepartmentName);
+    setTeacherName(nextTeacherName);
+    setOriginalIdentity({
+      schoolName: nextSchoolName,
+      departmentName: nextDepartmentName,
+      teacherName: nextTeacherName,
+    });
   }, [settings]);
 
   // Lock body scroll khi sidebar mở
@@ -125,10 +167,37 @@ export const LessonPlanBuilderPage: React.FC = () => {
   };
 
 
+  // Load teaching rules (for Prompt modal)
+  const loadTeachingRules = async () => {
+    setLoadingRules(true);
+    setRulesError(null);
+    try {
+      const rules = await getMyTeachingRules();
+      setTeachingRules(rules);
+    } catch {
+      setRulesError("Không thể tải quy tắc đã học");
+    } finally {
+      setLoadingRules(false);
+    }
+  };
+
+  const handleDeleteRule = async (ruleId: number) => {
+    try {
+      await deleteTeachingRule(ruleId);
+      setTeachingRules((prev) => prev.filter((r) => r.id !== ruleId));
+      toast.push({ type: "success", title: "Đã xóa quy tắc" });
+    } catch {
+      toast.push({ type: "error", title: "Không thể xóa quy tắc" });
+    }
+  };
+
   // === Settings modal handlers ===
   const openModal = (modal: SettingsModal) => {
     setShowUserMenu(false);
     setActiveModal(modal);
+    if (modal === "prompt") {
+      loadTeachingRules();
+    }
   };
 
   const closeModal = () => {
@@ -189,6 +258,32 @@ export const LessonPlanBuilderPage: React.FC = () => {
     finally { setSavingStyle(false); }
   };
 
+  const handleSaveIdentity = async () => {
+    setSavingIdentity(true);
+    try {
+      await saveSettings({
+        school_name: schoolName.trim() || null,
+        department_name: departmentName.trim() || null,
+        teacher_name: teacherName.trim() || null,
+      });
+      setOriginalIdentity({
+        schoolName,
+        departmentName,
+        teacherName,
+      });
+      toast.push({ type: "success", title: "Đã lưu thông tin trường và giáo viên" });
+    } catch {
+      // handled by hook/toast elsewhere
+    } finally {
+      setSavingIdentity(false);
+    }
+  };
+
+  const identityChanged =
+    schoolName !== originalIdentity.schoolName ||
+    departmentName !== originalIdentity.departmentName ||
+    teacherName !== originalIdentity.teacherName;
+
   const handleLogout = async () => {
     await logoutUser();
     navigate("/login");
@@ -237,6 +332,12 @@ export const LessonPlanBuilderPage: React.FC = () => {
       nls_selections: nlsSelections.length > 0 ? nlsSelections : undefined,
     }));
 
+    const normalizedCognitiveLevel: CognitiveLevel | undefined = (
+      ["weak", "average", "fair", "good", "excellent"] as const
+    ).includes(cognitiveLevel as CognitiveLevel)
+      ? (cognitiveLevel as CognitiveLevel)
+      : undefined;
+
     const controller = generateLessonPlanStream(
       {
         book_type: selectedLesson.book_type,
@@ -245,6 +346,7 @@ export const LessonPlanBuilderPage: React.FC = () => {
         lesson_id: selectedLesson.id,
         lesson_name: selectedLesson.name,
         activities: activitiesWithNLS,
+        cognitive_level: normalizedCognitiveLevel,
       },
       (evt) => setProgress(evt),
       (result) => {
@@ -381,8 +483,8 @@ export const LessonPlanBuilderPage: React.FC = () => {
           </div>
 
           {/* Progress Steps */}
-          <div className="px-3 sm:px-6 py-2 sm:py-3 border-t border-stone-100 bg-stone-50 flex items-center justify-center">
-            <div className="flex items-center gap-1 sm:gap-2">
+          <div className="px-3 sm:px-6 py-1.5 sm:py-2 border-t border-stone-100 bg-stone-50 flex items-center justify-center">
+            <div className="flex items-center gap-1 sm:gap-1.5">
               {STEPS.map((step, index) => {
                 const isActive = currentStepIndex === index;
                 const isCompleted = currentStepIndex > index;
@@ -398,7 +500,7 @@ export const LessonPlanBuilderPage: React.FC = () => {
                         else if (index === 2 && generatedResult) setCurrentStep("result");
                       }}
                       disabled={!isClickable}
-                      className={`flex items-center gap-1.5 sm:gap-2.5 px-2 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm transition-all rounded-lg ${
+                      className={`flex items-center gap-1 sm:gap-1.5 px-1.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs transition-all rounded-md ${
                         isActive
                           ? "bg-brand text-white shadow-md shadow-brand/25"
                           : isCompleted
@@ -406,7 +508,7 @@ export const LessonPlanBuilderPage: React.FC = () => {
                           : "text-stone-400 bg-stone-100"
                       } ${!isClickable && !isActive ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
                     >
-                      <span className={`w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-xs font-bold rounded-full ${
+                      <span className={`w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center text-[10px] font-bold rounded-full ${
                         isActive
                           ? "bg-white/25"
                           : isCompleted
@@ -415,14 +517,14 @@ export const LessonPlanBuilderPage: React.FC = () => {
                       }`}>
                         {isCompleted ? "✓" : index + 1}
                       </span>
-                      <span className="font-semibold hidden sm:inline">
+                      <span className="font-semibold hidden sm:inline leading-none">
                         {step.label}
                       </span>
                     </button>
 
                     {/* Connector */}
                     {index < STEPS.length - 1 && (
-                      <div className={`w-6 sm:w-12 h-0.5 rounded-full ${
+                      <div className={`w-4 sm:w-8 h-0.5 rounded-full ${
                         currentStepIndex > index
                           ? "bg-green-400"
                           : "bg-stone-200"
@@ -441,8 +543,12 @@ export const LessonPlanBuilderPage: React.FC = () => {
           {currentStep === "select" && (
             <div className="flex flex-col items-center justify-center h-full">
               <div className="bg-white p-10 max-w-md text-center rounded-2xl border border-stone-200 shadow-lg">
-                <div className="w-16 h-16 bg-sky-100 rounded-2xl flex items-center justify-center mx-auto mb-5">
-                  <FileText className="w-8 h-8 text-brand" />
+                <div className="w-20 h-20 bg-sky-100 rounded-2xl flex items-center justify-center mx-auto mb-5 overflow-hidden">
+                  <img
+                    src={lessonDocIcon}
+                    alt="Biểu tượng tài liệu"
+                    className="w-full h-full object-contain scale-[3.2] origin-center"
+                  />
                 </div>
                 <h2 className="text-xl font-bold text-stone-800 mb-3">
                   Chọn bài học để bắt đầu
@@ -541,6 +647,8 @@ export const LessonPlanBuilderPage: React.FC = () => {
                     lessonDetail={selectedLesson}
                     activities={activities}
                     onActivitiesChange={handleActivitiesChange}
+                    cognitiveLevel={cognitiveLevel}
+                    onCognitiveLevelChange={setCognitiveLevel}
                   />
                 </div>
               </section>
@@ -611,7 +719,7 @@ export const LessonPlanBuilderPage: React.FC = () => {
                 <button
                   onClick={isGenerating ? cancelGeneration : handleGenerate}
                   disabled={!isGenerating && activities.length === 0}
-                  className={`px-8 py-3.5 rounded-xl flex items-center gap-2.5 transition-all font-semibold shadow-lg ${
+                  className={`min-w-[210px] px-5 py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all text-sm font-semibold shadow-md ${
                     isGenerating
                       ? 'bg-red-500 hover:bg-red-600 text-white shadow-red-500/25'
                       : 'bg-brand hover:bg-brand-dark text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-brand/25 hover:shadow-brand/40'
@@ -619,12 +727,12 @@ export const LessonPlanBuilderPage: React.FC = () => {
                 >
                   {isGenerating ? (
                     <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <Loader2 className="w-4 h-4 animate-spin" />
                       Dừng soạn
                     </>
                   ) : (
                     <>
-                      <Sparkles className="w-5 h-5" />
+                      <Sparkles className="w-4 h-4" />
                       Sinh kế hoạch bài dạy
                     </>
                   )}
@@ -721,6 +829,20 @@ export const LessonPlanBuilderPage: React.FC = () => {
           >
             <Palette className="w-4 h-4 text-stone-500" />
             <span>Phong cách dạy học</span>
+          </button>
+          <button
+            className="w-full flex items-center gap-3 px-5 py-3 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
+            onClick={() => openModal("identity")}
+          >
+            <School className="w-4 h-4 text-stone-500" />
+            <span>Thông tin giáo viên</span>
+          </button>
+          <button
+            className="w-full flex items-center gap-3 px-5 py-3 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
+            onClick={() => openModal("prompt")}
+          >
+            <MessageSquareText className="w-4 h-4 text-stone-500" />
+            <span>Prompt</span>
           </button>
 
           <div className="my-2 mx-5 border-t border-stone-100"></div>
@@ -873,6 +995,242 @@ export const LessonPlanBuilderPage: React.FC = () => {
                   </button>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Prompt Modal - hiển thị rules đã sinh từ nhận xét GV */}
+          {activeModal === "identity" && (
+            <div className="relative bg-white rounded-xl shadow-2xl border border-stone-200 w-[95vw] max-w-[520px] max-h-[80vh] flex flex-col">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200">
+                <div>
+                  <h3 className="text-sm font-bold text-stone-800 flex items-center gap-2 uppercase tracking-wide">
+                    <School className="w-4 h-4 text-stone-600" />
+                    Thông tin giáo viên
+                  </h3>
+                  <p className="text-xs text-stone-500 mt-0.5">Mặc định cho tất cả KHBD soạn tiếp theo</p>
+                </div>
+                <button onClick={closeModal} className="p-1.5 hover:bg-stone-100 rounded-lg transition-colors">
+                  <X className="w-4 h-4 text-stone-500" />
+                </button>
+              </div>
+              <div className="p-5 space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-stone-600 uppercase tracking-wide mb-1.5">Trường</label>
+                  <input
+                    type="text"
+                    value={schoolName}
+                    onChange={(e) => setSchoolName(e.target.value)}
+                    maxLength={255}
+                    placeholder="VD: THPT Nguyễn Huệ"
+                    className="w-full px-3 py-2.5 bg-stone-50 border border-stone-200 rounded-lg text-stone-800 text-sm focus:ring-2 focus:ring-brand focus:border-brand transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-stone-600 uppercase tracking-wide mb-1.5">Tổ</label>
+                  <input
+                    type="text"
+                    value={departmentName}
+                    onChange={(e) => setDepartmentName(e.target.value)}
+                    maxLength={255}
+                    placeholder="VD: Tin học"
+                    className="w-full px-3 py-2.5 bg-stone-50 border border-stone-200 rounded-lg text-stone-800 text-sm focus:ring-2 focus:ring-brand focus:border-brand transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-stone-600 uppercase tracking-wide mb-1.5">Giáo viên</label>
+                  <input
+                    type="text"
+                    value={teacherName}
+                    onChange={(e) => setTeacherName(e.target.value)}
+                    maxLength={255}
+                    placeholder="VD: Trần Văn A"
+                    className="w-full px-3 py-2.5 bg-stone-50 border border-stone-200 rounded-lg text-stone-800 text-sm focus:ring-2 focus:ring-brand focus:border-brand transition-colors"
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-stone-400">Sẽ tự chèn vào KHBD tiếp theo khi xuất/in</span>
+                  <button
+                    type="button"
+                    onClick={handleSaveIdentity}
+                    disabled={!identityChanged || savingIdentity}
+                    className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+                      identityChanged
+                        ? "bg-brand hover:bg-brand-dark text-white"
+                        : "bg-stone-100 text-stone-400 cursor-not-allowed"
+                    } disabled:opacity-50`}
+                  >
+                    {savingIdentity ? <><Loader2 className="w-4 h-4 animate-spin" /> Đang lưu...</> : <><Save className="w-4 h-4" /> Lưu thay đổi</>}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Prompt Modal - hiển thị rules đã sinh từ nhận xét GV */}
+          {activeModal === "prompt" && (
+            <div className="relative bg-white rounded-xl shadow-2xl border border-stone-200 w-[95vw] max-w-[640px] max-h-[85vh] flex flex-col">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200">
+                <div>
+                  <h3 className="text-sm font-bold text-stone-800 flex items-center gap-2 uppercase tracking-wide">
+                    <MessageSquareText className="w-4 h-4 text-stone-600" />
+                    Prompt đã phân tích từ nhận xét GV
+                  </h3>
+                  <p className="text-xs text-stone-500 mt-0.5">
+                    Các quy tắc AI sinh tự động từ ghi chú của bạn — sẽ được inject vào prompt khi soạn KHBD lần sau
+                  </p>
+                </div>
+                <button onClick={closeModal} className="p-1.5 hover:bg-stone-100 rounded-lg transition-colors">
+                  <X className="w-4 h-4 text-stone-500" />
+                </button>
+              </div>
+              {(() => {
+                const general = teachingRules.filter(
+                  (r) => r.rule_type === "TEACHER_GENERAL" && r.is_active,
+                );
+                const lesson = teachingRules.filter(
+                  (r) => r.rule_type === "TEACHER_LESSON" && r.is_active,
+                );
+                return (
+                  <>
+                    {/* Tab header */}
+                    <div className="flex border-b border-stone-200 px-5 pt-2 gap-1 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setActiveRuleTab("general")}
+                        className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                          activeRuleTab === "general"
+                            ? "border-brand text-brand"
+                            : "border-transparent text-stone-500 hover:text-stone-700"
+                        }`}
+                      >
+                        Chung
+                        <span
+                          className={`ml-1.5 inline-flex items-center justify-center px-1.5 py-0.5 text-[11px] rounded-full ${
+                            activeRuleTab === "general"
+                              ? "bg-brand/10 text-brand"
+                              : "bg-stone-100 text-stone-500"
+                          }`}
+                        >
+                          {general.length}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveRuleTab("lesson")}
+                        className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                          activeRuleTab === "lesson"
+                            ? "border-brand text-brand"
+                            : "border-transparent text-stone-500 hover:text-stone-700"
+                        }`}
+                      >
+                        Riêng từng bài
+                        <span
+                          className={`ml-1.5 inline-flex items-center justify-center px-1.5 py-0.5 text-[11px] rounded-full ${
+                            activeRuleTab === "lesson"
+                              ? "bg-brand/10 text-brand"
+                              : "bg-stone-100 text-stone-500"
+                          }`}
+                        >
+                          {lesson.length}
+                        </span>
+                      </button>
+                    </div>
+
+                    <div className="p-5 overflow-y-auto flex-1 space-y-3">
+                      {loadingRules && (
+                        <div className="flex items-center justify-center py-8 text-sm text-stone-500">
+                          <Loader2 className="w-4 h-4 animate-spin mr-2" /> Đang tải...
+                        </div>
+                      )}
+                      {rulesError && (
+                        <div className="px-3 py-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg">
+                          {rulesError}
+                        </div>
+                      )}
+
+                      {!loadingRules && !rulesError && activeRuleTab === "general" && (
+                        <>
+                          <p className="text-xs text-stone-500">
+                            Áp dụng cho TẤT CẢ bài soạn về sau.
+                          </p>
+                          {general.length === 0 ? (
+                            <div className="text-center py-8">
+                              <MessageSquareText className="w-10 h-10 text-stone-300 mx-auto mb-2" />
+                              <p className="text-sm text-stone-500">Chưa có quy tắc chung nào.</p>
+                              <p className="text-xs text-stone-400 mt-1">
+                                Ghi chú trên KHBD rồi ấn Lưu — AI sẽ phân tích và sinh quy tắc tại đây.
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              {general.map((r) => (
+                                <div
+                                  key={r.id}
+                                  className="flex items-start gap-2 px-3 py-2.5 bg-sky-50 border border-sky-200 rounded-lg group"
+                                >
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm text-stone-800">{r.content}</p>
+                                    <p className="text-[10px] text-stone-500 mt-1">
+                                      {new Date(r.created_at).toLocaleString("vi-VN")}
+                                    </p>
+                                  </div>
+                                  <button
+                                    onClick={() => handleDeleteRule(r.id)}
+                                    className="opacity-0 group-hover:opacity-100 p-1 text-stone-400 hover:text-red-500 transition-all"
+                                    title="Xóa quy tắc"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {!loadingRules && !rulesError && activeRuleTab === "lesson" && (
+                        <>
+                          <p className="text-xs text-stone-500">
+                            Chỉ áp dụng khi soạn lại đúng bài đã nhận xét.
+                          </p>
+                          {lesson.length === 0 ? (
+                            <div className="text-center py-8">
+                              <MessageSquareText className="w-10 h-10 text-stone-300 mx-auto mb-2" />
+                              <p className="text-sm text-stone-500">Chưa có quy tắc riêng bài nào.</p>
+                              <p className="text-xs text-stone-400 mt-1">
+                                Nhận xét gắn với nội dung cụ thể của 1 bài sẽ được lưu ở đây.
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              {lesson.map((r) => (
+                                <div
+                                  key={r.id}
+                                  className="flex items-start gap-2 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-lg group"
+                                >
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm text-stone-800">{r.content}</p>
+                                    <p className="text-[10px] text-stone-500 mt-1">
+                                      Bài: {r.lesson_id || "—"} · {new Date(r.created_at).toLocaleString("vi-VN")}
+                                    </p>
+                                  </div>
+                                  <button
+                                    onClick={() => handleDeleteRule(r.id)}
+                                    className="opacity-0 group-hover:opacity-100 p-1 text-stone-400 hover:text-red-500 transition-all"
+                                    title="Xóa quy tắc"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           )}
         </div>

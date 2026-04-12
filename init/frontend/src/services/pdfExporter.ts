@@ -4,9 +4,67 @@ export const exportToPDF = async (
   content: string,
   fileName: string,
   lessonInfo?: { book_type?: string; grade?: string; topic?: string; lesson_name?: string },
+  teacherIdentity?: { school_name?: string; department_name?: string; teacher_name?: string },
   /** If provided, use this HTML directly instead of converting markdown */
   directHtml?: string
 ): Promise<Blob> => {
+  const fineDottedLineStyle =
+    'border-bottom:none;background-image:radial-gradient(circle,#6b7280 0.45px,transparent 0.55px);background-size:3px 1px;background-repeat:repeat-x;background-position:left calc(100% - 1px);';
+
+  const dedupeListItemLeadingMarkers = (html: string): string => {
+    if (typeof document === 'undefined') return html;
+
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    const markerPrefixPattern = /^\s*(?:[-+*•○◦]\s+)+/;
+
+    const findFirstMeaningfulTextNode = (root: Element): Text | null => {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+        acceptNode: (node) => {
+          const text = node.textContent || '';
+          if (!text.trim()) return NodeFilter.FILTER_SKIP;
+          const parentTag = node.parentElement?.tagName;
+          if (parentTag === 'CODE' || parentTag === 'PRE') {
+            return NodeFilter.FILTER_REJECT;
+          }
+          return NodeFilter.FILTER_ACCEPT;
+        },
+      });
+
+      const first = walker.nextNode();
+      return first ? (first as Text) : null;
+    };
+
+    tempDiv.querySelectorAll('li').forEach((li) => {
+      const textNode = findFirstMeaningfulTextNode(li);
+      if (!textNode) return;
+
+      const original = textNode.textContent || '';
+      const cleaned = original.replace(markerPrefixPattern, '');
+      if (cleaned !== original) {
+        textNode.textContent = cleaned;
+      }
+    });
+
+    return tempDiv.innerHTML;
+  };
+
+  const normalizePrintDottedLineStyles = (html: string): string => {
+    return html.replace(/border-bottom\s*:\s*1px\s*dotted\s*#(?:000|6b7280)\s*;?/gi, fineDottedLineStyle);
+  };
+
+  const escapeHeaderText = (value: string): string =>
+    value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+
+  const schoolText = (teacherIdentity?.school_name || "").trim() || "........................................";
+  const departmentText = (teacherIdentity?.department_name || "").trim() || "........................................";
+  const teacherText = (teacherIdentity?.teacher_name || "").trim() || "........................................";
+
   // Convert Markdown sang HTML theo chuẩn Công văn 5512
   const markdownToHtml = (md: string): string => {
     // Tách thành từng dòng để xử lý
@@ -139,7 +197,7 @@ export const exportToPDF = async (
       // Italic với underscore (_text_)
       result = result.replace(/_([^_\n]+)_/g, '<em>$1</em>');
       // Replace long dot sequences with dotted line spans
-      result = result.replace(/\.{6,}/g, '<span style="display:inline-block;min-width:40%;border-bottom:1px dotted #000;height:1.1em;vertical-align:bottom;">&nbsp;</span>');
+      result = result.replace(/\.{6,}/g, `<span style="display:inline-block;min-width:40%;${fineDottedLineStyle}height:1.1em;vertical-align:bottom;">&nbsp;</span>`);
       return result;
     }
 
@@ -306,6 +364,8 @@ export const exportToPDF = async (
     // Phiếu học tập trong PDF xuất ra không cần đóng khung
     // (Chỉ tính năng "In PHT" riêng mới đóng khung - xử lý trong LessonPlanOutput)
 
+    html = dedupeListItemLeadingMarkers(html);
+
     return html;
   };
 
@@ -331,6 +391,9 @@ export const exportToPDF = async (
       htmlContent = tempDiv.innerHTML;
     }
   }
+
+  htmlContent = dedupeListItemLeadingMarkers(htmlContent);
+  htmlContent = normalizePrintDottedLineStyles(htmlContent);
 
   // Tạo HTML đầy đủ cho in - theo mẫu template.html (Công văn 5512)
   const printHtml = `
@@ -557,38 +620,80 @@ export const exportToPDF = async (
           text-align: justify;
         }
 
-        /* Danh sách dấu tròn (level 1) */
-        ul.bullet-list {
+        /* Đồng bộ marker với giao diện hiển thị:
+           - cấp 1: dấu '-'
+           - cấp lồng: dấu '+' */
+        .content ul {
+          list-style: none;
           margin-left: 25px;
           padding-left: 0;
-          list-style-type: disc;
         }
 
-        ul.bullet-list li.bullet-item {
+        .content ul li {
+          list-style: none;
+          position: relative;
           margin: 5px 0;
           text-align: justify;
+          padding-left: 1.1em;
         }
 
-        /* Danh sách dấu + (level 2 - lùi vào hơn) */
-        ul.plus-list {
-          margin-left: 45px;
-          padding-left: 0;
-          list-style-type: none;
+        .content ul li::before {
+          content: "";
+          position: absolute;
+          left: 0.05em;
+          top: 0.72em;
+          width: 0.55em;
+          border-top: 1px solid currentColor;
         }
 
-        ul.plus-list li.plus-item {
-          margin: 5px 0;
-          text-align: justify;
+        .content ul ul {
+          margin-left: 20px;
         }
 
+        .content ul ul li::before {
+          content: "+";
+          left: 0;
+          top: 0;
+          width: auto;
+          border-top: none;
+          font-weight: 600;
+        }
+
+        .content ul ul ul li::before {
+          content: "•";
+          left: 0;
+          top: 0;
+          width: auto;
+          border-top: none;
+          font-weight: 400;
+        }
+
+        /* Markdown đã chuẩn hóa class plus-list thì giữ marker '+' */
         ul.plus-list li.plus-item::before {
-          content: "+ ";
-          font-weight: normal;
+          content: "+";
+          left: 0;
+          top: 0;
+          width: auto;
+          border-top: none;
+          font-weight: 600;
+        }
+
+        ul.plus-list ul li.plus-item::before {
+          content: "•";
+          left: 0;
+          top: 0;
+          width: auto;
+          border-top: none;
+          font-weight: 400;
         }
 
         /* Phiếu học tập: dotted lines for student answers */
         .worksheet-line {
-          border-bottom: 1px dotted #000;
+          border-bottom: none;
+          background-image: radial-gradient(circle, #6b7280 0.45px, transparent 0.55px);
+          background-size: 3px 1px;
+          background-repeat: repeat-x;
+          background-position: left calc(100% - 1px);
           height: 1.5em;
           margin: 0.3em 0;
           width: 100%;
@@ -805,15 +910,15 @@ export const exportToPDF = async (
         <tbody>
           <tr style="border: none;">
             <td style="text-align: left; border: none; vertical-align: top; padding: 5px 0;">
-              <strong>TRƯỜNG:</strong> ........................................
+              <strong>TRƯỜNG:</strong> ${escapeHeaderText(schoolText)}
             </td>
             <td style="text-align: left; border: none; vertical-align: top; padding: 5px 0;">
-              <strong>GIÁO VIÊN:</strong> ........................................
+              <strong>GIÁO VIÊN:</strong> ${escapeHeaderText(teacherText)}
             </td>
           </tr>
           <tr style="border: none;">
             <td style="text-align: left; border: none; vertical-align: top; padding: 5px 0;">
-              <strong>TỔ:</strong> ........................................
+              <strong>TỔ:</strong> ${escapeHeaderText(departmentText)}
             </td>
             <td style="text-align: left; border: none; vertical-align: top; padding: 5px 0;">
             </td>

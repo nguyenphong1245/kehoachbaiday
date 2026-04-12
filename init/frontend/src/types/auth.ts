@@ -46,6 +46,9 @@ export interface UserSettings {
   teaching_tools?: string[] | null;
   custom_tools?: string[] | null;
   teaching_style?: string | null;
+  school_name?: string | null;
+  department_name?: string | null;
+  teacher_name?: string | null;
 }
 
 export interface User {
@@ -81,6 +84,9 @@ export interface UserSettingsUpdatePayload {
   teaching_tools?: string[] | null;
   custom_tools?: string[] | null;
   teaching_style?: string | null;
+  school_name?: string | null;
+  department_name?: string | null;
+  teacher_name?: string | null;
 }
 
 export interface AuthResponse extends TokenResponse {

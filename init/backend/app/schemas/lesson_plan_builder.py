@@ -147,6 +147,17 @@ class GenerateLessonPlanBuilderRequest(BaseModel):
     lesson_id: str = Field(..., description="ID bài học")
     lesson_name: str = Field(..., description="Tên bài học")
     activities: List[ActivityConfig] = Field(..., description="Cấu hình các hoạt động")
+    cognitive_level: Optional[str] = Field(None, description="Mức nhận thức HS: weak|average|fair|good|excellent")
+
+    @field_validator("cognitive_level")
+    @classmethod
+    def validate_cognitive_level(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v == "":
+            return None
+        allowed = {"weak", "average", "fair", "good", "excellent"}
+        if v not in allowed:
+            raise ValueError(f"cognitive_level phải là một trong: {allowed}")
+        return v
 
 
 class QuizQuestionItem(BaseModel):
@@ -349,6 +360,67 @@ class ImproveSectionResponse(BaseModel):
     improved_content: str = Field(..., description="Nội dung đã được cải thiện")
     explanation: Optional[str] = Field(None, description="Giải thích về những thay đổi")
     updated_appendices: Optional[List[UpdatedAppendix]] = Field(None, description="Các phụ lục đã được cập nhật")
+
+
+# ============== AI EDIT INLINE SECTION ==============
+
+class EditAnalysis(BaseModel):
+    """Phân tích đoạn đang chỉnh sửa."""
+    activity_type: str = Field(..., description="Loại hoạt động")
+    current_method: str = Field(..., description="Phương pháp/kỹ thuật hiện tại")
+    position: str = Field(..., description="Vị trí trong hoạt động")
+    issue: str = Field(..., description="Vấn đề chính cần cải thiện")
+
+
+class EditSuggestion(BaseModel):
+    """Một hướng chỉnh sửa do AI đề xuất."""
+    id: int = Field(..., description="ID gợi ý")
+    type: str = Field(..., description="Loại gợi ý")
+    title: str = Field(..., description="Tiêu đề ngắn")
+    description: str = Field(..., description="Mô tả chi tiết")
+
+
+class EditSuggestRequest(BaseModel):
+    """Request đề xuất chỉnh sửa cho đoạn được bôi đen."""
+    selected_text: str = Field(..., min_length=1, max_length=5000, description="Đoạn giáo viên chọn để sửa")
+    full_lesson_plan: str = Field(..., min_length=1, max_length=30000, description="Toàn bộ nội dung KHBD")
+
+
+class EditSuggestResponse(BaseModel):
+    """Response đề xuất chỉnh sửa."""
+    analysis: EditAnalysis
+    suggestions: List[EditSuggestion] = Field(default_factory=list)
+
+
+class EditRelatedChange(BaseModel):
+    """Thay đổi liên quan ngoài đoạn được sửa trực tiếp."""
+    section: str = Field(..., description="Section liên quan")
+    action: str = Field(..., description="update | add | remove")
+    old_text: str = Field("", description="Text cũ")
+    new_text: str = Field("", description="Text mới")
+
+    @field_validator("action")
+    @classmethod
+    def validate_action(cls, v: str) -> str:
+        allowed = {"update", "add", "remove"}
+        if v not in allowed:
+            raise ValueError(f"action phải là một trong: {allowed}")
+        return v
+
+
+class EditApplyRequest(BaseModel):
+    """Request áp dụng chỉnh sửa cho đoạn được chọn."""
+    selected_text: str = Field(..., min_length=1, max_length=5000)
+    suggestion_type: str = Field(..., min_length=1, max_length=100)
+    suggestion_title: str = Field(..., min_length=1, max_length=200)
+    suggestion_description: str = Field(..., min_length=1, max_length=1000)
+    full_lesson_plan: str = Field(..., min_length=1, max_length=30000)
+
+
+class EditApplyResponse(BaseModel):
+    """Response sau khi AI thực hiện chỉnh sửa đoạn."""
+    edited_text: str = Field(..., description="Đoạn đã chỉnh sửa")
+    related_changes: List[EditRelatedChange] = Field(default_factory=list)
 
 
 # ============== CODE EXERCISES (Parsons + Coding) ==============

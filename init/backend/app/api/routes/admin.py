@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from typing import Any
 
-from app.api.deps import require_admin
+from app.api.deps import get_current_user, require_admin
 from app.core.rate_limiter import limiter
 from app.db.session import get_db
 from app.models.user import User
@@ -27,6 +27,13 @@ from app.schemas.admin import (
     TopTeacher,
     ContentItem,
     ContentListResponse,
+    AIModelSettingsRead,
+    AIModelSettingsUpdate,
+)
+from app.services.admin_ai_model_registry import (
+    ALLOWED_GEMINI_MODELS,
+    get_all_effective_model_settings,
+    upsert_model_settings,
 )
 
 
@@ -300,6 +307,54 @@ async def update_token_balance(
     await session.commit()
 
     return {"message": f"Đã cập nhật token thành {payload.token_balance}", "token_balance": user.token_balance}
+
+
+@router.get(
+    "/ai-model-settings",
+    response_model=AIModelSettingsRead,
+    dependencies=[Depends(require_admin)],
+)
+@limiter.limit("30/minute")
+async def get_ai_model_settings(
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+) -> AIModelSettingsRead:
+    settings = await get_all_effective_model_settings(session)
+    return AIModelSettingsRead(
+        allowed_models=list(ALLOWED_GEMINI_MODELS),
+        settings=settings,
+    )
+
+
+@router.put(
+    "/ai-model-settings",
+    response_model=AIModelSettingsRead,
+    dependencies=[Depends(require_admin)],
+)
+@limiter.limit("10/minute")
+async def update_ai_model_settings(
+    request: Request,
+    payload: AIModelSettingsUpdate,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> AIModelSettingsRead:
+    updates = {item.feature_key: item.model_name for item in payload.settings}
+
+    try:
+        await upsert_model_settings(
+            session,
+            updates,
+            updated_by_admin_id=current_user.id,
+        )
+        await session.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    settings = await get_all_effective_model_settings(session)
+    return AIModelSettingsRead(
+        allowed_models=list(ALLOWED_GEMINI_MODELS),
+        settings=settings,
+    )
 
 
 @router.get("/teachers-overview", dependencies=[Depends(require_admin)])

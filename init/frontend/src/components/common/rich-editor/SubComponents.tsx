@@ -68,7 +68,7 @@ export const TableResizeOverlay: React.FC<TableResizeOverlayProps> = ({
     backgroundColor: '#3b82f6',
     border: '1px solid #fff',
     borderRadius: 2,
-    zIndex: 100,
+    zIndex: 35,
   };
 
   const edgeStyleH: React.CSSProperties = {
@@ -78,7 +78,7 @@ export const TableResizeOverlay: React.FC<TableResizeOverlayProps> = ({
     backgroundColor: '#3b82f6',
     border: '1px solid #fff',
     borderRadius: 3,
-    zIndex: 100,
+    zIndex: 35,
   };
 
   const edgeStyleV: React.CSSProperties = {
@@ -88,7 +88,7 @@ export const TableResizeOverlay: React.FC<TableResizeOverlayProps> = ({
     backgroundColor: '#3b82f6',
     border: '1px solid #fff',
     borderRadius: 3,
-    zIndex: 100,
+    zIndex: 35,
   };
 
   return (
@@ -100,7 +100,7 @@ export const TableResizeOverlay: React.FC<TableResizeOverlayProps> = ({
         width,
         height,
         pointerEvents: 'none',
-        zIndex: 50,
+        zIndex: 35,
       }}
     >
       {/* Selection border */}
@@ -506,10 +506,10 @@ export const ListStylePicker: React.FC<{
 }> = ({ onSelect, onClose, styles }) => {
   return (
     <div
-      className="absolute top-full left-0 mt-1 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-600 rounded-lg shadow-xl p-2 z-[60] w-40"
+      className="absolute top-full left-0 mt-1 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-600 rounded-lg shadow-xl p-2 z-[60] w-36"
       onMouseLeave={onClose}
     >
-      <p className="text-xs text-stone-500 dark:text-stone-400 mb-1.5 px-1 font-medium">Kiểu danh sách</p>
+      <p className="text-xs text-stone-500 dark:text-stone-400 mb-1.5 px-1 font-medium">Danh sách</p>
       {styles.map((s) => (
         <button
           key={s.type}
@@ -638,7 +638,7 @@ export const TableInsertIndicators: React.FC<TableInsertIndicatorsProps> = ({
               borderRadius: '50%',
               border: '2px solid white',
               boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-              zIndex: 100,
+              zIndex: 30,
               cursor: 'pointer',
             }}
             onMouseEnter={() => setHoveredRowBtn(idx)}
@@ -679,7 +679,7 @@ export const TableInsertIndicators: React.FC<TableInsertIndicatorsProps> = ({
               borderRadius: '50%',
               border: '2px solid white',
               boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-              zIndex: 100,
+              zIndex: 30,
               cursor: 'pointer',
             }}
             onMouseEnter={() => setHoveredColBtn(idx)}
@@ -706,7 +706,7 @@ export const TableInsertIndicators: React.FC<TableInsertIndicatorsProps> = ({
             width: rect.width,
             height: 2,
             backgroundColor: '#3b82f6',
-            zIndex: 99,
+            zIndex: 29,
             pointerEvents: 'none',
           }}
         />
@@ -722,7 +722,7 @@ export const TableInsertIndicators: React.FC<TableInsertIndicatorsProps> = ({
             width: 2,
             height: rect.height,
             backgroundColor: '#3b82f6',
-            zIndex: 99,
+            zIndex: 29,
             pointerEvents: 'none',
           }}
         />
@@ -828,7 +828,7 @@ export const TableCornerMenu: React.FC<TableCornerMenuProps> = ({
           borderRadius: 4,
           border: '2px solid white',
           boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-          zIndex: 101,
+          zIndex: 31,
           cursor: 'pointer',
         }}
         onClick={handleButtonClick}
@@ -845,7 +845,7 @@ export const TableCornerMenu: React.FC<TableCornerMenuProps> = ({
           style={{
             left: tableLeft,
             top: tableTop - 44,
-            zIndex: 102,
+            zIndex: 32,
           }}
         >
           {/* Hàng buttons */}

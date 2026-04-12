@@ -65,3 +65,24 @@ class ContentListResponse(BaseModel):
     total: int
     page: int
     limit: int
+
+
+class AIModelFeatureSetting(BaseModel):
+    feature_key: str
+    feature_label: str
+    description: str
+    model_name: str
+
+
+class AIModelSettingsRead(BaseModel):
+    allowed_models: list[str]
+    settings: list[AIModelFeatureSetting]
+
+
+class AIModelSettingUpdateItem(BaseModel):
+    feature_key: str
+    model_name: str
+
+
+class AIModelSettingsUpdate(BaseModel):
+    settings: list[AIModelSettingUpdateItem]

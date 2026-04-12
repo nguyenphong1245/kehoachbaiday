@@ -4,7 +4,6 @@ import {
   Underline,
   Strikethrough,
   List,
-  ListOrdered,
   AlignLeft,
   AlignCenter,
   AlignRight,
@@ -32,9 +31,7 @@ export const TOOLBAR: ToolbarItem[] = [
   { type: "button", icon: Underline, label: "Gạch chân (Ctrl+U)", command: "underline" },
   { type: "button", icon: Strikethrough, label: "Gạch ngang", command: "strikeThrough" },
   { type: "separator" },
-  { type: "button", icon: List, label: "Danh sách", command: "insertUnorderedList" },
-  { type: "button", icon: ListOrdered, label: "Danh sách số", command: "insertOrderedList" },
-  { type: "button", icon: ListOrdered, label: "Kiểu danh sách", command: "__listStyle" },
+  { type: "button", icon: List, label: "Danh sách", command: "__listStyle" },
   { type: "button", icon: Indent, label: "Tăng thụt lề", command: "indent" },
   { type: "button", icon: Outdent, label: "Giảm thụt lề", command: "outdent" },
   { type: "separator" },
@@ -52,13 +49,7 @@ export const TOOLBAR: ToolbarItem[] = [
 
 export const LIST_STYLES = [
   { type: "decimal", label: "1, 2, 3", preview: "1." },
-  { type: "lower-alpha", label: "a, b, c", preview: "a." },
-  { type: "upper-alpha", label: "A, B, C", preview: "A." },
-  { type: "lower-roman", label: "i, ii, iii", preview: "i." },
-  { type: "upper-roman", label: "I, II, III", preview: "I." },
-  { type: "disc", label: "● Tròn đặc", preview: "●" },
-  { type: "circle", label: "○ Tròn rỗng", preview: "○" },
-  { type: "square", label: "■ Vuông", preview: "■" },
+  { type: "disc", label: "Gạch ngang", preview: "-" },
 ];
 
 export const FONT_SIZES = [

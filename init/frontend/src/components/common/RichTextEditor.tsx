@@ -399,12 +399,17 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       } else if (!isOrderedStyle && existingList.nodeName === 'OL') {
         // Convert OL to UL
         const ul = document.createElement('ul');
-        ul.style.listStyleType = styleType;
+        // Don't set inline style for disc — let CSS handle "- " / "+ "
         ul.innerHTML = existingList.innerHTML;
         existingList.parentNode?.replaceChild(ul, existingList);
       } else {
         // Same tag type, just change style
-        (existingList as HTMLElement).style.listStyleType = styleType;
+        if (!isOrderedStyle && existingList.nodeName === 'UL') {
+          // Remove inline style so CSS "- " / "+ " applies
+          (existingList as HTMLElement).style.listStyleType = '';
+        } else {
+          (existingList as HTMLElement).style.listStyleType = styleType;
+        }
       }
     } else {
       // Create new list
@@ -419,7 +424,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         let n: Node | null = newSel.anchorNode;
         while (n && n !== editorRef.current) {
           if (n.nodeName === 'OL' || n.nodeName === 'UL') {
-            (n as HTMLElement).style.listStyleType = styleType;
+            if (isOrderedStyle) {
+              (n as HTMLElement).style.listStyleType = styleType;
+            }
             break;
           }
           n = n.parentNode;
@@ -1606,6 +1613,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
                 // List style picker
                 if (item.command === "__listStyle") {
+                  const isListActive =
+                    activeFormats.insertUnorderedList || activeFormats.insertOrderedList;
+
                   return (
                     <div key={item.label} className="relative">
                       <button
@@ -1615,7 +1625,11 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                           savedSelectionRef.current = saveSelection();
                           setShowListStylePicker(prev => !prev);
                         }}
-                        className="p-1.5 rounded hover:bg-sky-50 dark:hover:bg-sky-900/30 text-stone-600 dark:text-stone-400 hover:text-brand dark:hover:text-sky-400 transition-colors flex items-center gap-0"
+                        className={`p-1.5 rounded transition-colors flex items-center gap-0 ${
+                          isListActive
+                            ? "bg-sky-100 dark:bg-sky-900/50 text-brand dark:text-sky-400"
+                            : "hover:bg-sky-50 dark:hover:bg-sky-900/30 text-stone-600 dark:text-stone-400 hover:text-brand dark:hover:text-sky-400"
+                        }`}
                         title={item.label}
                       >
                         <Icon className="w-4 h-4" />
@@ -1780,14 +1794,14 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       />
 
       {/* A4 page area with outline sidebar */}
-      <div className={`flex ${isFullscreen ? 'flex-1 overflow-y-auto bg-stone-300 dark:bg-stone-800' : 'border-x border-b border-stone-200 dark:border-stone-700 bg-stone-200 dark:bg-stone-800 rounded-b-lg'}`}>
+      <div className={`flex ${isFullscreen ? 'flex-1 overflow-y-auto bg-stone-100 dark:bg-stone-800' : 'border-x border-b border-stone-200 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 rounded-b-lg'}`}>
         {/* Sidebar + Toggle: MỘT phần tử sticky duy nhất, self-start để không stretch bằng A4 */}
         <div
           className="flex-shrink-0 self-start sticky z-20 flex"
           style={{ top: isFullscreen ? '0px' : `${headerHeight}px`, maxHeight: `calc(100vh - ${headerHeight + 8}px)` }}
         >
           {showOutline && (
-            <div className="w-48 lg:w-56 overflow-y-auto py-4 pl-3 pr-1 scrollbar-thin bg-stone-200 dark:bg-stone-800">
+            <div className={`w-48 lg:w-56 overflow-y-auto py-4 pl-3 pr-1 scrollbar-thin ${isFullscreen ? 'bg-stone-100 dark:bg-stone-800' : 'bg-stone-100 dark:bg-stone-800'}`}>
               <div className="flex items-center gap-1.5 mb-3 px-1">
                 <ListTree className="w-4 h-4 text-stone-400 dark:text-stone-500 flex-shrink-0" />
                 <span className="text-xs font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wider">Mục lục</span>
@@ -1844,8 +1858,13 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
               onMouseDown={handleEditorMouseDown}
               onClick={handleEditorClick}
               data-placeholder={placeholder}
-              className={`rich-editor-content outline-none leading-relaxed text-stone-800 dark:text-stone-200 ${isFullscreen ? 'flex-1' : ''}`}
-              style={{ minHeight, fontSize: '13pt', lineHeight: '1.5' }}
+              className={`rich-editor-content outline-none text-stone-800 dark:text-stone-200 ${isFullscreen ? 'flex-1' : ''}`}
+              style={{
+                minHeight,
+                fontFamily: '"Times New Roman", Times, serif',
+                fontSize: '14pt',
+                lineHeight: '1.5',
+              }}
             />
 
             {/* Table insert indicators (Word-like + buttons) */}
@@ -1961,60 +1980,71 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
       {/* Editor styles */}
       <style>{`
+        .rich-editor-content {
+          font-family: "Times New Roman", Times, serif;
+          font-size: 14pt;
+          line-height: 1.5;
+          letter-spacing: normal;
+          color: inherit;
+        }
         .rich-editor-content:empty::before {
           content: attr(data-placeholder);
           color: #9ca3af;
           pointer-events: none;
         }
         .rich-editor-content h1 {
-          font-size: 1.5rem;
+          font-size: 16pt;
           font-weight: 700;
-          margin: 1.25rem 0 0.75rem;
-          padding-bottom: 0.5rem;
-          border-bottom: 2px solid #3b82f6;
+          margin: 14pt 0 8pt;
+          text-align: center;
           color: inherit;
         }
         .rich-editor-content h2 {
-          font-size: 1.25rem;
+          font-size: 15pt;
           font-weight: 700;
-          margin: 1rem 0 0.5rem;
+          margin: 12pt 0 6pt;
           color: inherit;
         }
         .rich-editor-content h3 {
-          font-size: 1.1rem;
-          font-weight: 600;
-          margin: 0.75rem 0 0.5rem;
+          font-size: 14pt;
+          font-weight: 700;
+          margin: 10pt 0 6pt;
           color: inherit;
         }
         .rich-editor-content h4 {
-          font-size: 1rem;
+          font-size: 14pt;
           font-weight: 600;
-          margin: 0.75rem 0 0.5rem;
-          color: #2563eb;
+          margin: 8pt 0 5pt;
+          color: inherit;
         }
         .rich-editor-content p {
-          margin: 0 0 0.5rem;
+          margin: 0 0 8pt;
           line-height: 1.5;
+          text-align: justify;
           overflow-wrap: anywhere;
           word-break: break-word;
         }
         .rich-editor-content ul {
-          list-style: disc;
+          list-style-type: "- ";
           padding-left: 1.5rem;
-          margin: 0.5rem 0;
+          margin: 6pt 0 8pt;
+        }
+        .rich-editor-content ul ul {
+          list-style-type: "+ ";
         }
         .rich-editor-content ol {
           list-style: decimal;
           padding-left: 1.5rem;
-          margin: 0.5rem 0;
+          margin: 6pt 0 8pt;
         }
         .rich-editor-content li {
           line-height: 1.5;
-          margin: 0.15rem 0;
+          margin: 2pt 0;
+          text-align: justify;
         }
         .rich-editor-content table {
           border-collapse: collapse;
-          margin: 0.75rem 0;
+          margin: 10pt 0;
           border: 1px solid #d1d5db;
           table-layout: fixed;
         }
@@ -2024,12 +2054,14 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         .rich-editor-content th,
         .rich-editor-content td {
           border: 1px solid #d1d5db;
-          padding: 8px 12px;
+          padding: 6pt 8pt;
+          font-size: 13pt;
+          line-height: 1.5;
           text-align: left;
           vertical-align: top;
         }
         .rich-editor-content th {
-          background: #eff6ff;
+          background: #f5f5f5;
           font-weight: 700;
         }
         .rich-editor-content hr {
@@ -2089,9 +2121,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         }
         .dark .rich-editor-content hr {
           border-color: #4b5563;
-        }
-        .dark .rich-editor-content h4 {
-          color: #60a5fa;
         }
         .dark .rich-editor-content blockquote {
           color: #9ca3af;

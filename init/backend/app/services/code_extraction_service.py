@@ -25,23 +25,42 @@ class CodeExtractionService:
     """Service trích xuất bài tập code từ KHBD và tạo test cases"""
 
     def __init__(self):
+        self.model = None
+        self._model_name: str | None = None
+
         api_key = os.getenv("GEMINI_API_KEY")
         if api_key:
             genai.configure(api_key=api_key)
-            self.model = genai.GenerativeModel(
-                model_name=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
-                system_instruction=get_code_extraction_system_instruction(),
-                generation_config={
-                    "temperature": 0.1,
-                    "top_p": 0.95,
-                    "top_k": 40,
-                    "max_output_tokens": 8192,
-                    "response_mime_type": "application/json",
-                },
-            )
+            self.configure_model(os.getenv("GEMINI_MODEL", "gemini-2.5-flash"))
         else:
             self.model = None
             logger.warning("GEMINI_API_KEY not set - code extraction disabled")
+
+    def configure_model(self, model_name: str | None = None) -> None:
+        if not os.getenv("GEMINI_API_KEY"):
+            self.model = None
+            self._model_name = None
+            return
+
+        target_model = (model_name or self._model_name or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")).strip()
+        if not target_model:
+            target_model = "gemini-2.5-flash"
+
+        if self.model is not None and self._model_name == target_model:
+            return
+
+        self.model = genai.GenerativeModel(
+            model_name=target_model,
+            system_instruction=get_code_extraction_system_instruction(),
+            generation_config={
+                "temperature": 0.1,
+                "top_p": 0.95,
+                "top_k": 40,
+                "max_output_tokens": 8192,
+                "response_mime_type": "application/json",
+            },
+        )
+        self._model_name = target_model
 
     def extract_exercises(
         self,

@@ -152,12 +152,6 @@ OPENAI_MODEL=gpt-3.5-turbo
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=llama2
 
-# ======================== MEDIA SEARCH (Optional) ========================
-
-YOUTUBE_API_KEY=
-GOOGLE_CSE_API_KEY=
-GOOGLE_CSE_CX=
-
 # ======================== CODE EXECUTION ========================
 
 PISTON_API_URL=http://piston:2000/api/v2

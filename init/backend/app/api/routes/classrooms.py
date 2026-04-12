@@ -811,7 +811,7 @@ async def auto_divide_groups(
     except Exception as e:
         logger.error(f"Error auto-dividing groups for classroom {classroom_id}: {e}")
         await db.rollback()
-        raise HTTPException(status_code=500, detail=f"Lỗi khi chia nhóm: {str(e)}")
+        raise HTTPException(status_code=500, detail="Lỗi khi chia nhóm")
 
     # Reload all groups
     result = await db.execute(

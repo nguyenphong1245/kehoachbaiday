@@ -61,34 +61,68 @@ class LessonPlanBuilderService:
         self._reference_docs_cache: Optional[str] = None
         self._reference_docs_cache_time: float = 0
 
+        self.model = None
+        self.text_model = None
+        self._json_model_name: str | None = None
+        self._text_model_name: str | None = None
+        self._lesson_plan_temperature = float(os.getenv("LESSON_PLAN_TEMPERATURE", "0.2"))
+
         # Gemini API
         api_key = os.getenv("GEMINI_API_KEY")
         if api_key:
             genai.configure(api_key=api_key)
-            # Model cho lesson plan - dùng Gemini 3 Flash
-            lesson_plan_model = os.getenv("GEMINI_MODEL_LESSON_PLAN", "gemini-3-flash-preview")
-            # Model cho JSON output
+            lesson_plan_model = os.getenv("GEMINI_MODEL_LESSON_PLAN", "gemini-2.5-flash")
+            self.configure_models(
+                json_model_name=lesson_plan_model,
+                text_model_name=lesson_plan_model,
+            )
+
+    def configure_models(
+        self,
+        json_model_name: str | None = None,
+        text_model_name: str | None = None,
+    ) -> None:
+        """Rebuild Gemini models when admin switches configured model names."""
+        if not os.getenv("GEMINI_API_KEY"):
+            self.model = None
+            self.text_model = None
+            self._json_model_name = None
+            self._text_model_name = None
+            return
+
+        target_json_model = (json_model_name or self._json_model_name or os.getenv("GEMINI_MODEL_LESSON_PLAN", "gemini-2.5-flash")).strip()
+        target_text_model = (text_model_name or self._text_model_name or target_json_model).strip()
+
+        if not target_json_model:
+            target_json_model = "gemini-2.5-flash"
+        if not target_text_model:
+            target_text_model = target_json_model
+
+        if self.model is None or self._json_model_name != target_json_model:
             self.model = genai.GenerativeModel(
-                model_name=lesson_plan_model,
+                model_name=target_json_model,
                 system_instruction=self._get_system_instruction(),
                 generation_config={
-                    "temperature": float(os.getenv("LESSON_PLAN_TEMPERATURE", "0.2")),
+                    "temperature": self._lesson_plan_temperature,
                     "top_p": 0.95,
                     "top_k": 40,
-                    "max_output_tokens": 65536,  # Tăng lên max để tránh output bị cắt ngắn
+                    "max_output_tokens": 65536,
                     "response_mime_type": "application/json",
-                }
+                },
             )
-            # Model cho text output (improve section)
+            self._json_model_name = target_json_model
+
+        if self.text_model is None or self._text_model_name != target_text_model:
             self.text_model = genai.GenerativeModel(
-                model_name=lesson_plan_model,
+                model_name=target_text_model,
                 generation_config={
-                    "temperature": float(os.getenv("LESSON_PLAN_TEMPERATURE", "0.2")),
+                    "temperature": self._lesson_plan_temperature,
                     "top_p": 0.95,
                     "top_k": 40,
                     "max_output_tokens": 8192,
-                }
+                },
             )
+            self._text_model_name = target_text_model
     
     def _get_system_instruction(self) -> str:
         """Sử dụng system instruction từ prompts module"""
@@ -283,8 +317,12 @@ class LessonPlanBuilderService:
         request: GenerateLessonPlanBuilderRequest,
         reference_documents: Optional[str] = None,
         teacher_preferences_section: str = "",
+        cognitive_level_section: str = "",
+        dynamic_rules_section: str = "",
     ) -> tuple[GenerateLessonPlanBuilderResponse, int]:
         """Sinh kế hoạch bài dạy từ thông tin đã chọn"""
+        if not self.model:
+            raise RuntimeError("Gemini model cho sinh KHBD chua duoc cau hinh")
         
         # 1. Lấy chi tiết bài học từ Neo4j
         lesson_detail = self.get_lesson_detail(request.lesson_id)
@@ -295,7 +333,15 @@ class LessonPlanBuilderService:
         markdown_content = lesson_detail.content
 
         # 3. Xây dựng prompt với cả Neo4j data và markdown content
-        prompt = self._build_prompt(request, lesson_detail, reference_documents, markdown_content, teacher_preferences_section)
+        prompt = self._build_prompt(
+            request,
+            lesson_detail,
+            reference_documents,
+            markdown_content,
+            teacher_preferences_section,
+            cognitive_level_section,
+            dynamic_rules_section,
+        )
         
         # ========== DEBUG: THỐNG KÊ PROMPT ==========
         prompt_chars = len(prompt)
@@ -419,6 +465,8 @@ class LessonPlanBuilderService:
         reference_documents: Optional[str] = None,
         markdown_content: Optional[str] = None,
         teacher_preferences_section: str = "",
+        cognitive_level_section: str = "",
+        dynamic_rules_section: str = "",
     ) -> str:
         """Xây dựng prompt chi tiết cho LLM - lấy từ lesson_plan_generator.py"""
         
@@ -569,6 +617,8 @@ class LessonPlanBuilderService:
             grade=request.grade,
             book_type=request.book_type,
             teacher_preferences_section=teacher_preferences_section,
+            cognitive_level_section=cognitive_level_section,
+            dynamic_rules_section=dynamic_rules_section,
         )
 
         # Prompt component stats
@@ -692,6 +742,9 @@ YÊU CẦU:
     ) -> tuple[Any, int]:
         """Cải thiện nội dung một section với AI, kèm theo phụ lục liên quan nếu có.
         Returns: (ImproveSectionResponse, tokens_used)"""
+        if not self.text_model:
+            raise RuntimeError("Gemini model cho cai thien section chua duoc cau hinh")
+
         from app.schemas.lesson_plan_builder import ImproveSectionResponse, UpdatedAppendix
         from app.prompts import get_section_improvement_prompt
 
@@ -833,6 +886,9 @@ Lưu ý: Nếu có nhiều phụ lục, tạo nhiều block [UPDATED_APPENDIX] t
             lesson_detail: (optional) Nếu đã có từ bước trước, truyền vào
                            để tránh query Neo4j lần nữa.
         """
+        if not self.text_model:
+            raise RuntimeError("Gemini model cho mindmap chua duoc cau hinh")
+
         import re
         from app.prompts.mindmap_generation import build_mindmap_prompt
 

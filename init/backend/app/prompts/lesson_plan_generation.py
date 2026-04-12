@@ -88,6 +88,8 @@ def build_lesson_plan_prompt(
     grade: str,
     book_type: str,
     teacher_preferences_section: str = "",
+    cognitive_level_section: str = "",
+    dynamic_rules_section: str = "",
 ) -> str:
     """
     Xây dựng prompt đầy đủ để sinh kế hoạch bài dạy
@@ -211,6 +213,8 @@ QUY TẮC VỀ PHƯƠNG PHÁP/KỸ THUẬT DẠY HỌC:
 
 {teaching_section}
 {teacher_preferences_section}
+{cognitive_level_section}
+{dynamic_rules_section}
 {lesson_content_section}
 {docs_instruction}
 
@@ -832,7 +836,9 @@ QUY TẮC KHÔNG TRÍCH DẪN (bổ sung cho quy tắc xuyên suốt số 3):
 6. TRẮC NGHIỆM:
    - CHỈ TẠO section "trac_nghiem" KHI VÀ CHỈ KHI có hoạt động với "Hình thức hoạt động: Trắc nghiệm" trong <cau_hinh_hoat_dong>
    - TUYỆT ĐỐI KHÔNG tạo section trắc nghiệm nếu không có hoạt động nào chọn hình thức "Trắc nghiệm"
-   - Nếu có hoạt động trắc nghiệm → tạo ít nhất 10-15 câu
+    - Nếu có hoạt động trắc nghiệm → BẮT BUỘC tạo từ 10 đến 15 câu
+    - LƯU Ý: quy tắc "Tối đa 5 câu hỏi" chỉ áp dụng cho "phieu_hoc_tap", KHÔNG áp dụng cho "trac_nghiem"
+    - Nếu tạo dưới 10 câu thì coi là SAI YÊU CẦU
    - TẤT CẢ câu trắc nghiệm gom vào 1 section "trac_nghiem" DUY NHẤT
    - KHÔNG tạo phiếu học tập chứa trắc nghiệm
    - Mỗi câu PHẢI có 4 đáp án (A, B, C, D)
@@ -963,6 +969,7 @@ QUY TẮC JSON:
    - "khoi_dong" content BẮT ĐẦU bằng "## **III. TIẾN TRÌNH DẠY HỌC**"
    - KHÔNG viết "IV. PHỤ LỤC" trong BẤT KỲ section nào — hệ thống tự thêm trước phieu_hoc_tap
    - Mỗi section CHỈ chứa heading CỦA NÓ, KHÔNG chứa heading section khác!
+10. Nếu có section "trac_nghiem" thì mảng "questions" PHẢI có 10-15 phần tử
 
 BẮT BUỘC ĐỦ 6 SECTION CỐT LÕI: muc_tieu, thiet_bi, khoi_dong, hinh_thanh_kien_thuc, luyen_tap, van_dung. KHÔNG bỏ sót!
 
