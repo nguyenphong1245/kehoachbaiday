@@ -5,7 +5,6 @@ from datetime import datetime
 from pydantic import BaseModel, EmailStr, field_validator
 
 from app.schemas.validators import validate_password as _validate_password
-from app.schemas.profile import UserProfileRead
 from app.schemas.role import RoleRead
 from app.schemas.settings import UserSettingsRead
 
@@ -32,7 +31,6 @@ class UserRead(BaseModel):
     tokens_used: int = 0
     created_at: datetime
     roles: list[RoleRead] = []
-    profile: UserProfileRead | None = None
     settings: UserSettingsRead | None = None
 
     model_config = {"from_attributes": True}

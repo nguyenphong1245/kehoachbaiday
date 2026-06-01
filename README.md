@@ -1,242 +1,279 @@
-# KHBD - Hệ thống Soạn Kế hoạch Bài dạy Tin học THPT
+# KHBD - Hệ thống soạn Kế hoạch bài dạy Tin học THPT
 
-Ứng dụng hỗ trợ giáo viên Tin học THPT soạn Kế hoạch bài dạy (Giáo án) theo Chương trình GDPT 2018, tích hợp AI (Google Gemini).
+KHBD là ứng dụng web hỗ trợ giáo viên Tin học THPT xây dựng kế hoạch bài dạy theo Chương trình GDPT 2018. Dự án kết hợp quản lý lớp học, bài tập, học liệu, bài kiểm tra, bài tập lập trình và các luồng hỗ trợ AI để giáo viên có thể soạn, lưu trữ, chia sẻ và tổ chức hoạt động học tập trong cùng một hệ thống.
 
-## 🚀 Công nghệ sử dụng
+## Video hướng dẫn
 
-- **Backend**: FastAPI, PostgreSQL, SQLAlchemy, Alembic
-- **Frontend**: React, TypeScript, Vite, TailwindCSS
-- **AI**: Google Gemini API
-- **Code Execution**: Piston
-- **Deploy**: Docker, Docker Compose, Nginx
+Xem video hướng dẫn sử dụng hệ thống tại: [https://youtu.be/syU5PJJVTT4](https://youtu.be/syU5PJJVTT4)
 
-## 📋 Yêu cầu hệ thống
+## Tính năng chính
 
-- Docker Engine 24+
-- Docker Compose v2+
-- Git
+- Xác thực người dùng, phân quyền theo vai trò `admin`, `teacher`, `user`, `student`.
+- Soạn kế hoạch bài dạy với AI, lưu kế hoạch đã tạo và xem lại kế hoạch đã lưu.
+- Quản lý phiếu học tập, câu hỏi trắc nghiệm, học liệu chia sẻ và bài tập lập trình.
+- Chạy mã nguồn bài tập thông qua Piston code execution engine.
+- Quản lý lớp học, học sinh, nhóm học tập, bài giao và cổng làm bài cho học sinh.
+- Không gian làm việc cộng tác, nhận xét chéo cá nhân/nhóm và tự động xử lý một số tác vụ theo lịch.
+- Trang quản trị người dùng, giáo viên, vai trò/quyền và cấu hình mô hình AI.
+- Tích hợp Neo4j để lưu/truy vấn đồ thị nội dung bài học.
+- Hỗ trợ email xác thực tài khoản, đặt lại mật khẩu, tìm video YouTube, tìm ảnh minh họa và chuyển đổi PDF nếu cấu hình thêm API tương ứng.
 
-## 🐳 Triển khai với Docker (Production)
+## Công nghệ sử dụng
 
-### 1. Clone repository
+| Thành phần | Công nghệ |
+| --- | --- |
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS, React Router, Axios |
+| Backend | FastAPI, Python, SQLAlchemy async, Alembic, Pydantic |
+| Database | PostgreSQL 16, Neo4j Community |
+| AI | Google Gemini, OpenAI hoặc Ollama qua cấu hình môi trường |
+| Code execution | Piston |
+| Realtime | WebSocket |
+| Testing | Pytest, Vitest, Testing Library |
+| Deploy | Docker Compose, Nginx |
+
+## Cấu trúc dự án
+
+```text
+WEB1/
+├── .github/workflows/ci.yml       # CI cho backend, frontend test và frontend build
+├── init/
+│   ├── backend/                   # FastAPI application
+│   │   ├── alembic/               # Database migrations
+│   │   ├── app/
+│   │   │   ├── api/               # API routers
+│   │   │   ├── core/              # Config, logging, security, rate limit
+│   │   │   ├── db/                # Database session
+│   │   │   ├── models/            # SQLAlchemy models
+│   │   │   ├── schemas/           # Pydantic schemas
+│   │   │   ├── services/          # Business logic
+│   │   │   └── main.py            # FastAPI entrypoint
+│   │   ├── scripts/               # Data/import/Neo4j helper scripts
+│   │   ├── tests/                 # Backend tests
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt
+│   │   └── requirements-dev.txt
+│   ├── frontend/                  # React/Vite application
+│   │   ├── src/
+│   │   │   ├── components/
+│   │   │   ├── contexts/
+│   │   │   ├── hooks/
+│   │   │   ├── pages/
+│   │   │   ├── routes/
+│   │   │   ├── services/
+│   │   │   └── types/
+│   │   ├── Dockerfile
+│   │   ├── nginx.conf
+│   │   └── package.json
+│   ├── scripts/                   # Backup, logs, update scripts
+│   └── docker-compose.yml         # PostgreSQL, Neo4j, backend, frontend, Piston
+└── README.md
+```
+
+## Yêu cầu
+
+- Docker Engine 24+ và Docker Compose v2 cho cách chạy khuyến nghị.
+- Node.js 20+ nếu chạy frontend ở chế độ development.
+- Python 3.12+ nếu chạy backend trực tiếp trên máy.
+- PostgreSQL và Neo4j nếu không dùng Docker Compose.
+
+## Chạy nhanh bằng Docker Compose
 
 ```bash
 git clone <repository-url>
-cd WEB1
-```
+cd WEB1/init
 
-### 2. Cấu hình môi trường
-
-```bash
-cd init
-
-# Copy file cấu hình Docker Compose
 cp .env.example .env
-
-# Copy file cấu hình Backend
 cp backend/.env.example backend/.env
 ```
 
-### 3. Chỉnh sửa file cấu hình
+Cập nhật tối thiểu các biến sau:
 
-**File `init/.env`** (Docker Compose):
-```bash
-# Đặt mật khẩu database mạnh
+```env
+# init/.env
+POSTGRES_USER=khbd
 POSTGRES_PASSWORD=your_secure_password_here
-
-# Cấu hình domain production (nếu có)
-FRONTEND_BASE_URL=https://yourdomain.com
-CORS_ORIGINS=https://yourdomain.com
-COOKIE_SECURE=true
+POSTGRES_DB=khbd
+FRONTEND_PORT=80
+FRONTEND_BASE_URL=http://localhost
+CORS_ORIGINS=http://localhost
+COOKIE_SECURE=false
 ```
 
-**File `init/backend/.env`** (Backend):
-```bash
-# BẮT BUỘC: Generate secret key
-python -c "import secrets; print(secrets.token_urlsafe(32))"
-SECRET_KEY=<paste-generated-key-here>
-
-# BẮT BUỘC: Generate internal API key
-python -c "import secrets; print(secrets.token_urlsafe(32))"
-INTERNAL_API_KEY=<paste-generated-key-here>
-
-# Database sẽ tự động kết nối với Docker PostgreSQL
-SQL_DATABASE_URL=postgresql+asyncpg://khbd:your_password@postgres:5432/khbd
-
-# BẮT BUỘC: Google Gemini API Key
-GEMINI_API_KEY=your_gemini_api_key_here
-
-# Email SMTP (tùy chọn - nếu cần xác thực email)
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=your-email@gmail.com
-SMTP_PASSWORD=your-app-password
+```env
+# init/backend/.env
+SECRET_KEY=replace-with-a-random-secret
+INTERNAL_API_KEY=replace-with-a-random-internal-key
+SQL_DATABASE_URL=postgresql+asyncpg://khbd:your_secure_password_here@postgres:5432/khbd
+CHAT_AI_PROVIDER=gemini
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-2.5-flash
+COOKIE_SECURE=false
+CORS_ORIGINS=http://localhost,http://localhost:5173,http://127.0.0.1:5173
 ```
 
-### 4. Deploy
+Tạo khóa ngẫu nhiên:
 
 ```bash
-# Chạy script deploy (tự động build và start)
-chmod +x deploy.sh scripts/*.sh
-./deploy.sh
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
 
-# Hoặc chạy thủ công
+Khởi động toàn bộ hệ thống:
+
+```bash
 docker compose up -d --build
 ```
 
-### 5. Truy cập ứng dụng
+Sau khi container khởi động:
 
-- **Frontend**: http://your-server-ip (hoặc http://localhost nếu chạy local)
-- **Backend API**: http://your-server-ip/api/v1/docs
-- **Health Check**: http://your-server-ip/api/v1/health
+- Frontend: `http://localhost`
+- Backend health check: `http://localhost:8000/health`
+- Swagger/OpenAPI: `http://localhost:8000/docs`
+- Neo4j Browser: `http://localhost:7474`
 
-## 🛠️ Các lệnh quản lý
-
-```bash
-# Xem logs
-cd init
-./scripts/logs.sh backend    # Backend logs
-./scripts/logs.sh frontend   # Frontend logs
-./scripts/logs.sh all        # All services
-
-# Cập nhật khi có code mới
-git pull
-./scripts/update.sh
-
-# Backup database
-./scripts/backup.sh
-
-# Restart services
-docker compose restart
-
-# Stop all services
-docker compose down
-
-# Stop và xóa volumes (CẢNH BÁO: Xóa database!)
-docker compose down -v
-```
-
-## 💻 Phát triển Local (Development)
+## Chạy development local
 
 ### Backend
 
 ```bash
 cd init/backend
-
-# Tạo virtual environment
 python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-# hoặc
-.venv\Scripts\activate     # Windows
 
-# Install dependencies
-pip install -r requirements.txt
+# Windows
+.venv\Scripts\activate
 
-# Chạy migrations
+# macOS/Linux
+source .venv/bin/activate
+
+pip install -r requirements-dev.txt
+cp .env.example .env
 alembic upgrade head
-
-# Start dev server
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+Khi chạy backend local, cần có PostgreSQL, Neo4j và Piston đang hoạt động hoặc cấu hình các URL tương ứng trong `init/backend/.env`.
+Với local ngoài Docker, `SQL_DATABASE_URL` thường dùng host `localhost`; với Docker Compose, backend dùng service name `postgres`.
 
 ### Frontend
 
 ```bash
 cd init/frontend
-
-# Install dependencies
-npm install
-
-# Start dev server
+cp .env.example .env
+npm ci
 npm run dev
 ```
 
-## 📁 Cấu trúc dự án
+Frontend development server mặc định chạy tại `http://localhost:5173` và gọi API qua `VITE_API_URL`, mặc định là `http://localhost:8000/api/v1`.
 
-```
-WEB1/
-├── init/
-│   ├── backend/              # FastAPI backend
-│   │   ├── app/
-│   │   │   ├── api/          # API routes
-│   │   │   ├── core/         # Core config, security
-│   │   │   ├── db/           # Database
-│   │   │   ├── models/       # SQLAlchemy models
-│   │   │   ├── schemas/      # Pydantic schemas
-│   │   │   └── services/     # Business logic
-│   │   ├── alembic/          # Database migrations
-│   │   ├── Dockerfile
-│   │   ├── entrypoint.sh
-│   │   └── requirements.txt
-│   │
-│   ├── frontend/             # React frontend
-│   │   ├── src/
-│   │   │   ├── components/
-│   │   │   ├── pages/
-│   │   │   ├── services/
-│   │   │   └── utils/
-│   │   ├── Dockerfile
-│   │   ├── nginx.conf
-│   │   └── package.json
-│   │
-│   ├── scripts/              # Management scripts
-│   │   ├── backup.sh
-│   │   ├── logs.sh
-│   │   └── update.sh
-│   │
-│   ├── docker-compose.yml    # Docker orchestration
-│   ├── deploy.sh             # Deployment script
-│   └── DEPLOYMENT.md         # Chi tiết deployment
-│
-└── README.md                 # File này
-```
+## Kiểm thử
 
-## 🔒 Bảo mật
-
-- **KHÔNG** commit file `.env` chứa thông tin nhạy cảm
-- **BẮT BUỘC** đổi `SECRET_KEY` và `INTERNAL_API_KEY` trong production
-- Sử dụng mật khẩu database mạnh
-- Bật HTTPS và set `COOKIE_SECURE=true` trong production
-- Giới hạn CORS origins chỉ cho domain của bạn
-
-## 📝 Migrations
+Backend:
 
 ```bash
-# Tạo migration mới
 cd init/backend
-alembic revision --autogenerate -m "Description"
+pip install -r requirements-dev.txt
+python -m pytest tests/ -v
+```
 
-# Chạy migrations
+Frontend:
+
+```bash
+cd init/frontend
+npm ci
+npm test
+npx tsc --noEmit
+npm run build
+```
+
+CI trong `.github/workflows/ci.yml` chạy backend tests, frontend tests, type check và frontend build trên pull request hoặc push vào nhánh `main`.
+
+## Migrations
+
+```bash
+cd init/backend
+
+# Tạo migration mới
+alembic revision --autogenerate -m "describe change"
+
+# Áp dụng migration
 alembic upgrade head
 
-# Rollback
+# Rollback một migration
 alembic downgrade -1
 ```
 
-## 🐛 Troubleshooting
+Khi chạy bằng Docker Compose, backend entrypoint tự chạy migration trừ khi đặt `SKIP_MIGRATIONS=true` trong `init/.env`.
 
-### Backend không khởi động
-- Kiểm tra logs: `./scripts/logs.sh backend`
-- Đảm bảo đã set `SECRET_KEY` và không chứa "CHANGE-ME"
-- Kiểm tra database connection
+## Lệnh quản trị Docker
 
-### Frontend không load
-- Kiểm tra logs: `./scripts/logs.sh frontend`
-- Đảm bảo backend đã start thành công
-- Kiểm tra CORS settings
+```bash
+cd init
 
-### Database connection failed
-- Đảm bảo PostgreSQL container đang chạy: `docker ps`
-- Kiểm tra password trong `.env` và `backend/.env` khớp nhau
+# Xem trạng thái service
+docker compose ps
 
-## 📞 Hỗ trợ
+# Xem logs
+./scripts/logs.sh backend
+./scripts/logs.sh frontend
+./scripts/logs.sh all
 
-Xem chi tiết tại [DEPLOYMENT.md](init/DEPLOYMENT.md)
+# Backup database
+./scripts/backup.sh
 
-## 📄 License
+# Cập nhật sau khi pull code mới
+./scripts/update.sh
 
-Dự án Khóa luận tốt nghiệp - Hệ thống hỗ trợ soạn Kế hoạch bài dạy Tin học THPT
+# Restart
+docker compose restart
 
----
+# Dừng service
+docker compose down
 
-**Lưu ý**: Đây là phiên bản production-ready. Đảm bảo đã cấu hình đầy đủ trước khi deploy.
+# Dừng và xóa volume dữ liệu
+docker compose down -v
+```
+
+## API chính
+
+Backend mount API version tại `/api/v1` và hiện có các nhóm route chính:
+
+- `/auth`: đăng ký, đăng nhập, refresh token, xác thực email, đặt lại mật khẩu.
+- `/admin`: chức năng quản trị hệ thống.
+- `/roles`, `/permissions`, `/users`: người dùng, vai trò và phân quyền.
+- `/lesson-builder`: tạo và quản lý kế hoạch bài dạy.
+- `/classrooms`, `/assignments`, `/student`: lớp học, bài giao và cổng học sinh.
+- `/peer-review`: nhận xét chéo.
+- `/guide-cards`, `/teaching-rules`: hướng dẫn và quy tắc hỗ trợ AI.
+- Các route chia sẻ phiếu học tập, quiz, bài tập lập trình và nhận xét kế hoạch bài dạy.
+
+WebSocket được mount trực tiếp ngoài prefix API để phục vụ cộng tác realtime.
+
+## Bảo mật và cấu hình production
+
+- Không commit file `.env` hoặc khóa API thật lên GitHub.
+- Bắt buộc thay `SECRET_KEY` và `INTERNAL_API_KEY`; backend sẽ từ chối khởi động nếu vẫn chứa giá trị `CHANGE-ME`.
+- Dùng mật khẩu PostgreSQL và Neo4j mạnh trong production.
+- Khi dùng HTTPS, đặt `COOKIE_SECURE=true` và cấu hình `FRONTEND_BASE_URL`, `CORS_ORIGINS` đúng domain thật.
+- Chỉ mở các API key cần dùng: Gemini/OpenAI/Ollama, SMTP, YouTube Data API, Google Custom Search, LlamaParse.
+- Piston container chạy với `privileged: true`; nên triển khai trên hạ tầng tin cậy và giới hạn truy cập mạng phù hợp.
+
+## Triển khai
+
+Tài liệu triển khai chi tiết nằm trong:
+
+- `init/DEPLOYMENT.md`
+- `init/DEPLOY_GUIDE.md`
+
+Luồng production cơ bản:
+
+```bash
+cd init
+cp .env.example .env
+cp backend/.env.example backend/.env
+docker compose up -d --build
+```
+
+Nếu deploy lên server riêng, cập nhật domain trong `FRONTEND_BASE_URL`, `CORS_ORIGINS`, bật HTTPS và đặt `COOKIE_SECURE=true`.
+
+## License
+
+Dự án hiện chưa có file `LICENSE`. Nếu repository được công khai trên GitHub, hãy bổ sung giấy phép phù hợp trước khi cho phép người khác sử dụng hoặc phân phối lại mã nguồn.

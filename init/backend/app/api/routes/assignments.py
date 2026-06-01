@@ -903,6 +903,7 @@ async def _get_classroom_statistics_impl(
             "student_stats": [],
             "group_stats": [],
             "chat_enabled": a.chat_enabled if hasattr(a, 'chat_enabled') else True,
+            "lesson_info": li if isinstance(li, dict) else {},
         }
 
         if a.work_type == "group":
@@ -988,8 +989,8 @@ async def _get_classroom_statistics_impl(
                     "group_name": ws.group.name if ws.group else "",
                     "status": ws.status,
                     "submitted_at": ws.submitted_at.isoformat() if ws.submitted_at else None,
-                    "member_evaluations": ws.member_evaluations,
-                    "member_grades": ws.member_grades,
+                    "member_evaluations": ws.member_evaluations if isinstance(ws.member_evaluations, dict) else {},
+                    "member_grades": ws.member_grades if isinstance(ws.member_grades, dict) else {},
                     "teacher_score": ws.teacher_score,
                     "teacher_comment": ws.teacher_comment,
                     "session_id": ws.id,

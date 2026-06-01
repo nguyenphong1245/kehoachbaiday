@@ -1,5 +1,4 @@
 from .permission import Permission
-from .profile import UserProfile
 from .role import Role
 from .settings import UserSettings
 from .user import User
@@ -7,7 +6,6 @@ from .email_verification import EmailVerificationToken
 from .password_reset import PasswordResetToken
 from .saved_lesson_plan import SavedLessonPlan
 from .shared_worksheet import SharedWorksheet, WorksheetResponse
-from .lesson_content import LessonContent
 from .code_exercise import CodeExercise, CodeSubmission
 from .submission_session import SubmissionSession
 from .refresh_token import RefreshToken
@@ -25,14 +23,12 @@ __all__ = [
     "User",
     "Role",
     "Permission",
-    "UserProfile",
     "UserSettings",
     "EmailVerificationToken",
     "PasswordResetToken",
     "SavedLessonPlan",
     "SharedWorksheet",
     "WorksheetResponse",
-    "LessonContent",
     "CodeExercise",
     "CodeSubmission",
     "SubmissionSession",

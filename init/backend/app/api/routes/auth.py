@@ -28,7 +28,6 @@ from app.core.security import (
 from app.db.session import get_db
 from app.models.email_verification import EmailVerificationToken
 from app.models.password_reset import PasswordResetToken
-from app.models.profile import UserProfile
 from app.models.refresh_token import RefreshToken
 from app.models.role import Role
 from app.models.settings import UserSettings
@@ -79,7 +78,6 @@ def user_with_relationships_query(user_id: int | None = None):
         select(User)
         .options(
             selectinload(User.roles).selectinload(Role.permissions),
-            selectinload(User.profile),
             selectinload(User.settings),
         )
     )
@@ -127,7 +125,6 @@ async def register_user(request: Request, user_in: UserCreate,  background_tasks
         is_verified=False
     )
     new_user.roles.append(default_role)
-    new_user.profile = UserProfile()
     new_user.settings = UserSettings()
     session.add(new_user)
     await session.flush()

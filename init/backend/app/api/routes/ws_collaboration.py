@@ -229,15 +229,6 @@ async def get_user_display_name(user_id: int) -> str:
         if name:
             return name
 
-        # Fallback to User profile
-        from app.models.profile import UserProfile
-        result = await db.execute(
-            select(UserProfile.first_name).where(UserProfile.user_id == user_id)
-        )
-        name = result.scalar_one_or_none()
-        if name:
-            return name
-
         # Fallback to email
         result = await db.execute(
             select(User.email).where(User.id == user_id)

@@ -66,7 +66,6 @@ async def get_current_user(
         select(User)
         .options(
             selectinload(User.roles).selectinload(Role.permissions),
-            selectinload(User.profile),
             selectinload(User.settings),
         )
         .where(User.id == user_id)
@@ -102,7 +101,6 @@ async def get_current_user_optional(
         select(User)
         .options(
             selectinload(User.roles).selectinload(Role.permissions),
-            selectinload(User.profile),
             selectinload(User.settings),
         )
         .where(User.id == user_id)

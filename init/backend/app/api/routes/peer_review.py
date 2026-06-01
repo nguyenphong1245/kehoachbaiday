@@ -289,7 +289,7 @@ async def get_all_reviews(
     reviews_result = await db.execute(
         select(PeerReview)
         .where(PeerReview.round_id == review_round.id)
-        .options(selectinload(PeerReview.reviewer_user).selectinload(User.profile))
+        .options(selectinload(PeerReview.reviewer_user))
     )
     reviews = reviews_result.scalars().all()
 
@@ -320,7 +320,7 @@ async def get_all_reviews(
                 "reviewer_id": r.reviewer_id,
                 "reviewee_id": r.reviewee_id,
                 "reviewer_type": r.reviewer_type,
-                "reviewer_user_name": (r.reviewer_user.profile.first_name if r.reviewer_user and r.reviewer_user.profile else (r.reviewer_user.email.split("@")[0] if r.reviewer_user else None)),
+                "reviewer_user_name": (r.reviewer_user.email.split("@")[0] if r.reviewer_user else None),
                 "reviewer_group_name": session_to_group_name.get(r.reviewer_id) if r.reviewer_type == "group" else None,
                 "reviewee_group_name": session_to_group_name.get(r.reviewee_id) if r.reviewer_type == "group" else None,
                 "comments": r.comments or {},
@@ -652,7 +652,7 @@ async def submit_peer_review(
         member_comments = dict(review.member_comments) if review.member_comments else {}
         member_comments[user_key] = {
             "comments": data.comments,
-            "reviewer_name": current_user.profile.first_name if current_user.profile else current_user.email.split("@")[0],
+            "reviewer_name": current_user.email.split("@")[0],
         }
         review.member_comments = member_comments
 

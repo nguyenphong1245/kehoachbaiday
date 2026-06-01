@@ -6,15 +6,12 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import get_current_user, require_admin, user_has_role
 from app.core.rate_limiter import limiter
 from app.db.session import get_db
-from app.models.profile import UserProfile
 from app.models.role import Role
 from app.models.settings import UserSettings
 from app.models.user import User
 from app.schemas import (
     AuthMessage,
     ChangePassword,
-    UserProfileRead,
-    UserProfileUpdate,
     UserRead,
     UserRoleUpdate,
     UserSettingsRead,
@@ -28,7 +25,6 @@ router = APIRouter()
 def user_query(user_id: int | None = None):
     stmt = select(User).options(
         selectinload(User.roles).selectinload(Role.permissions),
-        selectinload(User.profile),
         selectinload(User.settings),
     )
     if user_id is not None:
@@ -80,55 +76,6 @@ async def update_user_roles(
     await session.commit()
     refreshed = await session.execute(user_query(user_id))
     return refreshed.scalar_one()
-
-
-@router.get("/users/{user_id}/profile", response_model=UserProfileRead)
-async def get_user_profile(
-    user_id: int,
-    session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> UserProfile:
-    if current_user.id != user_id and not user_has_role(current_user, "admin"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view this profile")
-
-    user = await session.get(User, user_id, options=[selectinload(User.profile)])
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-
-    if user.profile is None:
-        user.profile = UserProfile()
-        await session.commit()
-        await session.refresh(user)
-
-    return user.profile
-
-
-@router.put("/users/{user_id}/profile", response_model=UserProfileRead)
-async def update_user_profile(
-    user_id: int,
-    payload: UserProfileUpdate,
-    session: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> UserProfile:
-    if current_user.id != user_id and not user_has_role(current_user, "admin"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to update this profile")
-
-    user = await session.get(User, user_id, options=[selectinload(User.profile)])
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-
-    profile = user.profile
-    if profile is None:
-        profile = UserProfile()
-        user.profile = profile
-
-    update_data = payload.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(profile, field, value)
-
-    await session.commit()
-    await session.refresh(profile)
-    return profile
 
 
 @router.get("/users/{user_id}/settings", response_model=UserSettingsRead)

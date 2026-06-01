@@ -8,7 +8,6 @@ from app.api.routes import (
     lesson_builder,
     shared_worksheets,
     shared_quizzes,
-    lesson_contents,
     code_exercises,
     classrooms,
     assignments,
@@ -44,9 +43,6 @@ api_router.include_router(shared_worksheets.router, tags=["shared-worksheets"])
 
 # Shared quizzes routes
 api_router.include_router(shared_quizzes.router, tags=["shared-quizzes"])
-
-# Lesson contents (SGK) routes
-api_router.include_router(lesson_contents.router, prefix="/lesson-contents", tags=["lesson-contents"])
 
 # Code exercises routes
 api_router.include_router(code_exercises.router, tags=["code-exercises"])

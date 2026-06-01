@@ -20,13 +20,6 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     roles = relationship("Role", secondary=user_roles_table, back_populates="users")
-    profile = relationship(
-        "UserProfile",
-        back_populates="user",
-        cascade="all, delete-orphan",
-        uselist=False,
-        single_parent=True,
-    )
     settings = relationship(
         "UserSettings",
         back_populates="user",
