@@ -16,7 +16,7 @@ Xem video hướng dẫn sử dụng hệ thống tại: [https://youtu.be/syU5P
 - Không gian làm việc cộng tác, nhận xét chéo cá nhân/nhóm và tự động xử lý một số tác vụ theo lịch.
 - Trang quản trị người dùng, giáo viên, vai trò/quyền và cấu hình mô hình AI.
 - Tích hợp Neo4j để lưu/truy vấn đồ thị nội dung bài học.
-- Hỗ trợ email xác thực tài khoản, đặt lại mật khẩu, tìm video YouTube, tìm ảnh minh họa và chuyển đổi PDF nếu cấu hình thêm API tương ứng.
+- Hỗ trợ email xác thực tài khoản, đặt lại mật khẩu.
 
 ## Công nghệ sử dụng
 
