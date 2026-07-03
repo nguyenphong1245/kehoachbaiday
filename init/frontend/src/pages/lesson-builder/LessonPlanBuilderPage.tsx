@@ -801,6 +801,12 @@ export const LessonPlanBuilderPage: React.FC = () => {
         error={kgLpvJob.error}
         onDismiss={kgLpvJob.dismiss}
         onLocate={handleLocateSection}
+        onRepair={kgLpvJob.repair}
+        diffs={kgLpvJob.diffs}
+        repairing={kgLpvJob.repairing}
+        repairError={kgLpvJob.repairError}
+        onApplyDiffs={kgLpvJob.applyDiffs}
+        onCloseDiffModal={kgLpvJob.closeDiffModal}
       />
 
       {/* Backdrop */}

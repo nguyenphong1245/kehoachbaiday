@@ -227,3 +227,38 @@ class ReportResponse(BaseModel):
     branches: list[BranchReport]
     unjudged: list[FindingOut]
     summary: dict[str, int]
+
+
+# ============== Bước 4 — Sửa & kiểm lại (repairer, §6.3, §7 Bước 4) ==============
+
+
+class SectionDiff(BaseModel):
+    """1 đoạn (section) đã được sửa cục bộ — `before`/`after` là TOÀN VĂN nội dung
+    section trước/sau khi sửa; `findings_addressed` là id các `KgLpvFinding` đã
+    được gộp sửa CÙNG LÚC trong đoạn này (nhiều finding trên cùng 1 section ->
+    1 `SectionDiff` duy nhất, §7 Bước 4)."""
+
+    section_id: str
+    before: str
+    after: str
+    findings_addressed: list[int] = Field(default_factory=list)
+
+
+class RepairRequest(BaseModel):
+    """Body `POST /jobs/{job_id}/repair` — rỗng = sửa tất cả finding `status="open"` của job."""
+
+    finding_ids: list[int] = Field(default_factory=list)
+
+
+class RepairResponse(BaseModel):
+    job_id: int
+
+
+class ApplyRequest(BaseModel):
+    """Body `POST /jobs/{job_id}/apply` — `None` = áp dụng mọi section đã `status="repaired"`."""
+
+    section_ids: list[str] | None = None
+
+
+class ApplyResponse(BaseModel):
+    section_ids: list[str]

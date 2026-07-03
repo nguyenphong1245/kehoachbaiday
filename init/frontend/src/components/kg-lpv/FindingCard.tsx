@@ -11,6 +11,7 @@ interface FindingCardProps {
   finding: FindingOut;
   onDismiss?: (findingId: number) => void | Promise<void>;
   onLocate?: (sectionId: string) => void;
+  onRepair?: (findingId: number) => void | Promise<void>;
 }
 
 const BRANCH_LABELS: Record<string, string> = {
@@ -28,10 +29,12 @@ function evidenceLabel(ev: Record<string, unknown>): string {
   return parts.join(" · ") || "Bằng chứng đồ thị";
 }
 
-export const FindingCard: React.FC<FindingCardProps> = ({ finding, onDismiss, onLocate }) => {
+export const FindingCard: React.FC<FindingCardProps> = ({ finding, onDismiss, onLocate, onRepair }) => {
   const [dismissing, setDismissing] = useState(false);
+  const [repairing, setRepairing] = useState(false);
   const isUnjudged = finding.status === "unjudged";
   const isDismissed = finding.status === "dismissed";
+  const isOpen = finding.status === "open";
 
   const handleDismiss = async () => {
     if (!onDismiss || dismissing) return;
@@ -40,6 +43,16 @@ export const FindingCard: React.FC<FindingCardProps> = ({ finding, onDismiss, on
       await onDismiss(finding.id);
     } finally {
       setDismissing(false);
+    }
+  };
+
+  const handleRepair = async () => {
+    if (!onRepair || !isOpen || repairing) return;
+    setRepairing(true);
+    try {
+      await onRepair(finding.id);
+    } finally {
+      setRepairing(false);
     }
   };
 
@@ -106,12 +119,17 @@ export const FindingCard: React.FC<FindingCardProps> = ({ finding, onDismiss, on
         <div className="flex items-center gap-2 pt-1">
           <button
             type="button"
-            disabled
-            title="Sửa lỗi tự động — sắp có"
-            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-stone-400 bg-stone-100 dark:bg-stone-700 dark:text-stone-500 rounded-md cursor-not-allowed"
+            onClick={handleRepair}
+            disabled={!isOpen || repairing}
+            title={isOpen ? "Sửa lỗi tự động" : "Chỉ sửa được phát hiện đang mở"}
+            className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+              isOpen
+                ? "text-brand-dark dark:text-sky-300 bg-sky-50 dark:bg-sky-900/20 hover:bg-sky-100 dark:hover:bg-sky-900/40 disabled:opacity-60"
+                : "text-stone-400 bg-stone-100 dark:bg-stone-700 dark:text-stone-500 cursor-not-allowed"
+            }`}
           >
             <Wrench className="w-3 h-3" />
-            Sửa
+            {repairing ? "Đang sửa..." : "Sửa"}
           </button>
           {!isDismissed && (
             <button

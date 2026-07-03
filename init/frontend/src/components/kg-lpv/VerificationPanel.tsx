@@ -6,8 +6,9 @@
  */
 import React from "react";
 import { AlertCircle, Check, Loader2, X } from "lucide-react";
-import type { JobStatusResponse, ReportResponse } from "@/types/kgLpv";
+import type { JobStatusResponse, ReportResponse, SectionDiff } from "@/types/kgLpv";
 import { FindingCard } from "./FindingCard";
+import { RepairDiffModal } from "./RepairDiffModal";
 import { SummaryBar } from "./SummaryBar";
 
 const STEPS = [
@@ -42,6 +43,12 @@ interface VerificationPanelProps {
   error: string | null;
   onDismiss: (findingId: number) => void | Promise<void>;
   onLocate?: (sectionId: string) => void;
+  onRepair?: (findingId: number) => void | Promise<void>;
+  diffs?: SectionDiff[] | null;
+  repairing?: boolean;
+  repairError?: string | null;
+  onApplyDiffs?: (sectionIds: string[]) => void | Promise<void>;
+  onCloseDiffModal?: () => void;
 }
 
 export const VerificationPanel: React.FC<VerificationPanelProps> = ({
@@ -55,6 +62,12 @@ export const VerificationPanel: React.FC<VerificationPanelProps> = ({
   error,
   onDismiss,
   onLocate,
+  onRepair,
+  diffs,
+  repairing = false,
+  repairError = null,
+  onApplyDiffs,
+  onCloseDiffModal,
 }) => {
   const activeStep = currentStepIndex(job?.status);
   const isRunning = loading || (job !== null && !report && job.status !== "failed");
@@ -158,6 +171,7 @@ export const VerificationPanel: React.FC<VerificationPanelProps> = ({
                           finding={finding}
                           onDismiss={onDismiss}
                           onLocate={onLocate}
+                          onRepair={onRepair}
                         />
                       ))}
                     </div>
@@ -193,6 +207,19 @@ export const VerificationPanel: React.FC<VerificationPanelProps> = ({
           )}
         </div>
       </div>
+
+      {(repairing || (diffs !== null && diffs !== undefined)) && (
+        <RepairDiffModal
+          open
+          diffs={diffs || []}
+          loading={repairing}
+          error={repairError}
+          onClose={() => onCloseDiffModal?.()}
+          onApply={async (sectionIds) => {
+            await onApplyDiffs?.(sectionIds);
+          }}
+        />
+      )}
     </>
   );
 };

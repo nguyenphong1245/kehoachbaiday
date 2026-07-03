@@ -27,13 +27,19 @@ from app.modules.kg_lpv.error_codes import VerificationBranch
 from app.modules.kg_lpv.graph_client import graph_client
 from app.modules.kg_lpv.models import KgLpvFinding, KgLpvJob
 from app.modules.kg_lpv.pipeline.orchestrator import run_job
+from app.modules.kg_lpv.pipeline.repairer import run_repair_job
 from app.modules.kg_lpv.schemas import (
+    ApplyRequest,
+    ApplyResponse,
     BranchReport,
     FindingOut,
     GraphStatus,
     JobStatusResponse,
     KgLpvStatusResponse,
+    RepairRequest,
+    RepairResponse,
     ReportResponse,
+    SectionDiff,
     VerifyRequest,
     VerifyResponse,
 )
@@ -269,3 +275,157 @@ async def dismiss_finding(
     await db.refresh(finding)
 
     return FindingOut.model_validate(finding)
+
+
+# Ước lượng token cho bước 4 (sửa & kiểm lại) — mỗi finding sửa tốn ít nhất 1 lượt
+# LLM sửa + có thể kéo theo các lượt kiểm lại (N2 rule/LLM biên + N3 nhiều trục).
+_REPAIR_BASE_TOKENS = 500
+_REPAIR_TOKENS_PER_FINDING = 400
+
+
+async def _load_owned_job(db: AsyncSession, job_id: int, user_id: int) -> KgLpvJob:
+    job = await db.get(KgLpvJob, job_id)
+    if job is None or job.user_id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy job kiểm chứng",
+        )
+    return job
+
+
+@router.post(
+    "/jobs/{job_id}/repair",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=RepairResponse,
+    dependencies=[Depends(require_kg_lpv)],
+)
+@limiter.limit("5/minute")
+async def start_repair(
+    request: Request,
+    job_id: int,
+    payload: RepairRequest,
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> RepairResponse:
+    """Bước 4 — Sửa & kiểm lại (§7 Bước 4, §6.3). Body rỗng (`finding_ids=[]`) = sửa
+    tất cả finding `status="open"` của job. Chạy nền, chuyển job `repairing ->
+    re_verifying -> repaired` (do `repairer.run_repair_job` cập nhật)."""
+    job = await _load_owned_job(db, job_id, current_user.id)
+
+    query = select(KgLpvFinding).where(KgLpvFinding.job_id == job_id, KgLpvFinding.status == "open")
+    if payload.finding_ids:
+        query = query.where(KgLpvFinding.id.in_(payload.finding_ids))
+    result = await db.execute(query)
+    findings = result.scalars().all()
+
+    if not findings:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Không có phát hiện nào để sửa",
+        )
+
+    estimated_tokens = _REPAIR_BASE_TOKENS + _REPAIR_TOKENS_PER_FINDING * len(findings)
+    if not await check_token_balance(db, current_user.id, estimated_tokens):
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Bạn đã hết token. Vui lòng liên hệ quản trị viên để nâng hạn mức.",
+        )
+
+    finding_ids = [f.id for f in findings]
+
+    job.status = "repairing"
+    await db.commit()
+
+    logger.info("kg_lpv.repair.requested job_id=%s findings=%d", job_id, len(finding_ids))
+
+    create_task(run_repair_job(job.id, finding_ids))
+
+    return RepairResponse(job_id=job.id)
+
+
+@router.get(
+    "/jobs/{job_id}/diff",
+    response_model=list[SectionDiff],
+    dependencies=[Depends(require_kg_lpv)],
+)
+async def get_job_diff(
+    job_id: int,
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[SectionDiff]:
+    """Các đoạn đã sửa của job (owner-only, §6.3) — 1 dòng / section (dedup theo
+    `section_id`, nhiều finding cùng section đã được gộp thành 1 `repair_diff` giống
+    nhau khi sửa — xem `repairer.repair`)."""
+    await _load_owned_job(db, job_id, current_user.id)
+
+    result = await db.execute(
+        select(KgLpvFinding).where(KgLpvFinding.job_id == job_id, KgLpvFinding.repair_diff.isnot(None))
+    )
+    findings = result.scalars().all()
+
+    diffs_by_section: dict[str, SectionDiff] = {}
+    for f in findings:
+        if f.section_id not in diffs_by_section:
+            diffs_by_section[f.section_id] = SectionDiff.model_validate(f.repair_diff)
+
+    return list(diffs_by_section.values())
+
+
+@router.post(
+    "/jobs/{job_id}/apply",
+    response_model=ApplyResponse,
+    dependencies=[Depends(require_kg_lpv)],
+)
+async def apply_repair(
+    job_id: int,
+    payload: ApplyRequest,
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ApplyResponse:
+    """Ghi các đoạn đã sửa (được giáo viên duyệt) ngược vào `SavedLessonPlan.sections`
+    (§6.3) — bước DUY NHẤT chạm dữ liệu KHBD trong toàn pipeline. Mặc định
+    (`section_ids=None`) áp dụng mọi section đang `status="repaired"`; các section
+    khác giữ NGUYÊN VẸN (byte-identical)."""
+    job = await _load_owned_job(db, job_id, current_user.id)
+
+    plan = await db.get(SavedLessonPlan, job.saved_lesson_plan_id)
+    if plan is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy KHBD nguồn",
+        )
+
+    result = await db.execute(
+        select(KgLpvFinding).where(
+            KgLpvFinding.job_id == job_id,
+            KgLpvFinding.status == "repaired",
+            KgLpvFinding.repair_diff.isnot(None),
+        )
+    )
+    findings = result.scalars().all()
+
+    diffs_by_section: dict[str, dict] = {}
+    for f in findings:
+        diffs_by_section.setdefault(f.section_id, f.repair_diff)
+
+    approved_ids = set(payload.section_ids) if payload.section_ids else set(diffs_by_section.keys())
+    to_apply = {sid: diff for sid, diff in diffs_by_section.items() if sid in approved_ids}
+
+    if not to_apply:
+        return ApplyResponse(section_ids=[])
+
+    new_sections = []
+    updated_ids: list[str] = []
+    for section in plan.sections or []:
+        sid = section.get("section_id")
+        if sid in to_apply:
+            new_sections.append({**section, "content": to_apply[sid]["after"]})
+            updated_ids.append(sid)
+        else:
+            new_sections.append(section)
+    plan.sections = new_sections
+    await db.commit()
+
+    logger.info("kg_lpv.repair.applied job_id=%s sections=%s", job_id, updated_ids)
+
+    return ApplyResponse(section_ids=updated_ids)

@@ -4,11 +4,12 @@
  * job đạt trạng thái cuối (done/failed/repaired) — khi đó tải sổ lỗi (report).
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { dismissFinding, getJob, getReport, startVerify } from "@/services/kgLpvApi";
-import type { JobStatusResponse, ReportResponse } from "@/types/kgLpv";
+import { applyDiff, dismissFinding, getDiff, getJob, getReport, startRepair, startVerify } from "@/services/kgLpvApi";
+import type { JobStatusResponse, ReportResponse, SectionDiff } from "@/types/kgLpv";
 
 const POLL_INTERVAL_MS = 2500;
 const TERMINAL_STATUSES = new Set(["done", "failed", "repaired"]);
+const REPAIR_TERMINAL_STATUSES = new Set(["repaired", "failed"]);
 
 const PHASE_LABELS: Record<string, string> = {
   pending: "Đang chờ",
@@ -31,6 +32,12 @@ export interface UseKgLpvJobResult {
   error: string | null;
   start: (lessonPlanId: number) => Promise<void>;
   dismiss: (findingId: number) => Promise<void>;
+  diffs: SectionDiff[] | null;
+  repairing: boolean;
+  repairError: string | null;
+  repair: (findingId: number) => Promise<void>;
+  applyDiffs: (sectionIds: string[]) => Promise<void>;
+  closeDiffModal: () => void;
 }
 
 export function useKgLpvJob(): UseKgLpvJobResult {
@@ -38,6 +45,9 @@ export function useKgLpvJob(): UseKgLpvJobResult {
   const [report, setReport] = useState<ReportResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [diffs, setDiffs] = useState<SectionDiff[] | null>(null);
+  const [repairing, setRepairing] = useState(false);
+  const [repairError, setRepairError] = useState<string | null>(null);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const jobIdRef = useRef<number | null>(null);
@@ -114,8 +124,76 @@ export function useKgLpvJob(): UseKgLpvJobResult {
     });
   }, []);
 
+  // Bước 4 — Sửa & kiểm lại: bắt đầu sửa 1 finding, chờ job chuyển sang trạng thái
+  // cuối (`repaired`/`failed`) rồi tải các đoạn đã sửa để mở RepairDiffModal.
+  const repair = useCallback(async (findingId: number) => {
+    if (jobIdRef.current === null) return;
+    const jobId = jobIdRef.current;
+    setRepairing(true);
+    setRepairError(null);
+    setDiffs(null);
+    try {
+      await startRepair(jobId, [findingId]);
+
+      await new Promise<void>((resolve, reject) => {
+        const check = async () => {
+          try {
+            const status = await getJob(jobId);
+            setJob(status);
+            if (REPAIR_TERMINAL_STATUSES.has(status.status)) {
+              clearInterval(repairIntervalId);
+              if (status.status === "failed") {
+                reject(new Error("Sửa lỗi thất bại"));
+              } else {
+                resolve();
+              }
+            }
+          } catch (err) {
+            clearInterval(repairIntervalId);
+            reject(err);
+          }
+        };
+        const repairIntervalId = setInterval(check, POLL_INTERVAL_MS);
+        check();
+      });
+
+      const diffData = await getDiff(jobId);
+      setDiffs(diffData);
+    } catch (err: any) {
+      setRepairError(err.response?.data?.detail || err.message || "Không thể sửa lỗi");
+    } finally {
+      setRepairing(false);
+    }
+  }, []);
+
+  const applyDiffs = useCallback(async (sectionIds: string[]) => {
+    if (jobIdRef.current === null) return;
+    const jobId = jobIdRef.current;
+    await applyDiff(jobId, sectionIds);
+    setDiffs(null);
+    const reportData = await getReport(jobId);
+    setReport(reportData);
+  }, []);
+
+  const closeDiffModal = useCallback(() => setDiffs(null), []);
+
   const progress = job?.progress ?? 0;
   const phase = job ? PHASE_LABELS[job.status] ?? job.status : "";
 
-  return { job, report, progress, phase, loading, error, start, dismiss };
+  return {
+    job,
+    report,
+    progress,
+    phase,
+    loading,
+    error,
+    start,
+    dismiss,
+    diffs,
+    repairing,
+    repairError,
+    repair,
+    applyDiffs,
+    closeDiffModal,
+  };
 }

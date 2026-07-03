@@ -1,0 +1,405 @@
+"""Test Bước 4 — Sửa & kiểm lại (`repairer.repair`) + endpoint `/repair`, `/diff`,
+`/apply` (§7 Bước 4, §6.3).
+
+Mock graph + `generate_json` hoàn toàn — không Neo4j/Gemini thật. Theo pattern
+Task 3/5/6 (`test_verify_api.py`, `test_orchestrator_n1n2.py`): patch
+`router.create_task` cục bộ + trỏ `repairer.AsyncSessionLocal` sang sessionmaker
+DB test để job nền không giữ kết nối pooled sống (tránh treo tiến trình).
+"""
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.feature_flag import FeatureFlag
+from app.models.saved_lesson_plan import SavedLessonPlan
+from app.modules.kg_lpv import feature_flag as feature_flag_accessor
+from app.modules.kg_lpv.graph_client import graph_client
+from app.modules.kg_lpv.models import KgLpvFinding, KgLpvJob
+from app.modules.kg_lpv.pipeline import n2_curriculum, n3_pedagogy, repairer
+from app.modules.kg_lpv.pipeline.repairer import repair
+from app.modules.kg_lpv.schemas import (
+    ActivityComponentSegment,
+    LessonContext,
+    ObjectiveClauseSegment,
+    SegmentedPlan,
+)
+from tests.conftest import TestingSessionLocal
+from tests.helpers.auth_helpers import auth_get, auth_post
+from tests.helpers.factories import create_teacher
+
+REPAIR_URL = "/api/v1/kg-lpv/jobs/{job_id}/repair"
+DIFF_URL = "/api/v1/kg-lpv/jobs/{job_id}/diff"
+APPLY_URL = "/api/v1/kg-lpv/jobs/{job_id}/apply"
+JOB_URL = "/api/v1/kg-lpv/jobs/{job_id}"
+
+
+@pytest.fixture(autouse=True)
+def _reset_kg_lpv_caches():
+    feature_flag_accessor.invalidate_cache()
+    graph_client._healthy_cache = None
+    graph_client._healthy_cache_time = 0.0
+    yield
+    feature_flag_accessor.invalidate_cache()
+    graph_client._healthy_cache = None
+    graph_client._healthy_cache_time = 0.0
+
+
+async def _set_kg_lpv_flag(db_session: AsyncSession, enabled: bool) -> None:
+    flag = await db_session.get(FeatureFlag, "kg_lpv")
+    if flag is None:
+        db_session.add(FeatureFlag(key="kg_lpv", enabled=enabled))
+    else:
+        flag.enabled = enabled
+    await db_session.commit()
+    feature_flag_accessor.invalidate_cache()
+
+
+@pytest.fixture
+async def kg_lpv_client():
+    import os
+
+    from app.core.config import get_settings
+    from app.db.session import get_db
+    from app.main import get_app
+    from httpx import ASGITransport
+    from tests.conftest import override_get_db
+
+    original = os.environ.get("KG_LPV_ENABLED")
+    os.environ["KG_LPV_ENABLED"] = "true"
+    get_settings.cache_clear()
+    try:
+        app = get_app()
+        app.dependency_overrides[get_db] = override_get_db
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test", follow_redirects=True) as ac:
+            yield ac
+        app.dependency_overrides.clear()
+    finally:
+        if original is None:
+            os.environ.pop("KG_LPV_ENABLED", None)
+        else:
+            os.environ["KG_LPV_ENABLED"] = original
+        get_settings.cache_clear()
+
+
+@pytest.fixture
+async def ready_kg_lpv(kg_lpv_client: AsyncClient, db_session, monkeypatch):
+    await _set_kg_lpv_flag(db_session, True)
+    monkeypatch.setattr(graph_client, "is_healthy", lambda force=False: True)
+    return kg_lpv_client
+
+
+def _capture_create_task(monkeypatch):
+    captured: list = []
+
+    def _fake_create_task(coro, *args, **kwargs):
+        captured.append(coro)
+        return MagicMock()
+
+    monkeypatch.setattr("app.modules.kg_lpv.router.create_task", _fake_create_task)
+    return captured
+
+
+def _obj(segment_id, loai, text, section_id="muc_tieu") -> ObjectiveClauseSegment:
+    return ObjectiveClauseSegment(segment_id=segment_id, section_id=section_id, loai=loai, text=text)
+
+
+def _act(segment_id, component, text, section_id) -> ActivityComponentSegment:
+    return ActivityComponentSegment(segment_id=segment_id, section_id=section_id, component=component, text=text)
+
+
+# =========================== (a) Endpoint: chỉ đúng section thay đổi ===========================
+
+
+@pytest.mark.asyncio
+async def test_repair_via_api_changes_only_target_section(
+    ready_kg_lpv, db_session, teacher_user, monkeypatch
+):
+    monkeypatch.setattr("app.modules.kg_lpv.pipeline.repairer.AsyncSessionLocal", TestingSessionLocal)
+    monkeypatch.setattr(graph_client, "get_lesson_context", lambda lesson_id, grade: LessonContext())
+    monkeypatch.setattr(
+        repairer, "generate_json",
+        AsyncMock(return_value=({"after": "Nội dung đã sửa đúng chuẩn."}, 10)),
+    )
+    # An toàn: nếu re-verify lỡ gọi tới M2/M6 (không nên xảy ra với fixture này),
+    # trả về verdict "hợp lệ" để không tạo finding mới ngoài ý muốn.
+    monkeypatch.setattr(
+        n2_curriculum, "generate_json",
+        AsyncMock(return_value=({"verdict": "hop_le", "evidence_refs": [], "explanation": "OK"}, 0)),
+    )
+
+    sections = [
+        {"section_id": "muc_tieu", "section_type": "muc_tieu", "title": "Mục tiêu", "content": "Mục tiêu gốc."},
+        {"section_id": "khoi_dong", "section_type": "khoi_dong", "title": "Khởi động", "content": "Nội dung gốc chưa đúng."},
+    ]
+    plan = SavedLessonPlan(user_id=teacher_user.id, title="KHBD test", content="noi dung", sections=sections)
+    db_session.add(plan)
+    await db_session.commit()
+    await db_session.refresh(plan)
+
+    segments = SegmentedPlan(
+        objective_clauses=[],
+        activity_components=[_act("khoi_dong__noi_dung", "noi_dung", "Nội dung gốc chưa đúng.", "khoi_dong")],
+    ).model_dump(mode="json")
+
+    job = KgLpvJob(
+        user_id=teacher_user.id, saved_lesson_plan_id=plan.id, status="done", progress=100, segments=segments,
+    )
+    db_session.add(job)
+    await db_session.commit()
+    await db_session.refresh(job)
+
+    finding = KgLpvFinding(
+        job_id=job.id, code="M6", branch="N2", section_id="khoi_dong",
+        evidence=[{"ma_dinh_danh": "MDKT-1", "trich_dan": "..."}],
+        explanation="Kiến thức thiếu căn cứ.", status="open",
+    )
+    db_session.add(finding)
+    await db_session.commit()
+    await db_session.refresh(finding)
+
+    captured = _capture_create_task(monkeypatch)
+    resp = await auth_post(
+        ready_kg_lpv, REPAIR_URL.format(job_id=job.id), teacher_user.id, json={"finding_ids": [finding.id]}
+    )
+    assert resp.status_code == 202
+    await captured[0]
+
+    resp2 = await auth_get(ready_kg_lpv, JOB_URL.format(job_id=job.id), teacher_user.id)
+    assert resp2.json()["status"] == "repaired"
+
+    resp3 = await auth_get(ready_kg_lpv, DIFF_URL.format(job_id=job.id), teacher_user.id)
+    assert resp3.status_code == 200
+    diffs = resp3.json()
+    assert len(diffs) == 1
+    assert diffs[0]["section_id"] == "khoi_dong"
+    assert diffs[0]["before"] == "Nội dung gốc chưa đúng."
+    assert diffs[0]["after"] == "Nội dung đã sửa đúng chuẩn."
+    assert diffs[0]["findings_addressed"] == [finding.id]
+
+    await db_session.refresh(finding)
+    assert finding.status == "repaired"
+    assert finding.repair_diff["section_id"] == "khoi_dong"
+    assert finding.repair_diff["after"] == "Nội dung đã sửa đúng chuẩn."
+
+
+# =========================== (b) Finding không hợp lệ bị từ chối sửa ===========================
+
+
+@pytest.mark.asyncio
+async def test_repair_refuses_unjudged_dismissed_and_empty_evidence(db_session, teacher_user, monkeypatch):
+    mock_repair_llm = AsyncMock(return_value=({"after": "x"}, 5))
+    monkeypatch.setattr(repairer, "generate_json", mock_repair_llm)
+
+    sections = [{"section_id": "muc_tieu", "section_type": "muc_tieu", "title": "Mục tiêu", "content": "Nội dung."}]
+    plan = SavedLessonPlan(user_id=teacher_user.id, title="KHBD", content="c", sections=sections)
+    db_session.add(plan)
+    await db_session.commit()
+    await db_session.refresh(plan)
+
+    job = KgLpvJob(
+        user_id=teacher_user.id, saved_lesson_plan_id=plan.id, status="done", progress=100,
+        segments=SegmentedPlan().model_dump(mode="json"),
+    )
+    db_session.add(job)
+    await db_session.commit()
+    await db_session.refresh(job)
+
+    f_unjudged = KgLpvFinding(
+        job_id=job.id, code="M2", branch="N2", section_id="muc_tieu",
+        evidence=[{"a": 1}], explanation="x", status="unjudged",
+    )
+    f_dismissed = KgLpvFinding(
+        job_id=job.id, code="M1", branch="N2", section_id="muc_tieu",
+        evidence=[{"a": 1}], explanation="x", status="dismissed",
+    )
+    f_open_no_evidence = KgLpvFinding(
+        job_id=job.id, code="M3", branch="N2", section_id="muc_tieu",
+        evidence=[], explanation="x", status="open",
+    )
+    db_session.add_all([f_unjudged, f_dismissed, f_open_no_evidence])
+    await db_session.commit()
+    for f in (f_unjudged, f_dismissed, f_open_no_evidence):
+        await db_session.refresh(f)
+
+    diffs = await repair(db_session, job, [f_unjudged, f_dismissed, f_open_no_evidence])
+
+    assert diffs == []
+    mock_repair_llm.assert_not_called()
+    assert f_unjudged.status == "unjudged"
+    assert f_dismissed.status == "dismissed"
+    assert f_open_no_evidence.status == "open"
+
+
+# =========================== (c) Kiểm lại: pass -> repaired, fail -> reverified_fail ===========================
+
+
+@pytest.mark.asyncio
+async def test_repair_reverify_fail_keeps_diff_but_does_not_mark_repaired(db_session, teacher_user, monkeypatch):
+    monkeypatch.setattr(graph_client, "get_lesson_context", lambda lesson_id, grade: LessonContext())
+    monkeypatch.setattr(repairer, "generate_json", AsyncMock(return_value=({"after": "Nội dung sửa vẫn còn lỗi."}, 8)))
+    # Re-verify M6 (N2) vẫn phán "khong_can_cu" -> re-verify FAIL
+    monkeypatch.setattr(
+        n2_curriculum, "generate_json",
+        AsyncMock(return_value=(
+            {"verdict": "khong_can_cu", "evidence_refs": [{"ma_dinh_danh": "MDKT-1"}], "explanation": "Vẫn thiếu căn cứ."},
+            0,
+        )),
+    )
+
+    sections = [{"section_id": "khoi_dong", "section_type": "khoi_dong", "title": "Khởi động", "content": "Nội dung gốc."}]
+    plan = SavedLessonPlan(user_id=teacher_user.id, title="KHBD", content="c", sections=sections)
+    db_session.add(plan)
+    await db_session.commit()
+    await db_session.refresh(plan)
+
+    segments = SegmentedPlan(
+        objective_clauses=[],
+        activity_components=[_act("khoi_dong__noi_dung", "noi_dung", "Nội dung gốc.", "khoi_dong")],
+    ).model_dump(mode="json")
+    job = KgLpvJob(user_id=teacher_user.id, saved_lesson_plan_id=plan.id, status="done", progress=100, segments=segments)
+    db_session.add(job)
+    await db_session.commit()
+    await db_session.refresh(job)
+
+    finding = KgLpvFinding(
+        job_id=job.id, code="M6", branch="N2", section_id="khoi_dong",
+        evidence=[{"ma_dinh_danh": "MDKT-1"}], explanation="Kiến thức thiếu căn cứ.", status="open",
+    )
+    db_session.add(finding)
+    await db_session.commit()
+    await db_session.refresh(finding)
+
+    diffs = await repair(db_session, job, [finding])
+
+    assert len(diffs) == 1
+    assert diffs[0].after == "Nội dung sửa vẫn còn lỗi."
+    await db_session.refresh(finding)
+    assert finding.status == "reverified_fail"
+    assert finding.repair_diff is not None  # bản sửa vẫn giữ lại để giáo viên xem, KHÔNG áp dụng
+
+    # KHBD không bị đổi (repair() không bao giờ chạm SavedLessonPlan)
+    await db_session.refresh(plan)
+    assert plan.sections[0]["content"] == "Nội dung gốc."
+
+
+# =========================== (d) Đoạn phụ thuộc được kiểm lại ===========================
+
+
+@pytest.mark.asyncio
+async def test_repair_rechecks_dependent_activity_section_for_objective_edit(db_session, teacher_user, monkeypatch):
+    lesson_ctx = LessonContext(
+        yccd=[{"ma_dinh_danh": "YC1", "ten": "Trình bày được khái niệm mạng máy tính", "muc_nhan_thuc": {"bac": 1}}],
+        dong_tu_nhan_thuc={"do_duoc": [{"dong_tu": "trình bày được", "bac": 1}], "khong_do_duoc": []},
+    )
+    monkeypatch.setattr(graph_client, "get_lesson_context", lambda lesson_id, grade: lesson_ctx)
+    monkeypatch.setattr(
+        repairer, "generate_json",
+        AsyncMock(return_value=({"after": "Trình bày được khái niệm mạng máy tính chính xác hơn."}, 6)),
+    )
+    monkeypatch.setattr(
+        n2_curriculum, "generate_json",
+        AsyncMock(return_value=({"verdict": "do_duoc", "evidence_refs": [], "explanation": "OK"}, 0)),
+    )
+    mock_n3_llm = AsyncMock(return_value=(
+        {"verdict": "khong_dat", "thanh_phan_thieu": "hanh_dong", "evidence_refs": [], "explanation": "Thiếu hành động đúng mức."},
+        4,
+    ))
+    monkeypatch.setattr(n3_pedagogy, "generate_json", mock_n3_llm)
+
+    sections = [
+        {"section_id": "muc_tieu", "section_type": "muc_tieu", "title": "Mục tiêu", "content": "Trình bày được khái niệm mạng."},
+        {"section_id": "hoat_dong_1", "section_type": "hinh_thanh_kien_thuc", "title": "Hoạt động 1", "content": "Nội dung hoạt động 1."},
+    ]
+    plan = SavedLessonPlan(user_id=teacher_user.id, title="KHBD", content="c", sections=sections)
+    db_session.add(plan)
+    await db_session.commit()
+    await db_session.refresh(plan)
+
+    segments = SegmentedPlan(
+        objective_clauses=[_obj("muc_tieu__1", "kien_thuc", "Trình bày được khái niệm mạng.")],
+        activity_components=[
+            _act("hd1__muc_tieu", "muc_tieu", "Trình bày được khái niệm mạng.", "hoat_dong_1"),
+            _act("hd1__san_pham", "san_pham", "Bài trình bày của học sinh.", "hoat_dong_1"),
+            _act("hd1__to_chuc", "to_chuc_thuc_hien", "Học sinh thảo luận nhóm.", "hoat_dong_1"),
+        ],
+    ).model_dump(mode="json")
+    job = KgLpvJob(user_id=teacher_user.id, saved_lesson_plan_id=plan.id, status="done", progress=100, segments=segments)
+    db_session.add(job)
+    await db_session.commit()
+    await db_session.refresh(job)
+
+    finding = KgLpvFinding(
+        job_id=job.id, code="M1", branch="N2", section_id="muc_tieu",
+        evidence=[{"ma_dinh_danh": "YC1"}], explanation="Mục tiêu kiến thức lệch yêu cầu cần đạt.", status="open",
+    )
+    db_session.add(finding)
+    await db_session.commit()
+    await db_session.refresh(finding)
+
+    diffs = await repair(db_session, job, [finding])
+
+    assert len(diffs) == 1
+    mock_n3_llm.assert_called()  # trục 3 đã chạy kiểm lại trên hoạt động phụ thuộc "hoat_dong_1"
+    await db_session.refresh(finding)
+    assert finding.status == "reverified_fail"  # hoạt động phụ thuộc vẫn còn lỗi trục 3 -> kiểm lại fail
+
+
+# =========================== /apply: chỉ ghi đúng section đã duyệt ===========================
+
+
+@pytest.mark.asyncio
+async def test_apply_updates_only_approved_section(ready_kg_lpv, db_session, teacher_user):
+    sections = [
+        {"section_id": "muc_tieu", "section_type": "muc_tieu", "title": "Mục tiêu", "content": "Cũ 1"},
+        {"section_id": "khoi_dong", "section_type": "khoi_dong", "title": "Khởi động", "content": "Cũ 2"},
+    ]
+    plan = SavedLessonPlan(user_id=teacher_user.id, title="KHBD", content="c", sections=sections)
+    db_session.add(plan)
+    await db_session.commit()
+    await db_session.refresh(plan)
+
+    job = KgLpvJob(user_id=teacher_user.id, saved_lesson_plan_id=plan.id, status="repaired", progress=100)
+    db_session.add(job)
+    await db_session.commit()
+    await db_session.refresh(job)
+
+    diff = {"section_id": "muc_tieu", "before": "Cũ 1", "after": "Mới 1", "findings_addressed": []}
+    finding = KgLpvFinding(
+        job_id=job.id, code="M1", branch="N2", section_id="muc_tieu",
+        evidence=[{"a": 1}], explanation="x", status="repaired", repair_diff=diff,
+    )
+    db_session.add(finding)
+    await db_session.commit()
+
+    resp = await auth_post(ready_kg_lpv, APPLY_URL.format(job_id=job.id), teacher_user.id, json={})
+    assert resp.status_code == 200
+    assert resp.json()["section_ids"] == ["muc_tieu"]
+
+    await db_session.refresh(plan)
+    by_id = {s["section_id"]: s["content"] for s in plan.sections}
+    assert by_id["muc_tieu"] == "Mới 1"
+    assert by_id["khoi_dong"] == "Cũ 2"
+
+
+@pytest.mark.asyncio
+async def test_apply_non_owner_returns_404(ready_kg_lpv, db_session, roles):
+    owner = await create_teacher(db_session, roles, email="owner-repair@test.com")
+    other = await create_teacher(db_session, roles, email="other-repair@test.com")
+    await db_session.commit()
+
+    sections = [{"section_id": "muc_tieu", "section_type": "muc_tieu", "title": "Mục tiêu", "content": "Cũ"}]
+    plan = SavedLessonPlan(user_id=owner.id, title="KHBD", content="c", sections=sections)
+    db_session.add(plan)
+    await db_session.commit()
+    await db_session.refresh(plan)
+
+    job = KgLpvJob(user_id=owner.id, saved_lesson_plan_id=plan.id, status="repaired", progress=100)
+    db_session.add(job)
+    await db_session.commit()
+    await db_session.refresh(job)
+
+    resp = await auth_post(ready_kg_lpv, APPLY_URL.format(job_id=job.id), other.id, json={})
+    assert resp.status_code == 404

@@ -3,10 +3,13 @@
  */
 import { api } from "./authService";
 import type {
+  ApplyResponse,
   FindingOut,
   JobStatusResponse,
   KgLpvStatusResponse,
+  RepairResponse,
   ReportResponse,
+  SectionDiff,
   VerifyResponse,
 } from "@/types/kgLpv";
 
@@ -52,10 +55,43 @@ export const dismissFinding = async (findingId: number): Promise<FindingOut> => 
   return data;
 };
 
+/**
+ * Bước 4 — bắt đầu sửa & kiểm lại (chạy nền). `findingIds` rỗng = sửa tất cả
+ * finding `status="open"` của job.
+ */
+export const startRepair = async (jobId: number, findingIds: number[] = []): Promise<RepairResponse> => {
+  const { data } = await api.post<RepairResponse>(`/kg-lpv/jobs/${jobId}/repair`, {
+    finding_ids: findingIds,
+  });
+  return data;
+};
+
+/**
+ * Các đoạn đã sửa của job (before/after + findings_addressed).
+ */
+export const getDiff = async (jobId: number): Promise<SectionDiff[]> => {
+  const { data } = await api.get<SectionDiff[]>(`/kg-lpv/jobs/${jobId}/diff`);
+  return data;
+};
+
+/**
+ * Ghi các đoạn đã sửa (được giáo viên duyệt) vào KHBD. `sectionIds` rỗng/không
+ * truyền = áp dụng mọi section đang `status="repaired"`.
+ */
+export const applyDiff = async (jobId: number, sectionIds?: string[]): Promise<ApplyResponse> => {
+  const { data } = await api.post<ApplyResponse>(`/kg-lpv/jobs/${jobId}/apply`, {
+    section_ids: sectionIds && sectionIds.length > 0 ? sectionIds : null,
+  });
+  return data;
+};
+
 export const kgLpvApi = {
   getStatus,
   startVerify,
   getJob,
   getReport,
   dismissFinding,
+  startRepair,
+  getDiff,
+  applyDiff,
 };

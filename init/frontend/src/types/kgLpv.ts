@@ -63,3 +63,28 @@ export interface ReportResponse {
   unjudged: FindingOut[];
   summary: Record<string, number>;
 }
+
+/** Bước 4 — Sửa & kiểm lại (§7 Bước 4, §6.3). */
+export interface RepairRequest {
+  finding_ids: number[];
+}
+
+export interface RepairResponse {
+  job_id: number;
+}
+
+/** 1 đoạn (section) đã được sửa cục bộ — before/after là toàn văn nội dung section. */
+export interface SectionDiff {
+  section_id: string;
+  before: string;
+  after: string;
+  findings_addressed: number[];
+}
+
+export interface ApplyRequest {
+  section_ids?: string[] | null;
+}
+
+export interface ApplyResponse {
+  section_ids: string[];
+}
