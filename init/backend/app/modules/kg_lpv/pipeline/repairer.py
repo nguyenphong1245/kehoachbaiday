@@ -15,13 +15,19 @@
   ngưỡng `n3_pedagogy.truc1_nhat_quan_doc`) + M1/M2 (N2) của chính mục tiêu đó; sửa
   hoạt động (section thuộc `activity_components`) -> kiểm lại trục 2/5/6 của CHÍNH
   hoạt động đó + trục 1 + M6 (N2, kiểm lại chính finding gốc nếu hoạt động đó có
-  thành phần `noi_dung`). Để giữ tractable (không tách đoạn lại bằng LLM lần 2), việc
-  kiểm lại chạy trên 1 `SegmentedPlan` DỰNG LẠI trong bộ nhớ (`_rebuild_segmented_plan`)
-  — thay `text` của MỌI segment thuộc section đã sửa bằng TOÀN VĂN đoạn sau khi sửa;
-  segment ở section không đổi giữ nguyên. Pass (không có finding MỚI trong phạm vi
-  liên quan) -> finding `status="repaired"`; fail -> `status="reverified_fail"`, KHBD
-  KHÔNG bị thay đổi cho finding đó (chỉ `POST /apply`, giáo viên duyệt trên UI diff,
-  mới ghi vào `SavedLessonPlan` — repairer.py không bao giờ chạm `SavedLessonPlan`).
+  thành phần `noi_dung`). Việc kiểm lại chạy trên 1 `SegmentedPlan` DỰNG LẠI trong bộ
+  nhớ (`_rebuild_segmented_plan`): section chỉ có ĐÚNG 1 segment con -> gán thẳng
+  TOÀN VĂN đoạn sau khi sửa (không có gì để tách nhầm, giữ tractable §9); section có
+  NHIỀU segment con (VD nhiều mệnh đề mục tiêu, hoặc đủ 4 thành phần hoạt động) ->
+  TÁCH LẠI RIÊNG đoạn đó qua `segmenter.segment` (scoped đúng 1 section, KHÔNG tách
+  lại toàn bộ KHBD) để mỗi segment con dùng đúng văn bản của nó khi kiểm lại — tránh
+  gán nhầm toàn văn section cho MỌI segment con (che lấp lỗi còn sót ở segment khác,
+  Task 8 review). Lỗi tách đoạn lại (LLM hỏng/validator fail) không crash batch — rơi
+  về gán thẳng toàn văn (hành vi cũ) cho các segment của section đó. Segment ở section
+  không đổi giữ nguyên. Pass (không có finding MỚI trong phạm vi liên quan) -> finding
+  `status="repaired"`; fail -> `status="reverified_fail"`, KHBD KHÔNG bị thay đổi cho
+  finding đó (chỉ `POST /apply`, giáo viên duyệt trên UI diff, mới ghi vào
+  `SavedLessonPlan` — repairer.py không bao giờ chạm `SavedLessonPlan`).
 - 1 lượt LLM hỏng khi sửa 1 finding (timeout/JSON hỏng/lỗi API) KHÔNG được crash batch
   — bắt riêng, bỏ qua finding đó (không tính vào `findings_addressed`), tiếp tục các
   finding còn lại (§9 "an toàn khi hỏng"). Token dùng (sửa + kiểm lại) cộng dồn vào
@@ -48,6 +54,7 @@ from app.modules.kg_lpv.pipeline.n3_pedagogy import (
     truc5_thuc_chat_phuong_phap,
     truc6_tien_trinh_dieu_kien,
 )
+from app.modules.kg_lpv.pipeline.segmenter import segment
 from app.modules.kg_lpv.prompts.repair import build_repair_prompt
 from app.modules.kg_lpv.schemas import ActivityComponentType, LessonContext, SectionDiff, SegmentedPlan
 from app.services.admin_ai_model_registry import FEATURE_KG_LPV_REPAIR
@@ -140,7 +147,7 @@ async def repair(db: AsyncSession, job: KgLpvJob, findings: list[KgLpvFinding]) 
     job.status = "re_verifying"
     await db.commit()
 
-    reverify_tokens = await _reverify(db, job, plan, segmented, edited_texts, touched)
+    reverify_tokens = await _reverify(db, job, plan, segmented, edited_texts, touched, sections_by_id)
 
     stats = dict(job.stats or {})
     stats["tokens"] = int(stats.get("tokens", 0)) + reverify_tokens
@@ -161,15 +168,16 @@ async def _reverify(
     segmented: SegmentedPlan,
     edited_texts: dict[str, str],
     touched: dict[str, list[KgLpvFinding]],
+    sections_by_id: dict[str, dict],
 ) -> int:
     """Kiểm lại đoạn đã đổi + đoạn phụ thuộc theo map phụ thuộc tĩnh (§7 Bước 4).
     Đặt `status` cuối cùng ("repaired" | "reverified_fail") lên các finding đã sửa
     của MỖI section trong `touched`. Trả tổng token đã dùng để kiểm lại."""
-    rebuilt = _rebuild_segmented_plan(segmented, edited_texts)
+    rebuilt, resegment_tokens = await _rebuild_segmented_plan(db, segmented, edited_texts, sections_by_id)
 
     lesson_ctx: LessonContext = graph_client.get_lesson_context(plan.lesson_id, plan.grade)
 
-    total_tokens = 0
+    total_tokens = resegment_tokens
 
     n2_usage: dict[str, int] = {}
     n2_findings, hoat_dong_loi_m = await n2_verify(db, rebuilt, lesson_ctx, graph_client, usage=n2_usage)
@@ -226,20 +234,61 @@ async def _reverify(
     return total_tokens
 
 
-def _rebuild_segmented_plan(segmented: SegmentedPlan, edited_texts: dict[str, str]) -> SegmentedPlan:
-    """Dựng lại `SegmentedPlan` để kiểm lại — thay `text` của MỌI clause/component
-    thuộc các section đã sửa bằng TOÀN VĂN đoạn đã sửa (đơn giản hoá có chủ đích:
-    không gọi LLM tách đoạn lần 2 — giữ tractable, §7 Bước 4). Segment thuộc section
-    KHÔNG đổi giữ nguyên nguyên trạng."""
-    new_clauses = [
-        c.model_copy(update={"text": edited_texts[c.section_id]}) if c.section_id in edited_texts else c
-        for c in segmented.objective_clauses
-    ]
-    new_components = [
-        c.model_copy(update={"text": edited_texts[c.section_id]}) if c.section_id in edited_texts else c
-        for c in segmented.activity_components
-    ]
-    return SegmentedPlan(objective_clauses=new_clauses, activity_components=new_components)
+async def _rebuild_segmented_plan(
+    db: AsyncSession,
+    segmented: SegmentedPlan,
+    edited_texts: dict[str, str],
+    sections_by_id: dict[str, dict],
+) -> tuple[SegmentedPlan, int]:
+    """Dựng lại `SegmentedPlan` để kiểm lại. Section KHÔNG đổi giữ nguyên nguyên
+    trạng. Với MỖI section đã sửa:
+
+    - Chỉ có ĐÚNG 1 segment con (clause/component) map tới section đó -> không có
+      gì để tách nhầm, gán THẲNG toàn văn đoạn đã sửa cho segment đó (giữ tractable,
+      §9 — không cần LLM).
+    - Có NHIỀU segment con (VD nhiều mệnh đề mục tiêu cùng 1 section `muc_tieu`,
+      hoặc đủ 4 thành phần của 1 hoạt động) -> gán thẳng toàn văn cho MỌI segment
+      như cũ SẼ làm re-verify phán xử mỗi segment trên 1 khối văn bản trộn lẫn nội
+      dung của các segment khác -> có thể che lấp lỗi còn sót ở segment KHÔNG được
+      sửa (false pass) hoặc báo sai lỗi (false fail). Thay vào đó, TÁCH LẠI RIÊNG
+      đoạn này qua `segmenter.segment` (scoped đúng 1 section, KHÔNG tách lại toàn
+      bộ KHBD) để mỗi segment con dùng đúng văn bản của chính nó khi kiểm lại. Lỗi
+      tách đoạn lại (LLM hỏng/timeout/validator fail) không được crash batch — rơi
+      về gán thẳng toàn văn (hành vi cũ) cho các segment của section đó (§9 "an toàn
+      khi hỏng").
+
+    Trả `(SegmentedPlan đã dựng lại, tổng token đã dùng để tách đoạn lại)`.
+    """
+    total_tokens = 0
+    new_clauses = [c for c in segmented.objective_clauses if c.section_id not in edited_texts]
+    new_components = [c for c in segmented.activity_components if c.section_id not in edited_texts]
+
+    for section_id, edited_text in edited_texts.items():
+        old_clauses = [c for c in segmented.objective_clauses if c.section_id == section_id]
+        old_components = [c for c in segmented.activity_components if c.section_id == section_id]
+
+        if len(old_clauses) + len(old_components) > 1:
+            original_section = sections_by_id.get(section_id)
+            if original_section is not None:
+                section_input = {**original_section, "content": edited_text}
+                usage: dict[str, int] = {}
+                try:
+                    sub_plan = await segment(db, [section_input], usage=usage)
+                    total_tokens += usage.get("tokens_used", 0)
+                    new_clauses.extend(sub_plan.objective_clauses)
+                    new_components.extend(sub_plan.activity_components)
+                    continue
+                except Exception as exc:  # noqa: BLE001 - tách đoạn lại hỏng không được crash batch (§9)
+                    logger.warning(
+                        "kg_lpv.repair.resegment_failed section_id=%s err=%s", section_id, type(exc).__name__,
+                    )
+
+        # Section chỉ 1 segment con, hoặc không tìm thấy section gốc, hoặc tách lại
+        # thất bại -> gán thẳng toàn văn (hành vi dự phòng an toàn).
+        new_clauses.extend(c.model_copy(update={"text": edited_text}) for c in old_clauses)
+        new_components.extend(c.model_copy(update={"text": edited_text}) for c in old_components)
+
+    return SegmentedPlan(objective_clauses=new_clauses, activity_components=new_components), total_tokens
 
 
 def _dependent_activity_sections(segmented: SegmentedPlan, objective_section_id: str) -> set[str]:

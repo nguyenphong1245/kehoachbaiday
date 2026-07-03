@@ -27,8 +27,11 @@ Lỗi cục bộ 1 phán xử LLM (`LlmJsonError`, `asyncio.TimeoutError`, lỗi
 kỳ) KHÔNG được crash job — bắt riêng từng lượt gọi, ghi 1 `Finding` `status="unjudged"`
 (cùng quy ước Task 5, §9 "an toàn khi hỏng"), tiếp tục các mục còn lại. Các phán xử
 LLM chạy qua `gemini_limiter.get_gemini_semaphore()` (giới hạn đồng thời, dùng chung
-với luồng sinh KHBD).
+với luồng sinh KHBD) VÀ `_N3_JUDGE_SEMAPHORE` (giới hạn riêng `N3_JUDGE_CONCURRENCY`
+lượt phán xử nguyên tử N3 đồng thời, §9 — tránh fan-out không giới hạn nếu 1 trục sau
+này được chạy song song thay vì tuần tự như hiện tại).
 """
+import asyncio
 import re
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,6 +40,7 @@ from app.core.logging import logger
 from app.modules.kg_lpv.config import (
     N3_C1_GROUNDING_THRESHOLD,
     N3_DEVICE_KEYWORDS,
+    N3_JUDGE_CONCURRENCY,
     N3_OBJECTIVE_ACTIVITY_MATCH_THRESHOLD,
 )
 from app.modules.kg_lpv.error_codes import ERROR_META, ErrorCode
@@ -68,6 +72,10 @@ _METHOD_NAME_PATTERN = re.compile(r"(?:phương pháp|kĩ thuật|kỹ thuật)\
 
 # Thứ tự chuẩn tiến trình 1 tiết học (trục 6, §7) — dùng chung với `segmenter._ACTIVITY_PREFIXES`.
 _STAGE_ORDER = ("khoi_dong", "hinh_thanh_kien_thuc", "luyen_tap", "van_dung")
+
+# §9: giới hạn riêng số phán xử nguyên tử N3 chạy đồng thời (độc lập với
+# `gemini_limiter.get_gemini_semaphore()` dùng chung toàn app).
+_N3_JUDGE_SEMAPHORE = asyncio.Semaphore(N3_JUDGE_CONCURRENCY)
 
 
 # =========================== Điều phối chung ===========================
@@ -605,11 +613,12 @@ def _group_by_activity(segmented: SegmentedPlan) -> dict[str, dict]:
 
 
 async def _atomic_judge(db: AsyncSession, prompt: str) -> tuple[dict | None, int, Exception | None]:
-    """Gọi `generate_json` (feature `kg_lpv_n3_judge`) qua semaphore giới hạn đồng
-    thời dùng chung (`gemini_limiter`). Bắt MỌI exception — hàm gọi quyết định cách
-    ghi nhận (finding `unjudged`)."""
+    """Gọi `generate_json` (feature `kg_lpv_n3_judge`) qua 2 lớp semaphore: giới hạn
+    đồng thời dùng chung toàn app (`gemini_limiter`) VÀ giới hạn riêng cho phán xử N3
+    (`_N3_JUDGE_SEMAPHORE`, §9). Bắt MỌI exception — hàm gọi quyết định cách ghi nhận
+    (finding `unjudged`)."""
     try:
-        async with get_gemini_semaphore():
+        async with _N3_JUDGE_SEMAPHORE, get_gemini_semaphore():
             data, tokens = await generate_json(db, FEATURE_KG_LPV_N3_JUDGE, prompt)
         return data, tokens, None
     except Exception as exc:  # noqa: BLE001 - 1 lượt LLM hỏng không được crash job (§9)

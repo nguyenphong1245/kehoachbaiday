@@ -9,9 +9,13 @@ frontend có một nguồn duy nhất hỏi trạng thái.
 nghiệp vụ thật (verify/jobs/report...) do các task sau bổ sung.
 """
 
+import csv
+import io
+import json
 from asyncio import create_task
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -429,3 +433,55 @@ async def apply_repair(
     logger.info("kg_lpv.repair.applied job_id=%s sections=%s", job_id, updated_ids)
 
     return ApplyResponse(section_ids=updated_ids)
+
+
+_EXPORT_CSV_FIELDNAMES = ["code", "branch", "truc", "section_id", "status", "explanation", "evidence", "created_at"]
+
+
+@router.get(
+    "/jobs/{job_id}/export",
+    dependencies=[Depends(require_kg_lpv)],
+)
+async def export_job_findings(
+    job_id: int,
+    format: str = Query("json", pattern="^(json|csv)$"),
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Xuất findings phục vụ gán nhãn chuyên gia bên ngoài (§6.3, §14) — owner-only.
+    `format=json` (mặc định) trả `list[dict]`; `format=csv` trả file CSV (BOM UTF-8
+    để Excel mở tiếng Việt đúng), 1 dòng / finding. `created_at` lấy từ
+    `job.created_at` (`KgLpvFinding` không có cột thời gian riêng của chính nó)."""
+    job = await _load_owned_job(db, job_id, current_user.id)
+
+    result = await db.execute(select(KgLpvFinding).where(KgLpvFinding.job_id == job_id))
+    findings = result.scalars().all()
+
+    created_at = job.created_at.isoformat() if job.created_at else None
+    rows = [
+        {
+            "code": f.code,
+            "branch": f.branch,
+            "truc": f.truc,
+            "section_id": f.section_id,
+            "status": f.status,
+            "explanation": f.explanation,
+            "evidence": json.dumps(f.evidence, ensure_ascii=False),
+            "created_at": created_at,
+        }
+        for f in findings
+    ]
+
+    if format == "csv":
+        buffer = io.StringIO()
+        buffer.write("﻿")  # BOM UTF-8 để Excel mở tiếng Việt đúng
+        writer = csv.DictWriter(buffer, fieldnames=_EXPORT_CSV_FIELDNAMES)
+        writer.writeheader()
+        writer.writerows(rows)
+        return StreamingResponse(
+            iter([buffer.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=kg_lpv_job_{job_id}_findings.csv"},
+        )
+
+    return rows

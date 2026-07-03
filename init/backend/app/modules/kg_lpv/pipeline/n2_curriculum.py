@@ -27,7 +27,6 @@ mục tiêu/hoạt động), KHÔNG bỏ qua lặng lẽ mà ghi nhận 1 `Findi
 toàn khi hỏng"). M6 `unjudged` KHÔNG được đưa vào `hoat_dong_loi_M` — chỉ M6
 `status="open"` (đã xác nhận) mới loại hoạt động khỏi vai trò bằng chứng N3.
 """
-import asyncio
 import re
 
 from sqlalchemy.ext.asyncio import AsyncSession

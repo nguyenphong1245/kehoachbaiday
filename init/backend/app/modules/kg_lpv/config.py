@@ -22,6 +22,10 @@ N2_NLC_PC_MATCH_THRESHOLD = 0.6  # M4: năng lực chung/phẩm chất phải kh
 N3_OBJECTIVE_ACTIVITY_MATCH_THRESHOLD = 0.5  # trục 1: mục tiêu <-> mục tiêu cục bộ của hoạt động coi là "hiện thực"
 N3_C1_GROUNDING_THRESHOLD = 0.3  # trục 4 (C1): tên NLa-NLc phải xuất hiện đủ trong nội dung/sản phẩm hoạt động
 
+# §9 Hiệu năng/chi phí: giới hạn số phán xử nguyên tử N3 (LLM_JUDGE) chạy đồng thời —
+# tránh fan-out không giới hạn khi 1 KHBD có nhiều hoạt động/mục tiêu cần phán xử.
+N3_JUDGE_CONCURRENCY = 5
+
 # trục 6 (C3) — từ khoá thiết bị dùng để so khớp "khai báo" (tổ chức thực hiện) với
 # "sử dụng thực tế" (nội dung/sản phẩm) trong CÙNG một hoạt động — danh sách tối
 # thiểu đủ dùng cho bộ dữ liệu mẫu; nhóm nghiên cứu mở rộng khi curate dữ liệu thật.

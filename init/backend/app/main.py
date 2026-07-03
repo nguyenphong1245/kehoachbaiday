@@ -72,6 +72,16 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Piston warmup failed to start: {e}")
 
+    # KG-LPV: đánh failed các job kẹt do backend restart giữa job (§13 rủi ro #5)
+    try:
+        if _settings.kg_lpv_enabled:
+            from app.modules.kg_lpv.pipeline.orchestrator import recover_stuck_jobs
+            recovered = await recover_stuck_jobs()
+            if recovered:
+                logger.warning(f"KG-LPV: recovered {recovered} stuck job(s) on startup")
+    except Exception as e:
+        logger.warning(f"KG-LPV stuck-job recovery failed: {e}")
+
     logger.info(" Application started")
 
     yield

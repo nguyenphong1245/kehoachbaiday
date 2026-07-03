@@ -17,7 +17,7 @@ from app.models.saved_lesson_plan import SavedLessonPlan
 from app.modules.kg_lpv import feature_flag as feature_flag_accessor
 from app.modules.kg_lpv.graph_client import graph_client
 from app.modules.kg_lpv.models import KgLpvFinding, KgLpvJob
-from app.modules.kg_lpv.pipeline import n2_curriculum, n3_pedagogy, repairer
+from app.modules.kg_lpv.pipeline import n2_curriculum, n3_pedagogy, repairer, segmenter
 from app.modules.kg_lpv.pipeline.repairer import repair
 from app.modules.kg_lpv.schemas import (
     ActivityComponentSegment,
@@ -382,6 +382,113 @@ async def test_apply_updates_only_approved_section(ready_kg_lpv, db_session, tea
     by_id = {s["section_id"]: s["content"] for s in plan.sections}
     assert by_id["muc_tieu"] == "Mới 1"
     assert by_id["khoi_dong"] == "Cũ 2"
+
+
+# =========================== (e) Task 9: section nhiều mệnh đề không bị trộn khi kiểm lại ===========================
+
+
+@pytest.mark.asyncio
+async def test_repair_reverify_does_not_mask_second_broken_clause_in_multi_clause_section(
+    db_session, teacher_user, monkeypatch
+):
+    """Correctness fix (carried từ review Task 8): 1 section `muc_tieu` có NHIỀU mệnh
+    đề — sửa đúng 1 mệnh đề (clause1) KHÔNG được làm "biến mất" lỗi của mệnh đề còn
+    lại (clause2, không nằm trong finding được sửa) khi kiểm lại. Nếu
+    `_rebuild_segmented_plan` còn gán NGUYÊN VĂN section đã sửa cho MỌI clause (lỗi
+    cũ), clause2 sẽ được đối chiếu M1 bằng văn bản đã BỊ TRỘN với clause1 (chứa đủ từ
+    khớp YCCĐ nhờ clause1) -> PASS giả, che lấp lỗi thật. Với bản sửa (tách lại RIÊNG
+    section qua segmenter khi có nhiều segment con), clause2 được đối chiếu bằng đúng
+    văn bản của chính nó -> vẫn trượt M1 -> re-verify PHẢI fail."""
+    yccd = {
+        "ma_dinh_danh": "YCCD-1", "ten": "Trình bày khái niệm mạng máy tính",
+        "muc_nhan_thuc": {"bac": 1},
+    }
+    lesson_ctx = LessonContext(yccd=[yccd])
+    monkeypatch.setattr(graph_client, "get_lesson_context", lambda lesson_id, grade: lesson_ctx)
+
+    monkeypatch.setattr(
+        repairer, "generate_json",
+        AsyncMock(return_value=(
+            {"after": "Trình bày được khái niệm mạng máy tính. Thực hành lắp ráp máy tính để bàn."}, 6,
+        )),
+    )
+    # An toàn cho M2 (LLM_JUDGE) của cả 2 mệnh đề — không phải trọng tâm test này.
+    monkeypatch.setattr(
+        n2_curriculum, "generate_json",
+        AsyncMock(return_value=({"verdict": "do_duoc", "evidence_refs": [], "explanation": "OK"}, 0)),
+    )
+    monkeypatch.setattr(
+        segmenter, "generate_json",
+        AsyncMock(return_value=(
+            {
+                "objective_clauses": [
+                    {
+                        "segment_id": "muc_tieu__r1", "section_id": "muc_tieu", "loai": "kien_thuc",
+                        "text": "Trình bày được khái niệm mạng máy tính.",
+                    },
+                    {
+                        "segment_id": "muc_tieu__r2", "section_id": "muc_tieu", "loai": "kien_thuc",
+                        "text": " Thực hành lắp ráp máy tính để bàn.",
+                    },
+                ],
+                "activity_components": [],
+            },
+            5,
+        )),
+    )
+
+    sections = [
+        {
+            "section_id": "muc_tieu", "section_type": "muc_tieu", "title": "Mục tiêu",
+            "content": "Biết khái niệm mạng. Thực hành lắp ráp máy tính để bàn.",
+        },
+    ]
+    plan = SavedLessonPlan(user_id=teacher_user.id, title="KHBD test", content="c", sections=sections)
+    db_session.add(plan)
+    await db_session.commit()
+    await db_session.refresh(plan)
+
+    # 2 mệnh đề mục tiêu CÙNG section_id "muc_tieu" + 1 hoạt động (không thuộc chuỗi
+    # tiến trình chuẩn, chỉ có thành phần muc_tieu) hiện thực hoá CẢ HAI mệnh đề — để
+    # trục 1 (đứt chuỗi mục tiêu-hoạt động) không gây nhiễu kết quả, giữ test tập
+    # trung đúng vào M1.
+    segments = SegmentedPlan(
+        objective_clauses=[
+            _obj("muc_tieu__1", "kien_thuc", "Biết khái niệm mạng."),
+            _obj("muc_tieu__2", "kien_thuc", "Thực hành lắp ráp máy tính để bàn."),
+        ],
+        activity_components=[
+            _act(
+                "hd_evidence__muc_tieu", "muc_tieu",
+                "Trình bày được khái niệm mạng máy tính và thực hành lắp ráp máy tính để bàn.",
+                "hd_evidence",
+            ),
+        ],
+    ).model_dump(mode="json")
+    job = KgLpvJob(
+        user_id=teacher_user.id, saved_lesson_plan_id=plan.id, status="done", progress=100, segments=segments,
+    )
+    db_session.add(job)
+    await db_session.commit()
+    await db_session.refresh(job)
+
+    finding = KgLpvFinding(
+        job_id=job.id, code="M1", branch="N2", section_id="muc_tieu",
+        evidence=[{"ma_dinh_danh": "YCCD-1"}], explanation="Mục tiêu kiến thức lệch yêu cầu cần đạt.",
+        status="open",
+    )
+    db_session.add(finding)
+    await db_session.commit()
+    await db_session.refresh(finding)
+
+    diffs = await repair(db_session, job, [finding])
+
+    assert len(diffs) == 1
+    await db_session.refresh(finding)
+    # clause2 ("Thực hành lắp ráp máy tính để bàn.") KHÔNG nằm trong finding được sửa,
+    # vẫn trượt M1 khi được tách RIÊNG đúng -> kiểm lại phải fail, KHÔNG được coi là
+    # "repaired" giả do bị trộn văn bản với clause1 đã sửa.
+    assert finding.status == "reverified_fail"
 
 
 @pytest.mark.asyncio

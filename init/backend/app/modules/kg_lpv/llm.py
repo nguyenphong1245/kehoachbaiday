@@ -74,7 +74,7 @@ async def generate_json(
     """
     model_name = await get_effective_model_for_feature(db, feature_key)
     model = _build_model(model_name)
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     total_tokens = 0
     last_error: Exception | None = None

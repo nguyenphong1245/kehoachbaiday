@@ -495,6 +495,34 @@ async def test_n3_verify_aggregates_findings_from_multiple_axes(monkeypatch):
     assert c4[0].section_id == "muc_tieu"
 
 
+async def test_atomic_judge_bounds_concurrency_to_n3_judge_concurrency(monkeypatch):
+    """Task 9 §9: `_atomic_judge` giới hạn số phán xử N3 chạy đồng thời tối đa
+    `N3_JUDGE_CONCURRENCY` — kể cả khi bị fan-out (gather) không giới hạn từ caller.
+    Loại bỏ `get_gemini_semaphore` (giới hạn dùng chung toàn app, size 4) khỏi phép
+    thử để cô lập đúng semaphore riêng của N3 vừa thêm."""
+    monkeypatch.setattr(n3_pedagogy, "get_gemini_semaphore", lambda: asyncio.Semaphore(1000))
+
+    current = 0
+    max_seen = 0
+    lock = asyncio.Lock()
+
+    async def fake_generate_json(db, feature_key, prompt):
+        nonlocal current, max_seen
+        async with lock:
+            current += 1
+            max_seen = max(max_seen, current)
+        await asyncio.sleep(0.05)
+        async with lock:
+            current -= 1
+        return {"verdict": "dat"}, 1
+
+    monkeypatch.setattr(n3_pedagogy, "generate_json", fake_generate_json)
+
+    await asyncio.gather(*[n3_pedagogy._atomic_judge(None, f"prompt-{i}") for i in range(20)])
+
+    assert max_seen == n3_pedagogy.N3_JUDGE_CONCURRENCY
+
+
 async def test_llm_json_error_does_not_propagate_and_records_unjudged(monkeypatch):
     """Finding 1+2 (quy ước Task 5): lỗi phán xử LLM (LlmJsonError/TimeoutError/lỗi API)
     KHÔNG được crash n3_verify — phải ghi nhận finding status="unjudged". Hoạt động đủ

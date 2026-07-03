@@ -247,6 +247,74 @@ Backend mount API version tại `/api/v1` và hiện có các nhóm route chính
 
 WebSocket được mount trực tiếp ngoài prefix API để phục vụ cộng tác realtime.
 
+## KG-LPV — Kiểm chứng KHBD
+
+Module kiểm chứng tự động kế hoạch bài dạy (KHBD) do AI sinh ra, đối chiếu với một đồ thị
+tri thức Neo4j **riêng biệt** (chương trình GDPT 2018, TT 02/2025, CV 3456/5512...). Kiểm
+chứng chạy nền theo 3 nhánh:
+
+- **N1 — Định danh**: so khớp thuật toán (không dùng LLM) KHBD với đúng khối lớp/chủ đề/bài
+  học trong cây chương trình → mã lỗi `D1`.
+- **N2 — Đối chiếu chương trình**: mục tiêu, năng lực, phẩm chất, năng lực số khai báo có
+  đúng và tồn tại trong chương trình chuẩn không → mã lỗi `M1`–`M6`.
+- **N3 — Nhất quán sư phạm**: 6 trục nhất quán (mục tiêu ↔ hoạt động ↔ sản phẩm ↔ đánh giá,
+  mức nhận thức, phương pháp/kĩ thuật dạy học, tiến trình & điều kiện triển khai) → mã lỗi
+  `C1`–`C8`.
+
+Tổng cộng **15 mã lỗi**, mỗi phát hiện đều kèm bằng chứng truy vết về đồ thị (mã văn bản, số
+ký hiệu, ngày hiệu lực, vị trí trang) và giải thích tiếng Việt. Giáo viên có thể xem sổ lỗi,
+bác bỏ từng phát hiện, hoặc yêu cầu sửa cục bộ + xem diff trước khi áp dụng vào KHBD.
+
+### Bật/tắt 3 tầng
+
+Module tắt hoàn toàn theo mặc định và có thể bật/tắt độc lập ở 3 tầng:
+
+| Tầng | Cơ chế | Cần restart? |
+|---|---|---|
+| 1. Hạ tầng | Docker Compose profile `kg-lpv` cho service `neo4j-kglpv` | — (chọn lúc `docker compose up`) |
+| 2. Tiến trình | Env `KG_LPV_ENABLED=true` trong `init/backend/.env` | Có |
+| 3. Runtime | Cờ `feature_flags` (key `kg_lpv`) qua trang quản trị hoặc `PUT /api/v1/admin/feature-flags/kg_lpv` | Không |
+
+Khi tắt (ở bất kỳ tầng nào): không kết nối đồ thị KG-LPV, các route `/api/v1/kg-lpv/*`
+không hoạt động, frontend ẩn toàn bộ UI liên quan — ứng dụng chính không bị ảnh hưởng.
+
+### Đồ thị KG-LPV riêng
+
+Đồ thị KG-LPV là một instance Neo4j **tách biệt** khỏi Neo4j chính của ứng dụng (nội dung
+bài học, cổng `7474`/`7687`):
+
+- Browser: `http://localhost:7475`
+- Bolt: `bolt://localhost:7688`
+- Chỉ đọc (read-only) lúc runtime; dữ liệu chỉ được ghi offline qua script nạp liệu.
+
+Khởi động đồ thị (không chạy nếu không truyền `--profile kg-lpv`):
+
+```bash
+cd init
+docker compose --profile kg-lpv up -d neo4j-kglpv
+```
+
+Biến môi trường trong `init/backend/.env`: `KG_LPV_ENABLED`, `KG_LPV_NEO4J_URI`,
+`KG_LPV_NEO4J_USERNAME`, `KG_LPV_NEO4J_PASSWORD`, `KG_LPV_NEO4J_DATABASE`.
+
+### Nạp dữ liệu chuẩn vào đồ thị
+
+N2/N3 chỉ đưa ra được phán xử có căn cứ khi đồ thị đã có dữ liệu chương trình. Script nạp
+liệu nằm ở `init/backend/scripts/kg_lpv/` (xem `scripts/kg_lpv/README.md` để biết đầy đủ
+lược đồ nạp liệu):
+
+```bash
+cd init/backend
+cypher-shell -a bolt://localhost:7688 -u neo4j -p <mật khẩu> -f scripts/kg_lpv/schema.cypher
+python scripts/kg_lpv/import_kg.py            # nạp scripts/kg_lpv/samples/ (dữ liệu mẫu)
+python scripts/kg_lpv/validate_graph.py       # kiểm 100% vết xuất xứ + truy vấn mẫu
+```
+
+`import_kg.py` là idempotent (dùng `MERGE`) và từ chối mọi bản ghi thiếu vết xuất xứ (`ma_nguon`,
+`so_ky_hieu`, `ngay_hieu_luc`, `vi_tri_trang`). Nếu đồ thị chưa có dữ liệu hoặc mất kết nối,
+N2/N3 trả về nhiều phát hiện "không phán xử được" thay vì báo lỗi sai — module vẫn chạy được,
+chỉ thiếu căn cứ đối chiếu.
+
 ## Bảo mật và cấu hình production
 
 - Không commit file `.env` hoặc khóa API thật lên GitHub.

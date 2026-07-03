@@ -6,10 +6,20 @@
 hiện chỉ là stub typed qua `run_n3`).
 Không bao giờ để exception thoát ra ngoài `run_job` — job nền không được làm
 sập tiến trình; mọi lỗi được ghi vào `job.error_message` và `status='failed'`.
+
+`recover_stuck_jobs()` (§9, §13 rủi ro #5) — gọi 1 lần lúc khởi động backend
+(`app.main.lifespan`): job kẹt ở trạng thái không kết thúc do backend restart
+giữa job (mất asyncio task nền) được đánh `failed` thay vì treo vô hạn.
+
+Mỗi lần chạy `run_job`, thời gian (ms, đo bằng `time.monotonic`) của 3 bước
+chính được cộng dồn vào `job.stats["timings"]` (`segment_ms`, `n1n2_ms`,
+`n3_ms`, §9 Hiệu năng/chi phí) — phục vụ đo/đối chiếu mục tiêu ≤ 3 phút/job.
 """
 import asyncio
-from datetime import datetime, timezone
+import time
+from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import logger
@@ -28,9 +38,33 @@ _PROGRESS_AFTER_SEGMENTING = 10
 _PROGRESS_AFTER_N1_N2 = 70
 _PROGRESS_DONE = 100
 
+# Job ở 1 trong các trạng thái này CHƯA kết thúc — nếu kẹt quá lâu (backend restart
+# giữa job), startup recovery đánh `failed` (§13 rủi ro #5).
+_STUCK_JOB_STATUSES = ("pending", "segmenting", "verifying", "verifying_n3", "repairing", "re_verifying")
+_STUCK_JOB_THRESHOLD_MINUTES = 15
+_STUCK_JOB_MESSAGE = "gián đoạn hệ thống, vui lòng chạy lại"
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+async def recover_stuck_jobs() -> int:
+    """Đánh `failed` mọi job KG-LPV kẹt (status chưa kết thúc, `created_at` đã quá
+    `_STUCK_JOB_THRESHOLD_MINUTES` phút) — gọi 1 lần lúc khởi động (§9: 1 UPDATE
+    duy nhất, rẻ). Trả số job đã được đánh dấu."""
+    threshold = _utcnow() - timedelta(minutes=_STUCK_JOB_THRESHOLD_MINUTES)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            update(KgLpvJob)
+            .where(KgLpvJob.status.in_(_STUCK_JOB_STATUSES), KgLpvJob.created_at < threshold)
+            .values(status="failed", error_message=_STUCK_JOB_MESSAGE, finished_at=_utcnow())
+        )
+        await db.commit()
+        recovered = result.rowcount or 0
+        if recovered:
+            logger.warning("kg_lpv.orchestrator.recovered_stuck_jobs count=%d", recovered)
+        return recovered
 
 
 async def run_job(job_id: int) -> None:
@@ -52,12 +86,17 @@ async def run_job(job_id: int) -> None:
 
             sections = plan.sections or []
             usage: dict[str, int] = {}
+            t0 = time.monotonic()
             segmented = await segment(db, sections, usage=usage)
+            segment_ms = int((time.monotonic() - t0) * 1000)
 
             tokens_used = usage.get("tokens_used", 0)
             job.segments = segmented.model_dump(mode="json")
             stats = dict(job.stats or {})
             stats["tokens"] = int(stats.get("tokens", 0)) + tokens_used
+            timings = dict(stats.get("timings") or {})
+            timings["segment_ms"] = segment_ms
+            stats["timings"] = timings
             job.stats = stats
             await db.commit()
 
@@ -145,10 +184,12 @@ async def run_verification(db: AsyncSession, job: KgLpvJob, segmented: Segmented
     lesson_ctx: LessonContext = graph_client.get_lesson_context(identity.get("lesson_id"), identity.get("grade"))
 
     n2_usage: dict[str, int] = {}
+    t0 = time.monotonic()
     n1_findings, (n2_findings, hoat_dong_loi_m) = await asyncio.gather(
         asyncio.to_thread(n1_verify, identity, graph_client),
         n2_verify(db, segmented, lesson_ctx, graph_client, usage=n2_usage),
     )
+    n1n2_ms = int((time.monotonic() - t0) * 1000)
 
     persisted = _persist_findings(db, job.id, [*n1_findings, *n2_findings])
 
@@ -157,6 +198,9 @@ async def run_verification(db: AsyncSession, job: KgLpvJob, segmented: Segmented
     stats["tokens"] = int(stats.get("tokens", 0)) + n2_tokens
     stats["findings_n1"] = len(n1_findings)
     stats["findings_n2"] = len(n2_findings)
+    timings = dict(stats.get("timings") or {})
+    timings["n1n2_ms"] = n1n2_ms
+    stats["timings"] = timings
     job.stats = stats
     job.progress = _PROGRESS_AFTER_N1_N2
     await db.commit()
@@ -174,13 +218,18 @@ async def run_verification(db: AsyncSession, job: KgLpvJob, segmented: Segmented
     await db.commit()
 
     n3_usage: dict[str, int] = {}
+    t0 = time.monotonic()
     n3_findings = await run_n3(db, job, segmented, lesson_ctx, hoat_dong_loi_m, usage=n3_usage)
+    n3_ms = int((time.monotonic() - t0) * 1000)
     persisted += _persist_findings(db, job.id, n3_findings)
 
     n3_tokens = n3_usage.get("tokens_used", 0)
     stats = dict(job.stats or {})
     stats["tokens"] = int(stats.get("tokens", 0)) + n3_tokens
     stats["findings_n3"] = len(n3_findings)
+    timings = dict(stats.get("timings") or {})
+    timings["n3_ms"] = n3_ms
+    stats["timings"] = timings
     job.stats = stats
 
     job.status = "done"
