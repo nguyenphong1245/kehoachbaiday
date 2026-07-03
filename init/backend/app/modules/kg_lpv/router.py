@@ -242,3 +242,30 @@ async def get_job_report(
         unjudged=unjudged,
         summary={**summary, "total_confirmed": len(confirmed), "total_unjudged": len(unjudged)},
     )
+
+
+@router.post(
+    "/findings/{finding_id}/dismiss",
+    response_model=FindingOut,
+    dependencies=[Depends(require_kg_lpv)],
+)
+async def dismiss_finding(
+    finding_id: int,
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> FindingOut:
+    """Giáo viên bác bỏ 1 phát hiện (quyền tự chủ, §8) — owner-only qua job.user_id."""
+    finding = await db.get(KgLpvFinding, finding_id)
+    if finding is not None:
+        job = await db.get(KgLpvJob, finding.job_id)
+    if finding is None or job is None or job.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy phát hiện",
+        )
+
+    finding.status = "dismissed"
+    await db.commit()
+    await db.refresh(finding)
+
+    return FindingOut.model_validate(finding)

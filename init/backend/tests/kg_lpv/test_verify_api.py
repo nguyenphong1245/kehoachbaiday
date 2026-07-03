@@ -9,6 +9,7 @@ from app.models.feature_flag import FeatureFlag
 from app.models.saved_lesson_plan import SavedLessonPlan
 from app.modules.kg_lpv import feature_flag as feature_flag_accessor
 from app.modules.kg_lpv.graph_client import graph_client
+from app.modules.kg_lpv.models import KgLpvFinding, KgLpvJob
 from app.modules.kg_lpv.pipeline import n2_curriculum
 from tests.conftest import TestingSessionLocal
 from tests.helpers.auth_helpers import auth_get, auth_post
@@ -16,6 +17,7 @@ from tests.helpers.factories import create_teacher
 
 VERIFY_URL = "/api/v1/kg-lpv/verify"
 JOB_URL = "/api/v1/kg-lpv/jobs/{job_id}"
+DISMISS_URL = "/api/v1/kg-lpv/findings/{finding_id}/dismiss"
 
 _SECTIONS = [
     {
@@ -273,3 +275,59 @@ async def test_get_job_non_owned_returns_404(ready_kg_lpv, db_session, roles, mo
 
     resp2 = await auth_get(ready_kg_lpv, JOB_URL.format(job_id=job_id), other.id)
     assert resp2.status_code == 404
+
+
+async def _create_job_with_finding(db_session: AsyncSession, user_id: int, plan_id: int) -> int:
+    job = KgLpvJob(user_id=user_id, saved_lesson_plan_id=plan_id, status="done", progress=100)
+    db_session.add(job)
+    await db_session.commit()
+    await db_session.refresh(job)
+
+    finding = KgLpvFinding(
+        job_id=job.id,
+        code="D1",
+        branch="N1",
+        section_id="muc_tieu",
+        evidence=[{"ma_nguon": "CT2018", "trich_dan": "..."}],
+        explanation="Sai định danh bài học",
+        status="open",
+    )
+    db_session.add(finding)
+    await db_session.commit()
+    await db_session.refresh(finding)
+    return finding.id
+
+
+@pytest.mark.asyncio
+async def test_dismiss_finding_owner_sets_status_dismissed(ready_kg_lpv, db_session, teacher_user):
+    plan = SavedLessonPlan(
+        user_id=teacher_user.id, title="KHBD test", content="noi dung", sections=_SECTIONS,
+    )
+    db_session.add(plan)
+    await db_session.commit()
+    await db_session.refresh(plan)
+
+    finding_id = await _create_job_with_finding(db_session, teacher_user.id, plan.id)
+
+    resp = await auth_post(ready_kg_lpv, DISMISS_URL.format(finding_id=finding_id), teacher_user.id)
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "dismissed"
+
+
+@pytest.mark.asyncio
+async def test_dismiss_finding_non_owner_returns_404(ready_kg_lpv, db_session, roles):
+    owner = await create_teacher(db_session, roles, email="owner3@test.com")
+    other = await create_teacher(db_session, roles, email="other3@test.com")
+    await db_session.commit()
+
+    plan = SavedLessonPlan(
+        user_id=owner.id, title="KHBD", content="noi dung", sections=_SECTIONS,
+    )
+    db_session.add(plan)
+    await db_session.commit()
+    await db_session.refresh(plan)
+
+    finding_id = await _create_job_with_finding(db_session, owner.id, plan.id)
+
+    resp = await auth_post(ready_kg_lpv, DISMISS_URL.format(finding_id=finding_id), other.id)
+    assert resp.status_code == 404

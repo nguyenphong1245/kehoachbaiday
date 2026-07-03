@@ -61,6 +61,7 @@ interface LessonPlanOutputProps {
   onBack?: () => void;
   savedLessonPlanId?: string;
   hideFullscreen?: boolean;
+  onSaved?: (savedLessonPlanId: string) => void;
 }
 
 // ============== Turndown helpers ==============
@@ -758,6 +759,7 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
   onBack,
   savedLessonPlanId,
   hideFullscreen,
+  onSaved,
 }) => {
   const fullSectionTitle = "Nội dung";
 
@@ -2669,6 +2671,7 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
         });
         // Store the ID so subsequent saves update instead of creating new
         setCurrentSavedId(String(response.id));
+        onSaved?.(String(response.id));
         successText = response.message;
 
         // Auto-create shared materials (worksheets + quizzes) — only on first save

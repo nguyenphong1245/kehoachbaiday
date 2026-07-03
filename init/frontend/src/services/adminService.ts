@@ -128,6 +128,26 @@ export const updateAIModelSettings = async (
   return data;
 };
 
+// ============== FEATURE FLAGS ==============
+
+export interface FeatureFlag {
+  key: string;
+  enabled: boolean;
+  config: Record<string, unknown> | null;
+  updated_by: number | null;
+  updated_at: string;
+}
+
+export const getFeatureFlags = async (): Promise<FeatureFlag[]> => {
+  const { data } = await api.get("/admin/feature-flags");
+  return data;
+};
+
+export const setKgLpvEnabled = async (enabled: boolean): Promise<FeatureFlag> => {
+  const { data } = await api.put("/admin/feature-flags/kg_lpv", { enabled });
+  return data;
+};
+
 // ============== GUIDE CARDS ==============
 
 export interface GuideCardPublic {

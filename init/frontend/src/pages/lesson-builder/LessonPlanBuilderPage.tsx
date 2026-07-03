@@ -52,6 +52,10 @@ import {
   type TeachingRule,
 } from "@/services/teachingRuleService";
 import lessonDocIcon from "@/assets/tl.svg";
+import { useKgLpvStatus } from "@/hooks/useKgLpvStatus";
+import { useKgLpvJob } from "@/hooks/useKgLpvJob";
+import { VerifyButton } from "@/components/kg-lpv/VerifyButton";
+import { VerificationPanel } from "@/components/kg-lpv/VerificationPanel";
 
 type PageStep = "select" | "configure" | "result";
 
@@ -86,6 +90,27 @@ export const LessonPlanBuilderPage: React.FC = () => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [activeModal, setActiveModal] = useState<SettingsModal>(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  // KG-LPV: kiểm chứng KHBD bằng đồ thị tri thức (chỉ khả dụng sau khi đã lưu)
+  const kgLpvStatus = useKgLpvStatus();
+  const kgLpvJob = useKgLpvJob();
+  const [kgLpvPanelOpen, setKgLpvPanelOpen] = useState(false);
+  const [savedPlanId, setSavedPlanId] = useState<string | null>(null);
+
+  const handleVerify = () => {
+    if (!savedPlanId) return;
+    setKgLpvPanelOpen(true);
+    kgLpvJob.start(Number(savedPlanId));
+  };
+
+  const handleLocateSection = (sectionId: string) => {
+    const el = document.getElementById(sectionId);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    } else {
+      console.log("kg-lpv: không tìm thấy anchor cho section", sectionId);
+    }
+  };
 
   // Password form state
   const [oldPassword, setOldPassword] = useState("");
@@ -302,6 +327,7 @@ export const LessonPlanBuilderPage: React.FC = () => {
     setError(null);
     setCurrentStep("configure");
     setIsMobileSidebarOpen(false);
+    setSavedPlanId(null);
   }, []);
 
   const handleActivitiesChange = useCallback((newActivities: ActivityConfig[]) => {
@@ -394,6 +420,7 @@ export const LessonPlanBuilderPage: React.FC = () => {
     setGeneratedResult(null);
     setError(null);
     setSidebarResetKey((k) => k + 1);
+    setSavedPlanId(null);
   };
 
   const handleBackToConfigure = () => {
@@ -449,6 +476,17 @@ export const LessonPlanBuilderPage: React.FC = () => {
 
             {/* Actions */}
             <div className="flex items-center gap-1 flex-shrink-0">
+              {savedPlanId && (
+                <>
+                  <VerifyButton
+                    enabled={kgLpvStatus.enabled}
+                    availability={kgLpvStatus.availability}
+                    loading={kgLpvJob.loading}
+                    onClick={handleVerify}
+                  />
+                  <div className="w-px h-5 bg-stone-200 mx-1 hidden md:block" />
+                </>
+              )}
               <button
                 onClick={() => window.open("/lesson-builder/saved", "_blank")}
                 className="hidden md:inline-flex px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
@@ -745,10 +783,25 @@ export const LessonPlanBuilderPage: React.FC = () => {
               onExportPDF={() => {}}
               activities={activities}
               onBack={handleBackToConfigure}
+              onSaved={setSavedPlanId}
             />
           )}
         </main>
       </div>
+
+      {/* KG-LPV: panel kiểm chứng KHBD (ẩn khi module tắt) */}
+      <VerificationPanel
+        open={kgLpvPanelOpen}
+        onClose={() => setKgLpvPanelOpen(false)}
+        job={kgLpvJob.job}
+        report={kgLpvJob.report}
+        progress={kgLpvJob.progress}
+        phase={kgLpvJob.phase}
+        loading={kgLpvJob.loading}
+        error={kgLpvJob.error}
+        onDismiss={kgLpvJob.dismiss}
+        onLocate={handleLocateSection}
+      />
 
       {/* Backdrop */}
       {showUserMenu && (

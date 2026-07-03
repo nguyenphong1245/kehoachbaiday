@@ -12,6 +12,10 @@ import { getSavedLessonPlan } from "@/services/lessonBuilderService";
 import type { SavedLessonPlan, LessonPlanSection } from "@/types/lessonBuilder";
 import { LessonPlanOutput } from "@/components/lesson-builder/LessonPlanOutput";
 import { usePageTitle } from "@/hooks/usePageTitle";
+import { useKgLpvStatus } from "@/hooks/useKgLpvStatus";
+import { useKgLpvJob } from "@/hooks/useKgLpvJob";
+import { VerifyButton } from "@/components/kg-lpv/VerifyButton";
+import { VerificationPanel } from "@/components/kg-lpv/VerificationPanel";
 
 const ViewSavedLessonPlanPage: React.FC = () => {
   usePageTitle("Xem KHBD");
@@ -21,6 +25,26 @@ const ViewSavedLessonPlanPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
+
+  // KG-LPV: kiểm chứng KHBD bằng đồ thị tri thức
+  const kgLpvStatus = useKgLpvStatus();
+  const kgLpvJob = useKgLpvJob();
+  const [kgLpvPanelOpen, setKgLpvPanelOpen] = useState(false);
+
+  const handleVerify = () => {
+    if (!lessonPlan) return;
+    setKgLpvPanelOpen(true);
+    kgLpvJob.start(lessonPlan.id);
+  };
+
+  const handleLocateSection = (sectionId: string) => {
+    const el = document.getElementById(sectionId);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    } else {
+      console.log("kg-lpv: không tìm thấy anchor cho section", sectionId);
+    }
+  };
 
   useEffect(() => {
     const fetchLessonPlan = async () => {
@@ -74,6 +98,30 @@ const ViewSavedLessonPlanPage: React.FC = () => {
 
   return (
     <div className="h-screen flex flex-col bg-stone-50 dark:bg-stone-900">
+      {/* KG-LPV: nút kiểm chứng KHBD (ẩn khi module tắt) */}
+      {!isLoading && lessonPlan && (
+        <div className="fixed top-3 right-3 z-30">
+          <VerifyButton
+            enabled={kgLpvStatus.enabled}
+            availability={kgLpvStatus.availability}
+            loading={kgLpvJob.loading}
+            onClick={handleVerify}
+          />
+        </div>
+      )}
+      <VerificationPanel
+        open={kgLpvPanelOpen}
+        onClose={() => setKgLpvPanelOpen(false)}
+        job={kgLpvJob.job}
+        report={kgLpvJob.report}
+        progress={kgLpvJob.progress}
+        phase={kgLpvJob.phase}
+        loading={kgLpvJob.loading}
+        error={kgLpvJob.error}
+        onDismiss={kgLpvJob.dismiss}
+        onLocate={handleLocateSection}
+      />
+
       {/* Content Area */}
       <main className="flex-1 overflow-y-auto bg-stone-100 dark:bg-stone-900 p-0">
         {/* Loading */}
