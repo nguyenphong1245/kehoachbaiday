@@ -1,15 +1,26 @@
-"""Test POST /verify + GET /jobs/{id}: tạo job, trừ/kiểm token, chạy nền, poll trạng thái."""
+"""Test tích hợp orchestrator: N1 ‖ N2 chạy song song, sổ lỗi persist, job 'done'.
+
+Mock graph + genai hoàn toàn — không Neo4j/Gemini thật. Theo pattern Task 3
+(`test_verify_api.py`): patch `router.create_task` cục bộ (không patch
+`asyncio.create_task` toàn cục) và trỏ `orchestrator.AsyncSessionLocal` sang
+sessionmaker DB test để job nền không giữ kết nối pooled sống, tránh treo tiến trình.
+"""
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.feature_flag import FeatureFlag
 from app.models.saved_lesson_plan import SavedLessonPlan
 from app.modules.kg_lpv import feature_flag as feature_flag_accessor
+from app.modules.kg_lpv.error_codes import ErrorCode, VerificationBranch
 from app.modules.kg_lpv.graph_client import graph_client
+from app.modules.kg_lpv.llm import LlmJsonError
+from app.modules.kg_lpv.models import KgLpvFinding
 from app.modules.kg_lpv.pipeline import n2_curriculum
+from app.modules.kg_lpv.schemas import LessonContext
 from tests.conftest import TestingSessionLocal
 from tests.helpers.auth_helpers import auth_get, auth_post
 from tests.helpers.factories import create_teacher
@@ -28,11 +39,11 @@ _SECTIONS = [
         "section_id": "khoi_dong",
         "section_type": "khoi_dong",
         "title": "Khởi động",
-        "content": "Mục tiêu: dẫn nhập.",
+        "content": "Mạng máy tính chỉ tồn tại trên thiết bị di động hiện đại nhất.",
     },
 ]
 
-_LLM_RESPONSE = {
+_SEGMENTATION_RESPONSE = {
     "objective_clauses": [
         {
             "segment_id": "muc_tieu__1",
@@ -43,13 +54,19 @@ _LLM_RESPONSE = {
     ],
     "activity_components": [
         {
-            "segment_id": "khoi_dong__muc_tieu",
+            "segment_id": "khoi_dong__noi_dung",
             "section_id": "khoi_dong",
-            "component": "muc_tieu",
-            "text": "Mục tiêu: dẫn nhập.",
+            "component": "noi_dung",
+            "text": "Mạng máy tính chỉ tồn tại trên thiết bị di động hiện đại nhất.",
         },
     ],
 }
+
+_LESSON_CTX = LessonContext(
+    lesson=None,
+    yccd=[],  # rỗng -> M1 "không có YCCĐ" chắc chắn xảy ra, không cần fuzzy
+    dong_tu_nhan_thuc={"do_duoc": [{"dong_tu": "trình bày được", "bac": 1}], "khong_do_duoc": []},
+)
 
 
 @pytest.fixture(autouse=True)
@@ -75,7 +92,6 @@ async def _set_kg_lpv_flag(db_session: AsyncSession, enabled: bool) -> None:
 
 @pytest.fixture
 async def kg_lpv_client():
-    """Client dùng app build lại với KG_LPV_ENABLED=true (mô phỏng 'restart' tầng 2)."""
     import os
 
     from app.core.config import get_settings
@@ -104,26 +120,12 @@ async def kg_lpv_client():
 
 @pytest.fixture
 async def ready_kg_lpv(kg_lpv_client: AsyncClient, db_session, monkeypatch):
-    """DB flag ON + đồ thị healthy — sẵn sàng gọi các endpoint nghiệp vụ."""
     await _set_kg_lpv_flag(db_session, True)
     monkeypatch.setattr(graph_client, "is_healthy", lambda force=False: True)
     return kg_lpv_client
 
 
 def _capture_create_task(monkeypatch):
-    """Chặn create_task trong router để lấy coroutine job nền, await trực tiếp
-    trong test (thay vì chạy song song không kiểm soát được).
-
-    QUAN TRỌNG: chỉ patch tên `create_task` cục bộ của module router (được
-    import theo kiểu `from asyncio import create_task`), KHÔNG patch
-    `asyncio.create_task` toàn cục — asyncio module là singleton dùng chung
-    cho cả tiến trình, và SQLAlchemy async session tự dùng `asyncio.create_task`
-    nội bộ khi đóng session (`AsyncSession.__aexit__` -> `asyncio.shield(...)`).
-    Patch toàn cục khiến việc đóng session ném TypeError, session không đóng
-    sạch, giữ transaction "idle in transaction" và khoá bảng — làm treo cả
-    tiến trình pytest khi fixture dọn dẹp DB (drop_all) chờ khoá không bao giờ
-    được giải phóng.
-    """
     captured: list = []
 
     def _fake_create_task(coro, *args, **kwargs):
@@ -135,56 +137,32 @@ def _capture_create_task(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_verify_owned_plan_returns_202_with_job_id(
+async def test_orchestrator_persists_findings_from_both_n1_and_n2_and_reaches_done(
     ready_kg_lpv, db_session, teacher_user, monkeypatch
 ):
-    plan = SavedLessonPlan(
-        user_id=teacher_user.id, title="KHBD test", content="noi dung", sections=_SECTIONS,
-    )
-    db_session.add(plan)
-    await db_session.commit()
-
-    captured = _capture_create_task(monkeypatch)
-    with patch(
-        "app.modules.kg_lpv.pipeline.segmenter.generate_json",
-        new=AsyncMock(return_value=(_LLM_RESPONSE, 42)),
-    ):
-        resp = await auth_post(
-            ready_kg_lpv, VERIFY_URL, teacher_user.id, json={"lesson_plan_id": plan.id}
-        )
-
-    assert resp.status_code == 202
-    body = resp.json()
-    assert "job_id" in body
-    assert len(captured) == 1
-    # Job nền chưa được chạy trong test này — đóng coroutine để tránh cảnh báo
-    # "coroutine was never awaited" và rò rỉ tài nguyên.
-    captured[0].close()
-
-
-@pytest.mark.asyncio
-async def test_verify_job_reaches_done_with_progress_100(
-    ready_kg_lpv, db_session, teacher_user, monkeypatch
-):
-    # run_job() mở session riêng qua AsyncSessionLocal (app.db.session) — đó là
-    # engine PRODUCTION có pool (pool_size=20), không phải engine test NullPool.
-    # Khi test await trực tiếp coroutine này, các kết nối pooled không bao giờ
-    # được giải phóng và giữ event loop sống -> tiến trình pytest treo. Trỏ
-    # orchestrator sang sessionmaker của DB test (NullPool, dispose sạch).
     monkeypatch.setattr(
         "app.modules.kg_lpv.pipeline.orchestrator.AsyncSessionLocal", TestingSessionLocal
     )
-    # N2 (Task 5): động từ "Trình bày được" không có trong bảng dong_tu_nhan_thuc
-    # (đồ thị KG-LPV thật không sẵn sàng trong test) -> rơi vào LLM biên M2. Mock
-    # để không gọi Gemini thật (cùng quy ước "mock graph + genai" của test này).
-    monkeypatch.setattr(
-        n2_curriculum,
-        "generate_json",
-        AsyncMock(return_value=({"verdict": "do_duoc", "evidence_refs": [], "explanation": "OK"}, 0)),
+    # N1: không tìm thấy bài học nào khớp -> đúng 1 finding D1
+    monkeypatch.setattr(graph_client, "find_lesson_by_identity", lambda **kw: None)
+    monkeypatch.setattr(graph_client, "search_lessons_fuzzy", lambda **kw: [])
+    # N2: gói ngữ cảnh canned (yccd rỗng -> M1); M6 qua LLM mock verdict lỗi
+    monkeypatch.setattr(graph_client, "get_lesson_context", lambda lesson_id, grade: _LESSON_CTX)
+
+    m6_response = (
+        {
+            "verdict": "khong_can_cu",
+            "evidence_refs": [{"kg_node_id": "MDKT-X", "trich_dan": "..."}],
+            "explanation": "Kiến thức trong hoạt động không có căn cứ.",
+        },
+        7,
     )
+    mock_n2_llm = AsyncMock(return_value=m6_response)
+    monkeypatch.setattr(n2_curriculum, "generate_json", mock_n2_llm)
 
     plan = SavedLessonPlan(
         user_id=teacher_user.id, title="KHBD test", content="noi dung", sections=_SECTIONS,
+        grade="10", lesson_name="Bài 1: Thông tin và xử lý thông tin",
     )
     db_session.add(plan)
     await db_session.commit()
@@ -192,15 +170,13 @@ async def test_verify_job_reaches_done_with_progress_100(
     captured = _capture_create_task(monkeypatch)
     with patch(
         "app.modules.kg_lpv.pipeline.segmenter.generate_json",
-        new=AsyncMock(return_value=(_LLM_RESPONSE, 42)),
+        new=AsyncMock(return_value=(_SEGMENTATION_RESPONSE, 42)),
     ):
         resp = await auth_post(
             ready_kg_lpv, VERIFY_URL, teacher_user.id, json={"lesson_plan_id": plan.id}
         )
         assert resp.status_code == 202
         job_id = resp.json()["job_id"]
-
-        # Chạy job nền đồng bộ (đã được "chụp" lại thay vì asyncio.create_task)
         await captured[0]
 
     resp2 = await auth_get(ready_kg_lpv, JOB_URL.format(job_id=job_id), teacher_user.id)
@@ -208,12 +184,68 @@ async def test_verify_job_reaches_done_with_progress_100(
     body = resp2.json()
     assert body["status"] == "done"
     assert body["progress"] == 100
-    assert body["stats"]["tokens"] == 42
+
+    result = await db_session.execute(select(KgLpvFinding).where(KgLpvFinding.job_id == job_id))
+    findings = result.scalars().all()
+
+    codes_branches = {(f.code, f.branch) for f in findings}
+    assert (ErrorCode.D1.value, VerificationBranch.N1.value) in codes_branches
+    assert (ErrorCode.M1.value, VerificationBranch.N2.value) in codes_branches
+    assert (ErrorCode.M6.value, VerificationBranch.N2.value) in codes_branches
+    for f in findings:
+        assert f.evidence  # bất biến: mọi finding persist đều có evidence non-empty
 
 
 @pytest.mark.asyncio
-async def test_verify_insufficient_token_returns_402(ready_kg_lpv, db_session, roles):
-    teacher = await create_teacher(db_session, roles, email="poor@test.com", token_balance=0)
+async def test_orchestrator_llm_judge_failure_does_not_fail_job(
+    ready_kg_lpv, db_session, teacher_user, monkeypatch
+):
+    monkeypatch.setattr(
+        "app.modules.kg_lpv.pipeline.orchestrator.AsyncSessionLocal", TestingSessionLocal
+    )
+    monkeypatch.setattr(graph_client, "find_lesson_by_identity", lambda **kw: None)
+    monkeypatch.setattr(graph_client, "search_lessons_fuzzy", lambda **kw: [])
+    monkeypatch.setattr(graph_client, "get_lesson_context", lambda lesson_id, grade: _LESSON_CTX)
+
+    mock_n2_llm = AsyncMock(side_effect=LlmJsonError("AI trả JSON hỏng"))
+    monkeypatch.setattr(n2_curriculum, "generate_json", mock_n2_llm)
+
+    plan = SavedLessonPlan(
+        user_id=teacher_user.id, title="KHBD test", content="noi dung", sections=_SECTIONS,
+        grade="10", lesson_name="Bài 1: Thông tin và xử lý thông tin",
+    )
+    db_session.add(plan)
+    await db_session.commit()
+
+    captured = _capture_create_task(monkeypatch)
+    with patch(
+        "app.modules.kg_lpv.pipeline.segmenter.generate_json",
+        new=AsyncMock(return_value=(_SEGMENTATION_RESPONSE, 42)),
+    ):
+        resp = await auth_post(
+            ready_kg_lpv, VERIFY_URL, teacher_user.id, json={"lesson_plan_id": plan.id}
+        )
+        job_id = resp.json()["job_id"]
+        await captured[0]
+
+    resp2 = await auth_get(ready_kg_lpv, JOB_URL.format(job_id=job_id), teacher_user.id)
+    assert resp2.status_code == 200
+    body = resp2.json()
+    assert body["status"] == "done"  # KHÔNG 'failed' dù M6 LLM lỗi
+
+    result = await db_session.execute(select(KgLpvFinding).where(KgLpvFinding.job_id == job_id))
+    findings = result.scalars().all()
+    # M6 bị lỗi LLM -> không tạo finding (không phải false positive); D1 + M1 vẫn còn
+    assert all(f.code != ErrorCode.M6.value for f in findings)
+    codes_branches = {(f.code, f.branch) for f in findings}
+    assert (ErrorCode.D1.value, VerificationBranch.N1.value) in codes_branches
+    assert (ErrorCode.M1.value, VerificationBranch.N2.value) in codes_branches
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_insufficient_token_still_returns_402(ready_kg_lpv, db_session, roles):
+    """Regression nhỏ: đảm bảo Task 5 không phá vỡ luồng kiểm token đã có (Task 3)."""
+    teacher = await create_teacher(db_session, roles, email="poor-n2@test.com", token_balance=0)
     await db_session.commit()
 
     plan = SavedLessonPlan(
@@ -226,50 +258,3 @@ async def test_verify_insufficient_token_returns_402(ready_kg_lpv, db_session, r
         ready_kg_lpv, VERIFY_URL, teacher.id, json={"lesson_plan_id": plan.id}
     )
     assert resp.status_code == 402
-
-
-@pytest.mark.asyncio
-async def test_verify_non_owned_plan_returns_404(ready_kg_lpv, db_session, roles):
-    owner = await create_teacher(db_session, roles, email="owner@test.com")
-    other = await create_teacher(db_session, roles, email="other@test.com")
-    await db_session.commit()
-
-    plan = SavedLessonPlan(
-        user_id=owner.id, title="KHBD của người khác", content="noi dung", sections=_SECTIONS,
-    )
-    db_session.add(plan)
-    await db_session.commit()
-
-    resp = await auth_post(
-        ready_kg_lpv, VERIFY_URL, other.id, json={"lesson_plan_id": plan.id}
-    )
-    assert resp.status_code == 404
-
-
-@pytest.mark.asyncio
-async def test_get_job_non_owned_returns_404(ready_kg_lpv, db_session, roles, monkeypatch):
-    owner = await create_teacher(db_session, roles, email="owner2@test.com")
-    other = await create_teacher(db_session, roles, email="other2@test.com")
-    await db_session.commit()
-
-    plan = SavedLessonPlan(
-        user_id=owner.id, title="KHBD", content="noi dung", sections=_SECTIONS,
-    )
-    db_session.add(plan)
-    await db_session.commit()
-
-    captured = _capture_create_task(monkeypatch)
-    with patch(
-        "app.modules.kg_lpv.pipeline.segmenter.generate_json",
-        new=AsyncMock(return_value=(_LLM_RESPONSE, 42)),
-    ):
-        resp = await auth_post(
-            ready_kg_lpv, VERIFY_URL, owner.id, json={"lesson_plan_id": plan.id}
-        )
-        job_id = resp.json()["job_id"]
-    # Job nền chưa được chạy trong test này — đóng coroutine để tránh cảnh báo
-    # "coroutine was never awaited" và rò rỉ tài nguyên.
-    captured[0].close()
-
-    resp2 = await auth_get(ready_kg_lpv, JOB_URL.format(job_id=job_id), other.id)
-    assert resp2.status_code == 404

@@ -25,6 +25,7 @@ FEATURE_LESSON_PLAN_EDIT = "lesson_plan_edit"
 FEATURE_COMMENT_ANALYSIS = "comment_analysis"
 FEATURE_CODE_EXTRACTION = "code_extraction"
 FEATURE_KG_LPV_SEGMENTATION = "kg_lpv_segmentation"
+FEATURE_KG_LPV_N2_CRITIC = "kg_lpv_n2_critic"
 
 # Legacy keys kept for backward compatibility when reading old DB settings.
 LEGACY_FEATURE_LESSON_PLAN_EDIT_SUGGEST = "lesson_plan_edit_suggest"
@@ -64,6 +65,12 @@ FEATURE_CONFIGS: dict[str, dict[str, str]] = {
     FEATURE_KG_LPV_SEGMENTATION: {
         "label": "KG-LPV: Tách đoạn KHBD",
         "description": "Bước 1 pipeline kiểm chứng KG-LPV: tách sâu section thành segment nguyên tử.",
+        "env_var": "GEMINI_MODEL_LESSON_PLAN",
+        "default": "gemini-2.5-flash",
+    },
+    FEATURE_KG_LPV_N2_CRITIC: {
+        "label": "KG-LPV: Phản biện N2",
+        "description": "Bước 2b pipeline kiểm chứng KG-LPV: phản biện M2 (động từ) và M6 (mệnh đề kiến thức).",
         "env_var": "GEMINI_MODEL_LESSON_PLAN",
         "default": "gemini-2.5-flash",
     },

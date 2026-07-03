@@ -121,6 +121,54 @@ class Finding(BaseModel):
         }
 
 
+# ============== N2 — LessonContext (gói ngữ cảnh bài học, §9) ==============
+
+
+class LessonContext(BaseModel):
+    """Gói ngữ cảnh bài học — `graph_client.get_lesson_context()` truy hồi ĐÚNG 1
+    LẦN mỗi job (§9) và được N2 (Task 5) và N3 (Task 6) dùng chung, KHÔNG truy
+    vấn lại đồ thị cho từng mã lỗi.
+
+    Mỗi phần tử trong các danh sách con là 1 dict PHẲNG lấy trực tiếp từ node/
+    quan hệ Neo4j (không mô hình hoá lại từng label thành model riêng — các
+    label mang thuộc tính khác nhau, N2/N3 chỉ đọc theo key khi cần dùng, tránh
+    over-engineer). Mọi dict node đều mang 4 trường vết xuất xứ bắt buộc
+    (`ma_nguon`, `so_ky_hieu`, `ngay_hieu_luc`, `vi_tri_trang`) nguyên trạng từ
+    đồ thị (§5.2).
+
+    Cấu trúc từng trường:
+    - `lesson`: dict `BaiHoc` (`ma_dinh_danh`, `ten`, ...) hoặc `None` nếu không
+      tìm thấy bài học trong đồ thị.
+    - `yccd`: mỗi item `{ma_dinh_danh, ten, muc_nhan_thuc: {ma_dinh_danh, ten,
+      bac} | None, ...vet_xuat_xu}` — YCCĐ của bài học kèm mức nhận thức yêu cầu.
+    - `nang_luc_tin_hoc`: danh mục `NangLucTinHoc` NLa-NLe (toàn bộ danh mục —
+      5 năng lực đặc thù môn Tin học là danh mục cố định của chương trình,
+      không phụ thuộc bài học/cấp) — mỗi item có `ma_nang_luc` ("NLa".."NLe").
+    - `nang_luc_chung`, `pham_chat`: danh mục năng lực chung / phẩm chất của
+      chương trình tổng thể (toàn bộ danh mục, lý do tương tự `nang_luc_tin_hoc`).
+    - `chi_bao_nls`: `ChiBaoNLS` áp dụng cho khối lớp của bài học (đã lọc theo
+      khối lớp qua quan hệ `AP_DUNG_CHO` khi truy vấn) — mỗi item có
+      `ma_chi_bao` và `muc_do` (danh sách `MucDoNLS` áp dụng, có thể rỗng nếu
+      đồ thị chưa curate mức cho chỉ báo đó).
+    - `menh_de_kien_thuc`: `MenhDeKienThuc` (`THUOC`) của riêng bài học — dùng
+      làm ngữ cảnh neo bằng chứng cho M6.
+    - `dong_tu_nhan_thuc`: bảng động từ nhận thức, dạng
+      `{"do_duoc": [{"dong_tu": str, "bac": int}], "khong_do_duoc": [str]}` —
+      `do_duoc` mang thêm `bac` (mức nhận thức tương ứng, dùng đối chiếu M1);
+      `khong_do_duoc` chỉ cần liệt kê động từ (biết, hiểu, nắm...) vì luôn là
+      lỗi M2 bất kể mức.
+    """
+
+    lesson: dict | None = None
+    yccd: list[dict] = Field(default_factory=list)
+    nang_luc_tin_hoc: list[dict] = Field(default_factory=list)
+    nang_luc_chung: list[dict] = Field(default_factory=list)
+    pham_chat: list[dict] = Field(default_factory=list)
+    chi_bao_nls: list[dict] = Field(default_factory=list)
+    menh_de_kien_thuc: list[dict] = Field(default_factory=list)
+    dong_tu_nhan_thuc: dict = Field(default_factory=lambda: {"do_duoc": [], "khong_do_duoc": []})
+
+
 # ============== API: POST /verify, GET /jobs/{job_id} ==============
 
 

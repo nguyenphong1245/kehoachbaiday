@@ -7,6 +7,7 @@ from neo4j import GraphDatabase
 from app.core.config import get_settings
 from app.core.logging import logger
 from app.modules.kg_lpv.config import GRAPH_HEALTH_CACHE_TTL_SECONDS
+from app.modules.kg_lpv.schemas import LessonContext
 
 
 class KgLpvGraphClient:
@@ -187,6 +188,116 @@ class KgLpvGraphClient:
             "ngay_hieu_luc": node.get("ngay_hieu_luc"),
             "vi_tri_trang": node.get("vi_tri_trang"),
         }
+
+    def get_lesson_context(self, lesson_id: str | None, grade: str | None) -> LessonContext:
+        """Truy hồi "gói ngữ cảnh bài học" (§9) — gọi ĐÚNG 1 LẦN mỗi job, N2 (Task
+        5) và N3 (Task 6) dùng chung, không truy vấn lại đồ thị cho từng mã lỗi.
+
+        Trả `LessonContext` rỗng (mọi danh sách `[]`, `lesson=None`) nếu đồ thị
+        chưa sẵn sàng, thiếu `lesson_id`, hoặc truy vấn lỗi — không bao giờ raise
+        (cùng quy ước phòng thủ với các phương thức khác của client này).
+        """
+        driver = self._get_driver()
+        if driver is None or not lesson_id:
+            return LessonContext()
+
+        settings = get_settings()
+        try:
+            with driver.session(database=settings.kg_lpv_neo4j_database) as session:
+                return LessonContext(
+                    lesson=self._fetch_lesson(session, lesson_id),
+                    yccd=self._fetch_yccd(session, lesson_id),
+                    nang_luc_tin_hoc=self._fetch_all_nodes(session, "NangLucTinHoc"),
+                    nang_luc_chung=self._fetch_all_nodes(session, "NangLucChung"),
+                    pham_chat=self._fetch_all_nodes(session, "PhamChat"),
+                    chi_bao_nls=self._fetch_chi_bao_nls(session, grade),
+                    menh_de_kien_thuc=self._fetch_menh_de_kien_thuc(session, lesson_id),
+                    dong_tu_nhan_thuc=self._fetch_dong_tu_nhan_thuc(session),
+                )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("kg_lpv.graph_client.get_lesson_context_failed lesson_id=%s error=%s", lesson_id, exc)
+            return LessonContext()
+
+    @staticmethod
+    def _fetch_lesson(session, lesson_id: str) -> dict | None:
+        record = session.run(
+            "MATCH (bh:BaiHoc {ma_dinh_danh: $lesson_id}) RETURN bh", lesson_id=lesson_id
+        ).single()
+        return dict(record["bh"]) if record else None
+
+    @staticmethod
+    def _fetch_yccd(session, lesson_id: str) -> list[dict]:
+        records = session.run(
+            """
+            MATCH (bh:BaiHoc {ma_dinh_danh: $lesson_id})-[:CO_YCCD]->(y:YCCD)
+            OPTIONAL MATCH (y)-[:O_MUC]->(m:MucNhanThuc)
+            RETURN y, m
+            """,
+            lesson_id=lesson_id,
+        )
+        result = []
+        for record in records:
+            y = dict(record["y"])
+            m = dict(record["m"]) if record["m"] is not None else None
+            result.append({**y, "muc_nhan_thuc": m})
+        return result
+
+    @staticmethod
+    def _fetch_all_nodes(session, label: str) -> list[dict]:
+        # `label` chỉ nhận 1 trong các hằng số nội bộ gọi cố định bên dưới
+        # (không nội suy từ input người dùng) — an toàn tiêm Cypher.
+        records = session.run(f"MATCH (n:{label}) RETURN n")
+        return [dict(record["n"]) for record in records]
+
+    @staticmethod
+    def _fetch_chi_bao_nls(session, grade: str | None) -> list[dict]:
+        records = session.run(
+            """
+            MATCH (cb:ChiBaoNLS)-[:AP_DUNG_CHO]->(kl:KhoiLop)
+            WHERE $grade IS NULL OR kl.ten CONTAINS $grade OR kl.ma_dinh_danh ENDS WITH $grade
+            OPTIONAL MATCH (cb)-[:CO_MUC_DO]->(md:MucDoNLS)
+            RETURN cb, collect(md) AS muc_do_list
+            """,
+            grade=grade,
+        )
+        result = []
+        for record in records:
+            cb = dict(record["cb"])
+            muc_do = [dict(md) for md in record["muc_do_list"] if md is not None]
+            result.append({**cb, "muc_do": muc_do})
+        return result
+
+    @staticmethod
+    def _fetch_menh_de_kien_thuc(session, lesson_id: str) -> list[dict]:
+        records = session.run(
+            """
+            MATCH (m:MenhDeKienThuc)-[:THUOC]->(bh:BaiHoc {ma_dinh_danh: $lesson_id})
+            RETURN m
+            """,
+            lesson_id=lesson_id,
+        )
+        return [dict(record["m"]) for record in records]
+
+    @staticmethod
+    def _fetch_dong_tu_nhan_thuc(session) -> dict:
+        """Bảng động từ nhận thức (`DongTuNhanThuc`, §5.2). Quy ước thuộc tính node
+        (do nhóm nghiên cứu curate theo lược đồ nạp liệu — xem `scripts/kg_lpv/README.md`):
+        `dong_tu` (chuỗi động từ), `do_duoc` (bool đo lường được hay không), `bac`
+        (mức nhận thức tương ứng — chỉ có ý nghĩa khi `do_duoc=true`, dùng đối chiếu M1).
+        """
+        records = session.run("MATCH (d:DongTuNhanThuc) RETURN d")
+        do_duoc: list[dict] = []
+        khong_do_duoc: list[str] = []
+        for record in records:
+            d = dict(record["d"])
+            dong_tu = d.get("dong_tu")
+            if not dong_tu:
+                continue
+            if d.get("do_duoc"):
+                do_duoc.append({"dong_tu": dong_tu, "bac": d.get("bac")})
+            else:
+                khong_do_duoc.append(dong_tu)
+        return {"do_duoc": do_duoc, "khong_do_duoc": khong_do_duoc}
 
     def close(self) -> None:
         if self._driver is not None:

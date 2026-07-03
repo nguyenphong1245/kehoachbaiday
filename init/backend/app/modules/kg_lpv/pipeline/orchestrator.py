@@ -2,10 +2,12 @@
 
 `run_job(job_id)` mở session DB riêng (job chạy nền, session của request đã
 đóng), tải job + KHBD nguồn, chạy Bước 1 (tách đoạn), lưu kết quả, rồi gọi
-`run_verification` (N1‖N2‖N3 — Task 4-6 hiện thực; ở Task 3 chỉ là stub).
+`run_verification` (N1‖N2 chạy song song — Task 5 hiện thực; N3 — Task 6 —
+hiện chỉ là stub typed qua `run_n3`).
 Không bao giờ để exception thoát ra ngoài `run_job` — job nền không được làm
 sập tiến trình; mọi lỗi được ghi vào `job.error_message` và `status='failed'`.
 """
+import asyncio
 from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,12 +15,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.logging import logger
 from app.db.session import AsyncSessionLocal
 from app.models.saved_lesson_plan import SavedLessonPlan
-from app.modules.kg_lpv.models import KgLpvJob
+from app.modules.kg_lpv.graph_client import graph_client
+from app.modules.kg_lpv.models import KgLpvFinding, KgLpvJob
+from app.modules.kg_lpv.pipeline.n1_identity import n1_verify
+from app.modules.kg_lpv.pipeline.n2_curriculum import n2_verify
 from app.modules.kg_lpv.pipeline.segmenter import SegmentationValidationError, segment
-from app.modules.kg_lpv.schemas import SegmentedPlan
+from app.modules.kg_lpv.schemas import Finding, LessonContext, SegmentedPlan
 from app.services.token_service import deduct_tokens
 
 _PROGRESS_AFTER_SEGMENTING = 10
+_PROGRESS_AFTER_N1_N2 = 70
+_PROGRESS_DONE = 100
 
 
 def _utcnow() -> datetime:
@@ -82,30 +89,128 @@ async def run_job(job_id: int) -> None:
             logger.error("kg_lpv.orchestrator.job_failed job_id=%s error=%s", job_id, exc)
 
 
+def _build_identity(plan: SavedLessonPlan) -> dict:
+    """Trích {lesson_id, grade, book_type, topic, lesson_name} từ KHBD nguồn cho N1."""
+    return {
+        "lesson_id": plan.lesson_id,
+        "grade": plan.grade,
+        "book_type": plan.book_type,
+        "topic": plan.topic,
+        "lesson_name": plan.lesson_name,
+    }
+
+
+def _persist_findings(db: AsyncSession, job_id: int, findings: list[Finding]) -> int:
+    """Ghi mỗi `Finding` thành 1 dòng `KgLpvFinding` — CHỈ khi `evidence` khác rỗng
+    (double-guard: `Finding` đã enforce ở tầng Pydantic, nhưng vẫn kiểm lại ở đây
+    theo đúng bất biến §6.2 trước khi chạm DB)."""
+    persisted = 0
+    for finding in findings:
+        if not finding.evidence:
+            continue
+        db.add(KgLpvFinding(**finding.to_kg_lpv_finding_kwargs(job_id)))
+        persisted += 1
+    return persisted
+
+
 async def run_verification(db: AsyncSession, job: KgLpvJob, segmented: SegmentedPlan) -> None:
-    """N1‖N2 -> N3 -> sổ lỗi. Ở Task 3 đây CHỈ LÀ STUB tài liệu hóa hợp đồng.
+    """N1‖N2 -> N3 (stub) -> sổ lỗi.
 
-    Hợp đồng cho các task sau (Task 4: N1, Task 5: N2, Task 6: N3):
-    - Input: `db` (AsyncSession đang mở, dùng lại — KHÔNG mở session mới),
-      `job` (đã có `job.segments` = segmented.model_dump()), `segmented`
-      (SegmentedPlan đã qua validator Bước 1).
-    - Trách nhiệm: chạy N1 (D1, thuật toán thuần) song song N2 (M1-M6, RULE +
-      LLM_JUDGE) bằng `asyncio.gather`; sau đó N3 (C1-C8, 6 trục) loại trừ các
-      hoạt động dính lỗi M* khỏi vai trò bằng chứng; ghi mỗi finding thành một
-      dòng `KgLpvFinding` — CHỈ tạo finding khi có `evidence` hợp lệ (mảng
-      không rỗng), đây là bất biến bắt buộc enforce ở tầng service (mục 6.2).
-    - Cập nhật `job.status` qua các giá trị `verifying` -> `verifying_n3` ->
-      `done`; cập nhật `job.progress` tăng dần; cộng dồn token đã dùng vào
-      `job.stats["tokens"]`; set `job.finished_at` khi xong; luôn `await
-      db.commit()` sau mỗi lần đổi trạng thái đáng kể (để polling thấy được).
-    - Lỗi cục bộ một phán xử (LLM timeout/hỏng) không được làm crash job:
-      ghi finding dạng `explanation="không phán xử được"` và KHÔNG tính là
-      lỗi nội dung (tránh false positive) — job vẫn tiếp tục và kết thúc `done`.
-
-    # TODO(Task 4-6): N1‖N2, N3 plug in here — thay thế toàn bộ thân hàm này.
+    - N1 (D1, thuật toán thuần) chạy trong thread riêng (`asyncio.to_thread`,
+      vì các phương thức `graph_client` là lời gọi Neo4j đồng bộ/blocking) song
+      song với N2 (M1-M6, RULE + LLM_JUDGE, `await` các lượt gọi LLM) bằng
+      `asyncio.gather` — đúng tinh thần "N1 ‖ N2" (§3 điểm 3, §9).
+    - Gói ngữ cảnh bài học (`LessonContext`) truy hồi qua `graph.get_lesson_context`
+      ĐÚNG 1 LẦN trước khi chạy N1‖N2 — N2 dùng ngay, N3 (Task 6) tái dùng qua
+      tham số `lesson_ctx` của `run_n3`, không truy vấn lại đồ thị (§9).
+    - Ghi mỗi finding hợp lệ (evidence khác rỗng) thành 1 dòng `KgLpvFinding`;
+      cộng dồn token N2 đã dùng vào `job.stats["tokens"]` và trừ theo thực dùng
+      (cùng cơ chế `deduct_tokens` như Bước 1 tách đoạn).
+    - Lỗi cục bộ 1 phán xử LLM trong N2 (timeout/JSON hỏng) đã được
+      `n2_verify` bắt riêng từng lượt và bỏ qua (không tạo finding, không phải
+      false positive) — job vẫn tiếp tục và kết thúc `done`. Exception KHÔNG
+      lường trước (vượt khỏi phạm vi bắt cục bộ đó) sẽ thoát lên `run_job`,
+      nơi đã có try/except bao ngoài đánh dấu job `failed` kèm `error_message`.
     """
+    job.status = "verifying"
+    await db.commit()
+
+    plan = await db.get(SavedLessonPlan, job.saved_lesson_plan_id)
+    if plan is None:
+        raise RuntimeError("Không tìm thấy KHBD nguồn cho job kiểm chứng")
+
+    identity = _build_identity(plan)
+    lesson_ctx: LessonContext = graph_client.get_lesson_context(identity.get("lesson_id"), identity.get("grade"))
+
+    n2_usage: dict[str, int] = {}
+    n1_findings, (n2_findings, hoat_dong_loi_m) = await asyncio.gather(
+        asyncio.to_thread(n1_verify, identity, graph_client),
+        n2_verify(db, segmented, lesson_ctx, graph_client, usage=n2_usage),
+    )
+
+    persisted = _persist_findings(db, job.id, [*n1_findings, *n2_findings])
+
+    n2_tokens = n2_usage.get("tokens_used", 0)
+    stats = dict(job.stats or {})
+    stats["tokens"] = int(stats.get("tokens", 0)) + n2_tokens
+    stats["findings_n1"] = len(n1_findings)
+    stats["findings_n2"] = len(n2_findings)
+    job.stats = stats
+    job.progress = _PROGRESS_AFTER_N1_N2
+    await db.commit()
+
+    if n2_tokens > 0:
+        await deduct_tokens(db, job.user_id, n2_tokens)
+        await db.commit()
+
+    logger.info(
+        "kg_lpv.orchestrator.n1_n2_done job_id=%s n1=%d n2=%d persisted=%d hoat_dong_loi_m=%d",
+        job.id, len(n1_findings), len(n2_findings), persisted, len(hoat_dong_loi_m),
+    )
+
+    job.status = "verifying_n3"
+    await db.commit()
+
+    n3_findings = await run_n3(db, job, segmented, lesson_ctx, hoat_dong_loi_m)
+    persisted += _persist_findings(db, job.id, n3_findings)
+
     job.status = "done"
-    job.progress = 100
+    job.progress = _PROGRESS_DONE
     job.finished_at = _utcnow()
     await db.commit()
-    logger.info("kg_lpv.orchestrator.verification_stub job_id=%s findings=0", job.id)
+    logger.info("kg_lpv.orchestrator.verification_done job_id=%s findings=%d", job.id, persisted)
+
+
+async def run_n3(
+    db: AsyncSession,
+    job: KgLpvJob,
+    segmented: SegmentedPlan,
+    lesson_ctx: LessonContext,
+    excluded_sections: set[str],
+) -> list[Finding]:
+    """Bước 3 — N3 Nhất quán sư phạm (C1-C8, 6 trục). STUB — Task 6 hiện thực.
+
+    Hợp đồng cho Task 6:
+    - Input: `lesson_ctx` (gói ngữ cảnh bài học ĐÃ truy hồi 1 lần/job ở
+      `run_verification` — TÁI DÙNG, KHÔNG truy vấn lại đồ thị); `excluded_sections`
+      (= `hoat_dong_loi_M` trả về từ `n2_verify` — tập `section_id` hoạt động
+      dính lỗi M6 kiến thức, KHÔNG được dùng làm bằng chứng đạt năng lực ở N3,
+      nguyên tắc ưu tiên nhánh §7/§18).
+    - Output: `list[Finding]` mã C1-C8, mỗi `Finding` phải có `evidence` khác
+      rỗng (bất biến §6.2 — enforce bởi `Finding` + double-guard ở
+      `run_verification._persist_findings`). 6 hàm trục độc lập theo §7 Bước 3,
+      phán xử nguyên tử LLM_JUDGE có neo evidence, chạy song song có giới hạn
+      (semaphore 4-6 qua `gemini_limiter`).
+    - Lỗi cục bộ 1 phán xử LLM không được crash job (giống `n2_verify`): bắt
+      riêng `LlmJsonError`/timeout từng lượt, bỏ qua finding đó (không phải
+      false positive), tiếp tục các mục còn lại.
+    - `job.status` đã là `verifying_n3` khi hàm này được gọi; `run_verification`
+      chuyển sang `done` sau khi hàm này trả về — KHÔNG tự đổi `job.status`
+      trong `run_n3`.
+
+    STUB hiện tại: trả `[]`, không truy vấn LLM/đồ thị gì thêm.
+    """
+    logger.info(
+        "kg_lpv.orchestrator.n3_stub job_id=%s excluded_sections=%d", job.id, len(excluded_sections)
+    )
+    return []
