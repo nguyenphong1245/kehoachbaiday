@@ -24,6 +24,7 @@ FEATURE_LESSON_PLAN_MINDMAP = "lesson_plan_mindmap"
 FEATURE_LESSON_PLAN_EDIT = "lesson_plan_edit"
 FEATURE_COMMENT_ANALYSIS = "comment_analysis"
 FEATURE_CODE_EXTRACTION = "code_extraction"
+FEATURE_KG_LPV_SEGMENTATION = "kg_lpv_segmentation"
 
 # Legacy keys kept for backward compatibility when reading old DB settings.
 LEGACY_FEATURE_LESSON_PLAN_EDIT_SUGGEST = "lesson_plan_edit_suggest"
@@ -58,6 +59,12 @@ FEATURE_CONFIGS: dict[str, dict[str, str]] = {
         "label": "Trích xuất bài tập code",
         "description": "Trích xuất bài tập lập trình từ KHBD.",
         "env_var": "GEMINI_MODEL",
+        "default": "gemini-2.5-flash",
+    },
+    FEATURE_KG_LPV_SEGMENTATION: {
+        "label": "KG-LPV: Tách đoạn KHBD",
+        "description": "Bước 1 pipeline kiểm chứng KG-LPV: tách sâu section thành segment nguyên tử.",
+        "env_var": "GEMINI_MODEL_LESSON_PLAN",
         "default": "gemini-2.5-flash",
     },
 }
