@@ -16,3 +16,16 @@ N1_FUZZY_THRESHOLD = 0.8
 # `n2_curriculum._word_coverage`)
 N2_YCCD_MATCH_THRESHOLD = 0.6  # M1: mục tiêu kiến thức phải khớp đủ gần 1 YCCĐ
 N2_NLC_PC_MATCH_THRESHOLD = 0.6  # M4: năng lực chung/phẩm chất phải khớp đủ gần danh mục tổng thể
+
+# N3 nhất quán sư phạm (§7 Bước 3) — ngưỡng khớp mờ thuật toán (word coverage, kiểu
+# `n2_curriculum._word_coverage`) dùng ở các trục ALGORITHMIC/RULE.
+N3_OBJECTIVE_ACTIVITY_MATCH_THRESHOLD = 0.5  # trục 1: mục tiêu <-> mục tiêu cục bộ của hoạt động coi là "hiện thực"
+N3_C1_GROUNDING_THRESHOLD = 0.3  # trục 4 (C1): tên NLa-NLc phải xuất hiện đủ trong nội dung/sản phẩm hoạt động
+
+# trục 6 (C3) — từ khoá thiết bị dùng để so khớp "khai báo" (tổ chức thực hiện) với
+# "sử dụng thực tế" (nội dung/sản phẩm) trong CÙNG một hoạt động — danh sách tối
+# thiểu đủ dùng cho bộ dữ liệu mẫu; nhóm nghiên cứu mở rộng khi curate dữ liệu thật.
+N3_DEVICE_KEYWORDS: tuple[str, ...] = (
+    "máy chiếu", "máy tính", "laptop", "điện thoại", "máy tính bảng", "internet",
+    "loa", "micro", "bảng phụ", "phiếu học tập", "video", "phần mềm", "tivi", "màn hình",
+)

@@ -23,13 +23,17 @@ from app.db.session import get_db
 from app.models.saved_lesson_plan import SavedLessonPlan
 from app.modules.kg_lpv import feature_flag as feature_flag_accessor
 from app.modules.kg_lpv.config import MODULE_VERSION
+from app.modules.kg_lpv.error_codes import VerificationBranch
 from app.modules.kg_lpv.graph_client import graph_client
-from app.modules.kg_lpv.models import KgLpvJob
+from app.modules.kg_lpv.models import KgLpvFinding, KgLpvJob
 from app.modules.kg_lpv.pipeline.orchestrator import run_job
 from app.modules.kg_lpv.schemas import (
+    BranchReport,
+    FindingOut,
     GraphStatus,
     JobStatusResponse,
     KgLpvStatusResponse,
+    ReportResponse,
     VerifyRequest,
     VerifyResponse,
 )
@@ -186,3 +190,55 @@ async def get_job_status(
         )
 
     return JobStatusResponse(status=job.status, progress=job.progress, stats=job.stats)
+
+
+@router.get(
+    "/jobs/{job_id}/report",
+    response_model=ReportResponse,
+    dependencies=[Depends(require_kg_lpv)],
+)
+async def get_job_report(
+    job_id: int,
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ReportResponse:
+    """Sổ lỗi đầy đủ của job (owner-only, §6.3) — findings nhóm theo nhánh N1/N2/N3
+    kèm đếm theo mã. Findings `status="unjudged"` (phán xử LLM lỗi, §9) liệt kê
+    RIÊNG trong `unjudged` — KHÔNG tính vào `summary` (chỉ mang tính kiểm toán, không
+    phải lỗi nội dung đã xác nhận)."""
+    job = await db.get(KgLpvJob, job_id)
+    if job is None or job.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy job kiểm chứng",
+        )
+
+    result = await db.execute(select(KgLpvFinding).where(KgLpvFinding.job_id == job_id))
+    all_findings = result.scalars().all()
+
+    unjudged = [FindingOut.model_validate(f) for f in all_findings if f.status == "unjudged"]
+    confirmed = [f for f in all_findings if f.status != "unjudged"]
+
+    branches: list[BranchReport] = []
+    summary: dict[str, int] = {}
+    for branch in (VerificationBranch.N1.value, VerificationBranch.N2.value, VerificationBranch.N3.value):
+        branch_findings = [f for f in confirmed if f.branch == branch]
+        counts_by_code: dict[str, int] = {}
+        for f in branch_findings:
+            counts_by_code[f.code] = counts_by_code.get(f.code, 0) + 1
+            summary[f.code] = summary.get(f.code, 0) + 1
+        branches.append(
+            BranchReport(
+                branch=branch,
+                counts_by_code=counts_by_code,
+                findings=[FindingOut.model_validate(f) for f in branch_findings],
+            )
+        )
+
+    return ReportResponse(
+        job_id=job_id,
+        status=job.status,
+        branches=branches,
+        unjudged=unjudged,
+        summary={**summary, "total_confirmed": len(confirmed), "total_unjudged": len(unjudged)},
+    )

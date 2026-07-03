@@ -19,6 +19,7 @@ from app.modules.kg_lpv.graph_client import graph_client
 from app.modules.kg_lpv.models import KgLpvFinding, KgLpvJob
 from app.modules.kg_lpv.pipeline.n1_identity import n1_verify
 from app.modules.kg_lpv.pipeline.n2_curriculum import n2_verify
+from app.modules.kg_lpv.pipeline.n3_pedagogy import n3_verify
 from app.modules.kg_lpv.pipeline.segmenter import SegmentationValidationError, segment
 from app.modules.kg_lpv.schemas import Finding, LessonContext, SegmentedPlan
 from app.services.token_service import deduct_tokens
@@ -172,13 +173,25 @@ async def run_verification(db: AsyncSession, job: KgLpvJob, segmented: Segmented
     job.status = "verifying_n3"
     await db.commit()
 
-    n3_findings = await run_n3(db, job, segmented, lesson_ctx, hoat_dong_loi_m)
+    n3_usage: dict[str, int] = {}
+    n3_findings = await run_n3(db, job, segmented, lesson_ctx, hoat_dong_loi_m, usage=n3_usage)
     persisted += _persist_findings(db, job.id, n3_findings)
+
+    n3_tokens = n3_usage.get("tokens_used", 0)
+    stats = dict(job.stats or {})
+    stats["tokens"] = int(stats.get("tokens", 0)) + n3_tokens
+    stats["findings_n3"] = len(n3_findings)
+    job.stats = stats
 
     job.status = "done"
     job.progress = _PROGRESS_DONE
     job.finished_at = _utcnow()
     await db.commit()
+
+    if n3_tokens > 0:
+        await deduct_tokens(db, job.user_id, n3_tokens)
+        await db.commit()
+
     logger.info("kg_lpv.orchestrator.verification_done job_id=%s findings=%d", job.id, persisted)
 
 
@@ -188,30 +201,31 @@ async def run_n3(
     segmented: SegmentedPlan,
     lesson_ctx: LessonContext,
     excluded_sections: set[str],
+    *,
+    usage: dict[str, int] | None = None,
 ) -> list[Finding]:
-    """Bước 3 — N3 Nhất quán sư phạm (C1-C8, 6 trục). STUB — Task 6 hiện thực.
+    """Bước 3 — N3 Nhất quán sư phạm (C1-C8, 6 trục, Task 6) — delegate cho
+    `n3_pedagogy.n3_verify`.
 
-    Hợp đồng cho Task 6:
     - Input: `lesson_ctx` (gói ngữ cảnh bài học ĐÃ truy hồi 1 lần/job ở
       `run_verification` — TÁI DÙNG, KHÔNG truy vấn lại đồ thị); `excluded_sections`
       (= `hoat_dong_loi_M` trả về từ `n2_verify` — tập `section_id` hoạt động
       dính lỗi M6 kiến thức, KHÔNG được dùng làm bằng chứng đạt năng lực ở N3,
       nguyên tắc ưu tiên nhánh §7/§18).
-    - Output: `list[Finding]` mã C1-C8, mỗi `Finding` phải có `evidence` khác
-      rỗng (bất biến §6.2 — enforce bởi `Finding` + double-guard ở
-      `run_verification._persist_findings`). 6 hàm trục độc lập theo §7 Bước 3,
-      phán xử nguyên tử LLM_JUDGE có neo evidence, chạy song song có giới hạn
-      (semaphore 4-6 qua `gemini_limiter`).
-    - Lỗi cục bộ 1 phán xử LLM không được crash job (giống `n2_verify`): bắt
-      riêng `LlmJsonError`/timeout từng lượt, bỏ qua finding đó (không phải
-      false positive), tiếp tục các mục còn lại.
+    - Output: `list[Finding]` mã C1-C8, mỗi `Finding` có `evidence` khác rỗng
+      (bất biến §6.2 — enforce bởi `Finding` + double-guard ở
+      `run_verification._persist_findings`). 6 hàm trục độc lập theo §7 Bước 3.
+    - `usage` (tuỳ chọn, cùng quy ước `segment`/`n2_verify`): nếu truyền dict rỗng
+      vào, hàm ghi `usage["tokens_used"]` = tổng token các lượt phán xử LLM N3.
+    - Lỗi cục bộ 1 phán xử LLM không crash job — `n3_verify` đã bắt riêng từng
+      lượt và ghi nhận `Finding` `status="unjudged"` (cùng quy ước `n2_verify`).
     - `job.status` đã là `verifying_n3` khi hàm này được gọi; `run_verification`
       chuyển sang `done` sau khi hàm này trả về — KHÔNG tự đổi `job.status`
       trong `run_n3`.
-
-    STUB hiện tại: trả `[]`, không truy vấn LLM/đồ thị gì thêm.
     """
+    findings = await n3_verify(db, segmented, lesson_ctx, excluded_sections, graph_client, usage=usage)
     logger.info(
-        "kg_lpv.orchestrator.n3_stub job_id=%s excluded_sections=%d", job.id, len(excluded_sections)
+        "kg_lpv.orchestrator.n3_done job_id=%s excluded_sections=%d findings=%d",
+        job.id, len(excluded_sections), len(findings),
     )
-    return []
+    return findings

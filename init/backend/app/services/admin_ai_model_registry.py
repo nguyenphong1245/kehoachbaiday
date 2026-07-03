@@ -26,6 +26,7 @@ FEATURE_COMMENT_ANALYSIS = "comment_analysis"
 FEATURE_CODE_EXTRACTION = "code_extraction"
 FEATURE_KG_LPV_SEGMENTATION = "kg_lpv_segmentation"
 FEATURE_KG_LPV_N2_CRITIC = "kg_lpv_n2_critic"
+FEATURE_KG_LPV_N3_JUDGE = "kg_lpv_n3_judge"
 
 # Legacy keys kept for backward compatibility when reading old DB settings.
 LEGACY_FEATURE_LESSON_PLAN_EDIT_SUGGEST = "lesson_plan_edit_suggest"
@@ -73,6 +74,12 @@ FEATURE_CONFIGS: dict[str, dict[str, str]] = {
         "description": "Bước 2b pipeline kiểm chứng KG-LPV: phản biện M2 (động từ) và M6 (mệnh đề kiến thức).",
         "env_var": "GEMINI_MODEL_LESSON_PLAN",
         "default": "gemini-2.5-flash",
+    },
+    FEATURE_KG_LPV_N3_JUDGE: {
+        "label": "KG-LPV: Phán xử N3",
+        "description": "Bước 3 pipeline kiểm chứng KG-LPV: phán xử nguyên tử 6 trục nhất quán sư phạm (C1-C8).",
+        "env_var": "GEMINI_MODEL_LESSON_PLAN",
+        "default": "gemini-2.5-pro",
     },
 }
 

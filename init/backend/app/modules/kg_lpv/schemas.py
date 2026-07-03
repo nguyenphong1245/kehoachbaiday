@@ -184,3 +184,46 @@ class JobStatusResponse(BaseModel):
     status: str
     progress: int
     stats: dict | None = None
+
+
+# ============== API: GET /jobs/{job_id}/report (Task 6, §6.3) ==============
+
+
+class FindingOut(BaseModel):
+    """1 dòng `KgLpvFinding` trả ra API — khớp trực tiếp các cột của model ORM."""
+
+    id: int
+    code: str
+    branch: str
+    truc: int | None = None
+    section_id: str
+    span: dict | None = None
+    evidence: list[dict]
+    explanation: str
+    status: str
+
+    model_config = {"from_attributes": True}
+
+
+class BranchReport(BaseModel):
+    """Sổ lỗi của 1 nhánh (N1/N2/N3) — chỉ gồm findings ĐÃ XÁC NHẬN (`status != "unjudged"`)."""
+
+    branch: str
+    counts_by_code: dict[str, int]
+    findings: list[FindingOut]
+
+
+class ReportResponse(BaseModel):
+    """`GET /jobs/{job_id}/report` — sổ lỗi đầy đủ nhóm theo nhánh (§6.3).
+
+    `branches` chỉ chứa findings đã xác nhận (`status != "unjudged"`), nhóm N1/N2/N3
+    kèm đếm theo mã trong từng nhánh. `unjudged` liệt kê RIÊNG các phán xử LLM lỗi
+    (`status="unjudged"`) — chỉ mang tính kiểm toán, KHÔNG được tính là lỗi nội dung
+    xác nhận trong `summary` (§9 "an toàn khi hỏng" + quy ước Task 5/6).
+    """
+
+    job_id: int
+    status: str
+    branches: list[BranchReport]
+    unjudged: list[FindingOut]
+    summary: dict[str, int]

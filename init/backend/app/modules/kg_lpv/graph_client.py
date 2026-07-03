@@ -299,6 +299,42 @@ class KgLpvGraphClient:
                 khong_do_duoc.append(dong_tu)
         return {"do_duoc": do_duoc, "khong_do_duoc": khong_do_duoc}
 
+    def get_method_procedures(self, method_names: list[str]) -> dict[str, list[dict]]:
+        """Quy trình chuẩn (`BuocQuyTrinh`, đã sắp `thu_tu`) của các `PhuongPhapDH`/
+        `KyThuatDH` có tên trong `method_names` — dùng đối chiếu C7 (trục 5, §7 Bước 3).
+
+        Trả `{ten_phuong_phap: [buoc, ...]}` (mỗi `buoc` là dict phẳng kèm 4 trường
+        vết xuất xứ); phương pháp không tìm thấy trong đồ thị đơn giản không có mặt
+        trong dict trả về (KHÔNG phải lỗi). Trả `{}` nếu đồ thị chưa sẵn sàng, danh
+        sách tên rỗng, hoặc truy vấn lỗi — không bao giờ raise (cùng quy ước phòng
+        thủ với các phương thức khác của client này).
+        """
+        if not method_names:
+            return {}
+
+        driver = self._get_driver()
+        if driver is None:
+            return {}
+
+        settings = get_settings()
+        try:
+            with driver.session(database=settings.kg_lpv_neo4j_database) as session:
+                records = session.run(
+                    """
+                    MATCH (pp)-[r:GOM_BUOC]->(b:BuocQuyTrinh)
+                    WHERE (pp:PhuongPhapDH OR pp:KyThuatDH) AND pp.ten IN $method_names
+                    WITH pp, b, r.thu_tu AS thu_tu
+                    ORDER BY thu_tu
+                    WITH pp, collect(b) AS buoc_list
+                    RETURN pp.ten AS ten, buoc_list
+                    """,
+                    method_names=method_names,
+                )
+                return {record["ten"]: [dict(b) for b in record["buoc_list"]] for record in records}
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("kg_lpv.graph_client.get_method_procedures_failed error=%s", exc)
+            return {}
+
     def close(self) -> None:
         if self._driver is not None:
             try:
