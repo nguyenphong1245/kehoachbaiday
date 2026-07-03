@@ -235,11 +235,67 @@ async def test_orchestrator_llm_judge_failure_does_not_fail_job(
 
     result = await db_session.execute(select(KgLpvFinding).where(KgLpvFinding.job_id == job_id))
     findings = result.scalars().all()
-    # M6 bị lỗi LLM -> không tạo finding (không phải false positive); D1 + M1 vẫn còn
-    assert all(f.code != ErrorCode.M6.value for f in findings)
+    # M6 bị lỗi LLM -> ghi nhận finding status="unjudged" (không phải lỗi nội dung xác nhận,
+    # không phải false positive), KHÔNG status="open"; D1 + M1 vẫn còn
+    m6_findings = [f for f in findings if f.code == ErrorCode.M6.value]
+    assert len(m6_findings) == 1
+    assert m6_findings[0].status == "unjudged"
+    assert m6_findings[0].explanation.startswith("không phán xử được")
+    assert m6_findings[0].evidence
     codes_branches = {(f.code, f.branch) for f in findings}
     assert (ErrorCode.D1.value, VerificationBranch.N1.value) in codes_branches
     assert (ErrorCode.M1.value, VerificationBranch.N2.value) in codes_branches
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_llm_judge_timeout_does_not_fail_job_and_persists_unjudged(
+    ready_kg_lpv, db_session, teacher_user, monkeypatch
+):
+    """Finding 1: asyncio.TimeoutError (không chỉ LlmJsonError) từ generate_json cũng
+    không được crash job. Finding 2: finding "unjudged" phải được persist, KHÔNG được
+    tính là lỗi xác nhận (status="open")."""
+    import asyncio
+
+    monkeypatch.setattr(
+        "app.modules.kg_lpv.pipeline.orchestrator.AsyncSessionLocal", TestingSessionLocal
+    )
+    monkeypatch.setattr(graph_client, "find_lesson_by_identity", lambda **kw: None)
+    monkeypatch.setattr(graph_client, "search_lessons_fuzzy", lambda **kw: [])
+    monkeypatch.setattr(graph_client, "get_lesson_context", lambda lesson_id, grade: _LESSON_CTX)
+
+    mock_n2_llm = AsyncMock(side_effect=asyncio.TimeoutError("hết giờ chờ Gemini"))
+    monkeypatch.setattr(n2_curriculum, "generate_json", mock_n2_llm)
+
+    plan = SavedLessonPlan(
+        user_id=teacher_user.id, title="KHBD test", content="noi dung", sections=_SECTIONS,
+        grade="10", lesson_name="Bài 1: Thông tin và xử lý thông tin",
+    )
+    db_session.add(plan)
+    await db_session.commit()
+
+    captured = _capture_create_task(monkeypatch)
+    with patch(
+        "app.modules.kg_lpv.pipeline.segmenter.generate_json",
+        new=AsyncMock(return_value=(_SEGMENTATION_RESPONSE, 42)),
+    ):
+        resp = await auth_post(
+            ready_kg_lpv, VERIFY_URL, teacher_user.id, json={"lesson_plan_id": plan.id}
+        )
+        job_id = resp.json()["job_id"]
+        await captured[0]
+
+    resp2 = await auth_get(ready_kg_lpv, JOB_URL.format(job_id=job_id), teacher_user.id)
+    assert resp2.status_code == 200
+    body = resp2.json()
+    assert body["status"] == "done"  # KHÔNG 'failed' dù TimeoutError từ LLM
+
+    result = await db_session.execute(select(KgLpvFinding).where(KgLpvFinding.job_id == job_id))
+    findings = result.scalars().all()
+    m6_findings = [f for f in findings if f.code == ErrorCode.M6.value]
+    assert len(m6_findings) == 1
+    assert m6_findings[0].status == "unjudged"
+    assert m6_findings[0].explanation.startswith("không phán xử được")
+    assert m6_findings[0].evidence
 
 
 @pytest.mark.asyncio

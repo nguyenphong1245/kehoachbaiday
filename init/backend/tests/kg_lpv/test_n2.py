@@ -3,6 +3,7 @@
 Đồ thị FAKE (không Neo4j thật) qua `lesson_ctx` (LessonContext) canned trực tiếp;
 `llm.generate_json` bị monkeypatch — không gọi Gemini thật.
 """
+import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
@@ -237,7 +238,7 @@ async def test_m2_verb_not_in_table_llm_says_measurable_produces_no_finding(monk
     mock_llm.assert_called_once()
 
 
-async def test_m2_llm_failure_does_not_crash_and_yields_no_finding(monkeypatch):
+async def test_m2_llm_failure_does_not_crash_and_records_unjudged_finding(monkeypatch):
     from app.modules.kg_lpv.llm import LlmJsonError
 
     mock_llm = AsyncMock(side_effect=LlmJsonError("JSON hỏng"))
@@ -246,7 +247,29 @@ async def test_m2_llm_failure_does_not_crash_and_yields_no_finding(monkeypatch):
     plan = SegmentedPlan(objective_clauses=[_obj("o1", "kien_thuc", "Cảm nhận được vẻ đẹp của mạng máy tính")])
     findings, _ = await _n2(plan, _lesson_ctx())
 
-    assert [f for f in findings if f.code == ErrorCode.M2] == []
+    m2 = [f for f in findings if f.code == ErrorCode.M2]
+    assert len(m2) == 1
+    assert m2[0].status == "unjudged"
+    assert m2[0].explanation.startswith("không phán xử được")
+    assert m2[0].evidence
+
+
+@pytest.mark.parametrize("exc", [asyncio.TimeoutError("hết giờ"), RuntimeError("Gemini 400 API_KEY_INVALID")])
+async def test_m2_llm_edge_case_failure_records_unjudged_finding_not_open(monkeypatch, exc):
+    """Finding 1+2: TimeoutError hoặc lỗi API Gemini bất kỳ (không chỉ LlmJsonError) không
+    được crash n2_verify — phải ghi nhận finding status="unjudged", KHÔNG phải "open"."""
+    mock_llm = AsyncMock(side_effect=exc)
+    monkeypatch.setattr(n2_curriculum, "generate_json", mock_llm)
+
+    plan = SegmentedPlan(objective_clauses=[_obj("o1", "kien_thuc", "Cảm nhận được vẻ đẹp của mạng máy tính")])
+    findings, _ = await _n2(plan, _lesson_ctx())
+
+    m2 = [f for f in findings if f.code == ErrorCode.M2]
+    assert len(m2) == 1
+    assert m2[0].status == "unjudged"
+    assert m2[0].explanation.startswith("không phán xử được")
+    assert m2[0].evidence
+    assert m2[0].evidence[0].get("khong_phan_xu_duoc") is True
 
 
 # =========================== M3 — năng lực tin học không khớp chương trình ===========================
@@ -419,7 +442,7 @@ async def test_m6_llm_flags_unsupported_but_no_evidence_produces_no_finding(monk
     assert hoat_dong_loi_m == set()
 
 
-async def test_m6_llm_failure_does_not_crash_and_yields_no_finding(monkeypatch):
+async def test_m6_llm_failure_does_not_crash_and_records_unjudged_finding(monkeypatch):
     from app.modules.kg_lpv.llm import LlmJsonError
 
     mock_llm = AsyncMock(side_effect=LlmJsonError("timeout"))
@@ -427,7 +450,35 @@ async def test_m6_llm_failure_does_not_crash_and_yields_no_finding(monkeypatch):
 
     plan = SegmentedPlan(activity_components=[_act("a1", "noi_dung", "Nội dung bất kỳ.")])
     findings, hoat_dong_loi_m = await _n2(plan, _lesson_ctx())
-    assert [f for f in findings if f.code == ErrorCode.M6] == []
+
+    m6 = [f for f in findings if f.code == ErrorCode.M6]
+    assert len(m6) == 1
+    assert m6[0].status == "unjudged"
+    assert m6[0].explanation.startswith("không phán xử được")
+    assert m6[0].evidence
+    # unjudged KHÔNG được loại hoạt động khỏi vai trò bằng chứng N3 (Finding 2)
+    assert hoat_dong_loi_m == set()
+
+
+@pytest.mark.parametrize("exc", [asyncio.TimeoutError("hết giờ"), RuntimeError("Gemini 400 API_KEY_INVALID")])
+async def test_m6_llm_edge_case_failure_records_unjudged_finding_excluded_from_hoat_dong_loi_m(
+    monkeypatch, exc
+):
+    """Finding 1+2: TimeoutError hoặc lỗi API Gemini bất kỳ không được crash n2_verify —
+    phải ghi nhận finding status="unjudged" và KHÔNG thêm section vào hoat_dong_loi_M
+    (chỉ M6 status="open" đã xác nhận mới loại trừ bằng chứng N3)."""
+    mock_llm = AsyncMock(side_effect=exc)
+    monkeypatch.setattr(n2_curriculum, "generate_json", mock_llm)
+
+    plan = SegmentedPlan(activity_components=[_act("a1", "noi_dung", "Nội dung bất kỳ.")])
+    findings, hoat_dong_loi_m = await _n2(plan, _lesson_ctx())
+
+    m6 = [f for f in findings if f.code == ErrorCode.M6]
+    assert len(m6) == 1
+    assert m6[0].status == "unjudged"
+    assert m6[0].explanation.startswith("không phán xử được")
+    assert m6[0].evidence
+    assert m6[0].evidence[0].get("khong_phan_xu_duoc") is True
     assert hoat_dong_loi_m == set()
 
 

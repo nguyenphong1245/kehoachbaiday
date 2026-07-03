@@ -126,11 +126,12 @@ async def run_verification(db: AsyncSession, job: KgLpvJob, segmented: Segmented
     - Ghi mỗi finding hợp lệ (evidence khác rỗng) thành 1 dòng `KgLpvFinding`;
       cộng dồn token N2 đã dùng vào `job.stats["tokens"]` và trừ theo thực dùng
       (cùng cơ chế `deduct_tokens` như Bước 1 tách đoạn).
-    - Lỗi cục bộ 1 phán xử LLM trong N2 (timeout/JSON hỏng) đã được
-      `n2_verify` bắt riêng từng lượt và bỏ qua (không tạo finding, không phải
-      false positive) — job vẫn tiếp tục và kết thúc `done`. Exception KHÔNG
-      lường trước (vượt khỏi phạm vi bắt cục bộ đó) sẽ thoát lên `run_job`,
-      nơi đã có try/except bao ngoài đánh dấu job `failed` kèm `error_message`.
+    - Lỗi cục bộ 1 phán xử LLM trong N2 (timeout/JSON hỏng/lỗi API) đã được
+      `n2_verify` bắt riêng từng lượt và ghi nhận 1 `Finding` `status="unjudged"`
+      (không tính là lỗi nội dung xác nhận, không phải false positive) — job
+      vẫn tiếp tục và kết thúc `done`. Exception KHÔNG lường trước (vượt khỏi
+      phạm vi bắt cục bộ đó) sẽ thoát lên `run_job`, nơi đã có try/except bao
+      ngoài đánh dấu job `failed` kèm `error_message`.
     """
     job.status = "verifying"
     await db.commit()

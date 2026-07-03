@@ -19,10 +19,15 @@ và §7 Bước 2b:
   kiến thức tự do với `MenhDeKienThuc`), nhưng CHỈ tạo finding khi model trả
   `evidence_refs` khác rỗng (§6.2 — quyết định thiếu bằng chứng không được tạo).
 
-Lỗi cục bộ 1 lượt LLM (`LlmJsonError`, timeout) KHÔNG được làm crash job: bắt
-riêng từng lượt gọi, bỏ qua (không tạo finding, không phải false positive), ghi
-log cảnh báo, tiếp tục các mục còn lại (§9 "an toàn khi hỏng").
+Lỗi cục bộ 1 lượt LLM (`LlmJsonError`, `asyncio.TimeoutError`, lỗi API Gemini
+bất kỳ) KHÔNG được làm crash job: bắt riêng từng lượt gọi (biên phán xử từng
+mục tiêu/hoạt động), KHÔNG bỏ qua lặng lẽ mà ghi nhận 1 `Finding` trạng thái
+`status="unjudged"` (khác `"open"` — KHÔNG tính là lỗi nội dung xác nhận, chỉ
+để giữ vết kiểm toán §9), ghi log cảnh báo, tiếp tục các mục còn lại (§9 "an
+toàn khi hỏng"). M6 `unjudged` KHÔNG được đưa vào `hoat_dong_loi_M` — chỉ M6
+`status="open"` (đã xác nhận) mới loại hoạt động khỏi vai trò bằng chứng N3.
 """
+import asyncio
 import re
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,7 +36,7 @@ from app.core.logging import logger
 from app.modules.kg_lpv.config import N2_NLC_PC_MATCH_THRESHOLD, N2_YCCD_MATCH_THRESHOLD
 from app.modules.kg_lpv.error_codes import ErrorCode, VerificationBranch
 from app.modules.kg_lpv.graph_client import KgLpvGraphClient
-from app.modules.kg_lpv.llm import LlmJsonError, generate_json
+from app.modules.kg_lpv.llm import generate_json
 from app.modules.kg_lpv.prompts.n2_critic import build_m2_prompt, build_m6_prompt
 from app.modules.kg_lpv.schemas import (
     ActivityComponentSegment,
@@ -95,7 +100,11 @@ async def n2_verify(
         total_tokens += tokens
         if m6_finding is not None:
             findings.append(m6_finding)
-            hoat_dong_loi_m.add(comp.section_id)
+            # Chỉ M6 status="open" (đã XÁC NHẬN thiếu căn cứ) mới loại hoạt động
+            # khỏi vai trò bằng chứng N3 — "unjudged" (không phán xử được) không
+            # được coi là lỗi, không được phép loại trừ oan bằng chứng (Finding 2).
+            if m6_finding.status == "open":
+                hoat_dong_loi_m.add(comp.section_id)
 
     if usage is not None:
         usage["tokens_used"] = total_tokens
@@ -171,7 +180,7 @@ def _check_m3(clause: ObjectiveClauseSegment, lesson_ctx: LessonContext) -> Find
     if not missing:
         return None
 
-    evidence = [{"ma_khai_bao": sorted(missing), "danh_muc_hop_le": sorted(catalog_codes)}]
+    evidence = [{"ma_khai_bao": sorted(missing), "danh_muc_hop_le": lesson_ctx.nang_luc_tin_hoc}]
     return _build_finding(
         ErrorCode.M3, clause.section_id, evidence=evidence,
         explanation=(
@@ -222,7 +231,7 @@ def _check_m5(clause: ObjectiveClauseSegment, lesson_ctx: LessonContext) -> Find
         evidence = [
             {
                 "ma_khai_bao": declared_code,
-                "danh_muc_hop_le": [c.get("ma_chi_bao") for c in lesson_ctx.chi_bao_nls],
+                "danh_muc_hop_le": lesson_ctx.chi_bao_nls,
             }
         ]
         return _build_finding(
@@ -268,9 +277,19 @@ async def _check_m2(
     prompt = build_m2_prompt(clause.text, do_duoc, khong_do_duoc)
     try:
         data, tokens = await generate_json(db, FEATURE_KG_LPV_N2_CRITIC, prompt)
-    except LlmJsonError as exc:
-        logger.warning("kg_lpv.n2.m2_llm_failed section_id=%s error=%s", clause.section_id, exc)
-        return None, 0
+    except Exception as exc:  # noqa: BLE001 - 1 lượt LLM hỏng (JSON/timeout/lỗi API) không được crash job (§9)
+        logger.warning(
+            "kg_lpv.n2.judge_failed code=M2 section_id=%s err=%s", clause.section_id, type(exc).__name__
+        )
+        finding = _build_finding(
+            ErrorCode.M2, clause.section_id,
+            evidence=[{"khong_phan_xu_duoc": True, "muc_tieu": clause.text}],
+            explanation=(
+                f"không phán xử được: lỗi khi gọi AI kiểm tra động từ mục tiêu ({type(exc).__name__})."
+            ),
+            status="unjudged",
+        )
+        return finding, 0
 
     verdict = (data or {}).get("verdict")
     if verdict != "khong_do_duoc":
@@ -293,9 +312,19 @@ async def _check_m6(
     prompt = build_m6_prompt(comp.text, lesson_ctx.menh_de_kien_thuc)
     try:
         data, tokens = await generate_json(db, FEATURE_KG_LPV_N2_CRITIC, prompt)
-    except LlmJsonError as exc:
-        logger.warning("kg_lpv.n2.m6_llm_failed section_id=%s error=%s", comp.section_id, exc)
-        return None, 0
+    except Exception as exc:  # noqa: BLE001 - 1 lượt LLM hỏng (JSON/timeout/lỗi API) không được crash job (§9)
+        logger.warning(
+            "kg_lpv.n2.judge_failed code=M6 section_id=%s err=%s", comp.section_id, type(exc).__name__
+        )
+        finding = _build_finding(
+            ErrorCode.M6, comp.section_id,
+            evidence=[{"khong_phan_xu_duoc": True, "menh_de": comp.text}],
+            explanation=(
+                f"không phán xử được: lỗi khi gọi AI kiểm tra căn cứ kiến thức ({type(exc).__name__})."
+            ),
+            status="unjudged",
+        )
+        return finding, 0
 
     verdict = (data or {}).get("verdict")
     evidence_refs = (data or {}).get("evidence_refs") or []
@@ -310,10 +339,12 @@ async def _check_m6(
 # =========================== Tiện ích chung ===========================
 
 
-def _build_finding(code: ErrorCode, section_id: str, *, evidence: list[dict], explanation: str) -> Finding:
+def _build_finding(
+    code: ErrorCode, section_id: str, *, evidence: list[dict], explanation: str, status: str = "open"
+) -> Finding:
     return Finding(
         code=code, branch=VerificationBranch.N2, section_id=section_id,
-        evidence=evidence, explanation=explanation,
+        evidence=evidence, explanation=explanation, status=status,
     )
 
 
