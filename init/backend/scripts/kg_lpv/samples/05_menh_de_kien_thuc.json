@@ -1,0 +1,27 @@
+{
+  "_mo_ta": "MenhDeKienThuc chuẩn từ SGK -[:THUOC]-> BaiHoc (phục vụ kiểm M6)",
+  "nodes": [
+    {
+      "label": "MenhDeKienThuc",
+      "ma_dinh_danh": "MDKT-TIN10-C1-B1-01",
+      "ten": "Thông tin là sự phản ánh các hiện tượng, sự vật; dữ liệu là thông tin đã được mã hoá",
+      "properties": {},
+      "ma_nguon": "SGK-TIN10-KNTT",
+      "so_ky_hieu": "SGK-TIN10-2022",
+      "ngay_hieu_luc": "2022-06-01",
+      "vi_tri_trang": "tr.10"
+    }
+  ],
+  "edges": [
+    {
+      "type": "THUOC",
+      "from": "MDKT-TIN10-C1-B1-01",
+      "to": "BH-TIN10-C1-B1",
+      "properties": {},
+      "ma_nguon": "SGK-TIN10-KNTT",
+      "so_ky_hieu": "SGK-TIN10-2022",
+      "ngay_hieu_luc": "2022-06-01",
+      "vi_tri_trang": "tr.10"
+    }
+  ]
+}

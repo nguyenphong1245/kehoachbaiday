@@ -1,0 +1,67 @@
+{
+  "_mo_ta": "Năng lực Tin học đặc thù + Năng lực chung + Phẩm chất; BaiHoc -[:HINH_THANH]-> các đỉnh này",
+  "nodes": [
+    {
+      "label": "NangLucTinHoc",
+      "ma_dinh_danh": "NL-TIN-A",
+      "ten": "NLa: Sử dụng và quản lí các phương tiện công nghệ thông tin và truyền thông",
+      "properties": { "ma_nang_luc": "NLa" },
+      "ma_nguon": "CT-TIN-2018",
+      "so_ky_hieu": "32/2018/TT-BGDĐT",
+      "ngay_hieu_luc": "2018-12-26",
+      "vi_tri_trang": "tr.8"
+    },
+    {
+      "label": "NangLucChung",
+      "ma_dinh_danh": "NLC-TU-CHU",
+      "ten": "Tự chủ và tự học",
+      "properties": {},
+      "ma_nguon": "CT-TONGT-2018",
+      "so_ky_hieu": "32/2018/TT-BGDĐT",
+      "ngay_hieu_luc": "2018-12-26",
+      "vi_tri_trang": "tr.5"
+    },
+    {
+      "label": "PhamChat",
+      "ma_dinh_danh": "PC-CHAM-CHI",
+      "ten": "Chăm chỉ",
+      "properties": {},
+      "ma_nguon": "CT-TONGT-2018",
+      "so_ky_hieu": "32/2018/TT-BGDĐT",
+      "ngay_hieu_luc": "2018-12-26",
+      "vi_tri_trang": "tr.6"
+    }
+  ],
+  "edges": [
+    {
+      "type": "HINH_THANH",
+      "from": "BH-TIN10-C1-B1",
+      "to": "NL-TIN-A",
+      "properties": {},
+      "ma_nguon": "CT-TIN-2018",
+      "so_ky_hieu": "32/2018/TT-BGDĐT",
+      "ngay_hieu_luc": "2018-12-26",
+      "vi_tri_trang": "tr.15"
+    },
+    {
+      "type": "HINH_THANH",
+      "from": "BH-TIN10-C1-B1",
+      "to": "NLC-TU-CHU",
+      "properties": {},
+      "ma_nguon": "CT-TONGT-2018",
+      "so_ky_hieu": "32/2018/TT-BGDĐT",
+      "ngay_hieu_luc": "2018-12-26",
+      "vi_tri_trang": "tr.15"
+    },
+    {
+      "type": "HINH_THANH",
+      "from": "BH-TIN10-C1-B2",
+      "to": "PC-CHAM-CHI",
+      "properties": {},
+      "ma_nguon": "CT-TONGT-2018",
+      "so_ky_hieu": "32/2018/TT-BGDĐT",
+      "ngay_hieu_luc": "2018-12-26",
+      "vi_tri_trang": "tr.16"
+    }
+  ]
+}

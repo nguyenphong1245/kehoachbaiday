@@ -1,0 +1,117 @@
+{
+  "_mo_ta": "1 PhuongPhapDH với chuỗi BuocQuyTrinh có thứ tự (phục vụ kiểm C7)",
+  "nodes": [
+    {
+      "label": "PhuongPhapDH",
+      "ma_dinh_danh": "PPDH-GQVD",
+      "ten": "Dạy học giải quyết vấn đề",
+      "properties": {},
+      "ma_nguon": "TAI-LIEU-PPDH",
+      "so_ky_hieu": "TLTH-2020",
+      "ngay_hieu_luc": "2020-06-01",
+      "vi_tri_trang": "tr.20"
+    },
+    {
+      "label": "BuocQuyTrinh",
+      "ma_dinh_danh": "PPDH-GQVD-B1",
+      "ten": "Phát hiện và nêu vấn đề",
+      "properties": {},
+      "ma_nguon": "TAI-LIEU-PPDH",
+      "so_ky_hieu": "TLTH-2020",
+      "ngay_hieu_luc": "2020-06-01",
+      "vi_tri_trang": "tr.20"
+    },
+    {
+      "label": "BuocQuyTrinh",
+      "ma_dinh_danh": "PPDH-GQVD-B2",
+      "ten": "Đề xuất giả thuyết, giải pháp",
+      "properties": {},
+      "ma_nguon": "TAI-LIEU-PPDH",
+      "so_ky_hieu": "TLTH-2020",
+      "ngay_hieu_luc": "2020-06-01",
+      "vi_tri_trang": "tr.20"
+    },
+    {
+      "label": "BuocQuyTrinh",
+      "ma_dinh_danh": "PPDH-GQVD-B3",
+      "ten": "Lập kế hoạch giải quyết vấn đề",
+      "properties": {},
+      "ma_nguon": "TAI-LIEU-PPDH",
+      "so_ky_hieu": "TLTH-2020",
+      "ngay_hieu_luc": "2020-06-01",
+      "vi_tri_trang": "tr.21"
+    },
+    {
+      "label": "BuocQuyTrinh",
+      "ma_dinh_danh": "PPDH-GQVD-B4",
+      "ten": "Thực hiện kế hoạch",
+      "properties": {},
+      "ma_nguon": "TAI-LIEU-PPDH",
+      "so_ky_hieu": "TLTH-2020",
+      "ngay_hieu_luc": "2020-06-01",
+      "vi_tri_trang": "tr.21"
+    },
+    {
+      "label": "BuocQuyTrinh",
+      "ma_dinh_danh": "PPDH-GQVD-B5",
+      "ten": "Trình bày, đánh giá kết quả",
+      "properties": {},
+      "ma_nguon": "TAI-LIEU-PPDH",
+      "so_ky_hieu": "TLTH-2020",
+      "ngay_hieu_luc": "2020-06-01",
+      "vi_tri_trang": "tr.21"
+    }
+  ],
+  "edges": [
+    {
+      "type": "GOM_BUOC",
+      "from": "PPDH-GQVD",
+      "to": "PPDH-GQVD-B1",
+      "properties": { "thu_tu": 1 },
+      "ma_nguon": "TAI-LIEU-PPDH",
+      "so_ky_hieu": "TLTH-2020",
+      "ngay_hieu_luc": "2020-06-01",
+      "vi_tri_trang": "tr.20"
+    },
+    {
+      "type": "GOM_BUOC",
+      "from": "PPDH-GQVD",
+      "to": "PPDH-GQVD-B2",
+      "properties": { "thu_tu": 2 },
+      "ma_nguon": "TAI-LIEU-PPDH",
+      "so_ky_hieu": "TLTH-2020",
+      "ngay_hieu_luc": "2020-06-01",
+      "vi_tri_trang": "tr.20"
+    },
+    {
+      "type": "GOM_BUOC",
+      "from": "PPDH-GQVD",
+      "to": "PPDH-GQVD-B3",
+      "properties": { "thu_tu": 3 },
+      "ma_nguon": "TAI-LIEU-PPDH",
+      "so_ky_hieu": "TLTH-2020",
+      "ngay_hieu_luc": "2020-06-01",
+      "vi_tri_trang": "tr.21"
+    },
+    {
+      "type": "GOM_BUOC",
+      "from": "PPDH-GQVD",
+      "to": "PPDH-GQVD-B4",
+      "properties": { "thu_tu": 4 },
+      "ma_nguon": "TAI-LIEU-PPDH",
+      "so_ky_hieu": "TLTH-2020",
+      "ngay_hieu_luc": "2020-06-01",
+      "vi_tri_trang": "tr.21"
+    },
+    {
+      "type": "GOM_BUOC",
+      "from": "PPDH-GQVD",
+      "to": "PPDH-GQVD-B5",
+      "properties": { "thu_tu": 5 },
+      "ma_nguon": "TAI-LIEU-PPDH",
+      "so_ky_hieu": "TLTH-2020",
+      "ngay_hieu_luc": "2020-06-01",
+      "vi_tri_trang": "tr.21"
+    }
+  ]
+}

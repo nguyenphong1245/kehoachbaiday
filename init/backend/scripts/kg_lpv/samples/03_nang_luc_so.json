@@ -1,0 +1,87 @@
+{
+  "_mo_ta": "Chuỗi khung năng lực số: MienNLS -> NangLucThanhPhanNLS -> ChiBaoNLS -> MucDoNLS; ChiBaoNLS -[:AP_DUNG_CHO]-> KhoiLop",
+  "nodes": [
+    {
+      "label": "MienNLS",
+      "ma_dinh_danh": "NLS-M5",
+      "ten": "Miền 5: Giải quyết vấn đề",
+      "properties": { "so_thu_tu": 5 },
+      "ma_nguon": "TT-02-2025",
+      "so_ky_hieu": "02/2025/TT-BGDĐT",
+      "ngay_hieu_luc": "2025-01-15",
+      "vi_tri_trang": "tr.4"
+    },
+    {
+      "label": "NangLucThanhPhanNLS",
+      "ma_dinh_danh": "NLS-NLTP-5.1",
+      "ten": "5.1. Giải quyết các vấn đề kĩ thuật",
+      "properties": {},
+      "ma_nguon": "TT-02-2025",
+      "so_ky_hieu": "02/2025/TT-BGDĐT",
+      "ngay_hieu_luc": "2025-01-15",
+      "vi_tri_trang": "tr.4"
+    },
+    {
+      "label": "ChiBaoNLS",
+      "ma_dinh_danh": "NLS-CB-5.1.NC1a",
+      "ten": "Đánh giá được các vấn đề kĩ thuật khi sử dụng môi trường số và vận hành các thiết bị số",
+      "properties": { "ma_chi_bao": "5.1.NC1a" },
+      "ma_nguon": "CV-3456-PHULUC",
+      "so_ky_hieu": "3456/BGDĐT-GDPT",
+      "ngay_hieu_luc": "2021-08-20",
+      "vi_tri_trang": "tr.12"
+    },
+    {
+      "label": "MucDoNLS",
+      "ma_dinh_danh": "NLS-MD-5.1.NC1a-KL10-M1",
+      "ten": "Mức 1 (lớp 10)",
+      "properties": { "muc": 1 },
+      "ma_nguon": "CV-3456-PHULUC",
+      "so_ky_hieu": "3456/BGDĐT-GDPT",
+      "ngay_hieu_luc": "2021-08-20",
+      "vi_tri_trang": "tr.12"
+    }
+  ],
+  "edges": [
+    {
+      "type": "CO_NANG_LUC_THANH_PHAN",
+      "from": "NLS-M5",
+      "to": "NLS-NLTP-5.1",
+      "properties": {},
+      "ma_nguon": "TT-02-2025",
+      "so_ky_hieu": "02/2025/TT-BGDĐT",
+      "ngay_hieu_luc": "2025-01-15",
+      "vi_tri_trang": "tr.4"
+    },
+    {
+      "type": "CO_CHI_BAO",
+      "from": "NLS-NLTP-5.1",
+      "to": "NLS-CB-5.1.NC1a",
+      "properties": {},
+      "ma_nguon": "CV-3456-PHULUC",
+      "so_ky_hieu": "3456/BGDĐT-GDPT",
+      "ngay_hieu_luc": "2021-08-20",
+      "vi_tri_trang": "tr.12"
+    },
+    {
+      "type": "CO_MUC_DO",
+      "from": "NLS-CB-5.1.NC1a",
+      "to": "NLS-MD-5.1.NC1a-KL10-M1",
+      "properties": {},
+      "ma_nguon": "CV-3456-PHULUC",
+      "so_ky_hieu": "3456/BGDĐT-GDPT",
+      "ngay_hieu_luc": "2021-08-20",
+      "vi_tri_trang": "tr.12"
+    },
+    {
+      "type": "AP_DUNG_CHO",
+      "from": "NLS-CB-5.1.NC1a",
+      "to": "KL10",
+      "properties": {},
+      "ma_nguon": "CV-3456-PHULUC",
+      "so_ky_hieu": "3456/BGDĐT-GDPT",
+      "ngay_hieu_luc": "2021-08-20",
+      "vi_tri_trang": "tr.12"
+    }
+  ]
+}

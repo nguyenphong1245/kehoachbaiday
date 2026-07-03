@@ -1,0 +1,157 @@
+{
+  "_mo_ta": "Cây chương trình: KhoiLop -> ChuDe -> BaiHoc -> YCCD -> MucNhanThuc",
+  "nodes": [
+    {
+      "label": "KhoiLop",
+      "ma_dinh_danh": "KL10",
+      "ten": "Lớp 10",
+      "properties": { "cap_hoc": "THPT" },
+      "ma_nguon": "CT-TIN-2018",
+      "so_ky_hieu": "32/2018/TT-BGDĐT",
+      "ngay_hieu_luc": "2018-12-26",
+      "vi_tri_trang": "tr.6"
+    },
+    {
+      "label": "ChuDe",
+      "ma_dinh_danh": "CD-TIN10-C1",
+      "ten": "Chủ đề A: Máy tính và xã hội tri thức",
+      "properties": {},
+      "ma_nguon": "CT-TIN-2018",
+      "so_ky_hieu": "32/2018/TT-BGDĐT",
+      "ngay_hieu_luc": "2018-12-26",
+      "vi_tri_trang": "tr.15"
+    },
+    {
+      "label": "BaiHoc",
+      "ma_dinh_danh": "BH-TIN10-C1-B1",
+      "ten": "Bài 1: Thông tin và xử lý thông tin",
+      "properties": { "thu_tu": 1 },
+      "ma_nguon": "CT-TIN-2018",
+      "so_ky_hieu": "32/2018/TT-BGDĐT",
+      "ngay_hieu_luc": "2018-12-26",
+      "vi_tri_trang": "tr.15"
+    },
+    {
+      "label": "BaiHoc",
+      "ma_dinh_danh": "BH-TIN10-C1-B2",
+      "ten": "Bài 2: Vai trò của thiết bị thông minh trong đời sống",
+      "properties": { "thu_tu": 2 },
+      "ma_nguon": "CT-TIN-2018",
+      "so_ky_hieu": "32/2018/TT-BGDĐT",
+      "ngay_hieu_luc": "2018-12-26",
+      "vi_tri_trang": "tr.16"
+    },
+    {
+      "label": "MucNhanThuc",
+      "ma_dinh_danh": "MNT-NHAN-BIET",
+      "ten": "Nhận biết",
+      "properties": { "bac": 1 },
+      "ma_nguon": "CV-5512",
+      "so_ky_hieu": "5512/BGDĐT-GDTrH",
+      "ngay_hieu_luc": "2020-12-18",
+      "vi_tri_trang": "tr.3"
+    },
+    {
+      "label": "MucNhanThuc",
+      "ma_dinh_danh": "MNT-VAN-DUNG",
+      "ten": "Vận dụng",
+      "properties": { "bac": 3 },
+      "ma_nguon": "CV-5512",
+      "so_ky_hieu": "5512/BGDĐT-GDTrH",
+      "ngay_hieu_luc": "2020-12-18",
+      "vi_tri_trang": "tr.3"
+    },
+    {
+      "label": "YCCD",
+      "ma_dinh_danh": "YCCD-TIN10-C1-B1-01",
+      "ten": "Nêu được ví dụ minh hoạ mối quan hệ giữa thông tin và dữ liệu",
+      "properties": {},
+      "ma_nguon": "CT-TIN-2018",
+      "so_ky_hieu": "32/2018/TT-BGDĐT",
+      "ngay_hieu_luc": "2018-12-26",
+      "vi_tri_trang": "tr.15"
+    },
+    {
+      "label": "YCCD",
+      "ma_dinh_danh": "YCCD-TIN10-C1-B2-01",
+      "ten": "Trình bày được vai trò của thiết bị thông minh trong việc tạo lập, thu thập và xử lí dữ liệu",
+      "properties": {},
+      "ma_nguon": "CT-TIN-2018",
+      "so_ky_hieu": "32/2018/TT-BGDĐT",
+      "ngay_hieu_luc": "2018-12-26",
+      "vi_tri_trang": "tr.16"
+    }
+  ],
+  "edges": [
+    {
+      "type": "CO_CHU_DE",
+      "from": "KL10",
+      "to": "CD-TIN10-C1",
+      "properties": {},
+      "ma_nguon": "CT-TIN-2018",
+      "so_ky_hieu": "32/2018/TT-BGDĐT",
+      "ngay_hieu_luc": "2018-12-26",
+      "vi_tri_trang": "tr.15"
+    },
+    {
+      "type": "CO_BAI_HOC",
+      "from": "CD-TIN10-C1",
+      "to": "BH-TIN10-C1-B1",
+      "properties": {},
+      "ma_nguon": "CT-TIN-2018",
+      "so_ky_hieu": "32/2018/TT-BGDĐT",
+      "ngay_hieu_luc": "2018-12-26",
+      "vi_tri_trang": "tr.15"
+    },
+    {
+      "type": "CO_BAI_HOC",
+      "from": "CD-TIN10-C1",
+      "to": "BH-TIN10-C1-B2",
+      "properties": {},
+      "ma_nguon": "CT-TIN-2018",
+      "so_ky_hieu": "32/2018/TT-BGDĐT",
+      "ngay_hieu_luc": "2018-12-26",
+      "vi_tri_trang": "tr.16"
+    },
+    {
+      "type": "CO_YCCD",
+      "from": "BH-TIN10-C1-B1",
+      "to": "YCCD-TIN10-C1-B1-01",
+      "properties": {},
+      "ma_nguon": "CT-TIN-2018",
+      "so_ky_hieu": "32/2018/TT-BGDĐT",
+      "ngay_hieu_luc": "2018-12-26",
+      "vi_tri_trang": "tr.15"
+    },
+    {
+      "type": "CO_YCCD",
+      "from": "BH-TIN10-C1-B2",
+      "to": "YCCD-TIN10-C1-B2-01",
+      "properties": {},
+      "ma_nguon": "CT-TIN-2018",
+      "so_ky_hieu": "32/2018/TT-BGDĐT",
+      "ngay_hieu_luc": "2018-12-26",
+      "vi_tri_trang": "tr.16"
+    },
+    {
+      "type": "O_MUC",
+      "from": "YCCD-TIN10-C1-B1-01",
+      "to": "MNT-NHAN-BIET",
+      "properties": {},
+      "ma_nguon": "CV-5512",
+      "so_ky_hieu": "5512/BGDĐT-GDTrH",
+      "ngay_hieu_luc": "2020-12-18",
+      "vi_tri_trang": "tr.3"
+    },
+    {
+      "type": "O_MUC",
+      "from": "YCCD-TIN10-C1-B2-01",
+      "to": "MNT-VAN-DUNG",
+      "properties": {},
+      "ma_nguon": "CV-5512",
+      "so_ky_hieu": "5512/BGDĐT-GDTrH",
+      "ngay_hieu_luc": "2020-12-18",
+      "vi_tri_trang": "tr.3"
+    }
+  ]
+}
