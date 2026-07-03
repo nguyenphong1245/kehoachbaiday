@@ -285,6 +285,57 @@ async def test_repair_reverify_fail_keeps_diff_but_does_not_mark_repaired(db_ses
     assert plan.sections[0]["content"] == "Nội dung gốc."
 
 
+# =========================== (c2) Kiểm lại: unjudged (LLM lỗi) KHÔNG tính là fail ===========================
+
+
+@pytest.mark.asyncio
+async def test_repair_reverify_unjudged_finding_does_not_fail_repair(db_session, teacher_user, monkeypatch):
+    """Fix (final-review Finding 1): re-verify M6 gặp lỗi LLM (timeout/API lỗi) chỉ
+    tạo finding `status="unjudged"` (không phán xử được, §9) — KHÔNG phải lỗi nội
+    dung đã xác nhận. `_reverify` phải loại `unjudged` khỏi `relevant` trước khi
+    tính `passed`; nếu không, finding đã sửa đúng sẽ bị đánh oan `reverified_fail`
+    chỉ vì 1 lượt LLM hỏng khi kiểm lại (không liên quan chất lượng bản sửa)."""
+    monkeypatch.setattr(graph_client, "get_lesson_context", lambda lesson_id, grade: LessonContext())
+    monkeypatch.setattr(
+        repairer, "generate_json",
+        AsyncMock(return_value=({"after": "Nội dung đã sửa đúng chuẩn."}, 8)),
+    )
+    # Re-verify M6 (N2): LLM hỏng -> chỉ tạo finding "unjudged", KHÔNG phải lỗi xác nhận.
+    monkeypatch.setattr(n2_curriculum, "generate_json", AsyncMock(side_effect=RuntimeError("LLM API lỗi tạm thời")))
+
+    sections = [{"section_id": "khoi_dong", "section_type": "khoi_dong", "title": "Khởi động", "content": "Nội dung gốc chưa đúng."}]
+    plan = SavedLessonPlan(user_id=teacher_user.id, title="KHBD", content="c", sections=sections)
+    db_session.add(plan)
+    await db_session.commit()
+    await db_session.refresh(plan)
+
+    segments = SegmentedPlan(
+        objective_clauses=[],
+        activity_components=[_act("khoi_dong__noi_dung", "noi_dung", "Nội dung gốc chưa đúng.", "khoi_dong")],
+    ).model_dump(mode="json")
+    job = KgLpvJob(user_id=teacher_user.id, saved_lesson_plan_id=plan.id, status="done", progress=100, segments=segments)
+    db_session.add(job)
+    await db_session.commit()
+    await db_session.refresh(job)
+
+    finding = KgLpvFinding(
+        job_id=job.id, code="M6", branch="N2", section_id="khoi_dong",
+        evidence=[{"ma_dinh_danh": "MDKT-1"}], explanation="Kiến thức thiếu căn cứ.", status="open",
+    )
+    db_session.add(finding)
+    await db_session.commit()
+    await db_session.refresh(finding)
+
+    diffs = await repair(db_session, job, [finding])
+
+    assert len(diffs) == 1
+    assert diffs[0].after == "Nội dung đã sửa đúng chuẩn."
+    await db_session.refresh(finding)
+    # unjudged khi kiểm lại KHÔNG được tính là fail -> finding vẫn "repaired", diff áp dụng được
+    assert finding.status == "repaired"
+    assert finding.repair_diff is not None
+
+
 # =========================== (d) Đoạn phụ thuộc được kiểm lại ===========================
 
 

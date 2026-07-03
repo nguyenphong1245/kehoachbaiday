@@ -220,6 +220,10 @@ async def _reverify(
                 + [f for f in truc5_findings if f.section_id == section_id]
                 + [f for f in truc6_findings if f.section_id == section_id]
             )
+        # "unjudged" (phán xử LLM lỗi khi kiểm lại, §9) KHÔNG phải lỗi nội dung đã
+        # xác nhận — chỉ finding "open" (thật sự xác nhận) mới được tính là kiểm
+        # lại fail, tránh 1 lượt LLM hỏng khi re-verify chặn oan bản sửa đã đúng.
+        relevant = [f for f in relevant if f.status != "unjudged"]
 
         passed = not relevant
         new_status = "repaired" if passed else "reverified_fail"

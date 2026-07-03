@@ -16,6 +16,7 @@ from app.models.saved_lesson_plan import SavedLessonPlan
 from app.modules.kg_lpv import feature_flag as feature_flag_accessor
 from app.modules.kg_lpv.error_codes import ErrorCode, VerificationBranch
 from app.modules.kg_lpv.graph_client import graph_client
+from app.modules.kg_lpv.models import KgLpvFinding, KgLpvJob
 from app.modules.kg_lpv.pipeline import n2_curriculum
 from app.modules.kg_lpv.schemas import LessonContext
 from tests.conftest import TestingSessionLocal
@@ -25,6 +26,7 @@ from tests.helpers.factories import create_teacher
 VERIFY_URL = "/api/v1/kg-lpv/verify"
 JOB_URL = "/api/v1/kg-lpv/jobs/{job_id}"
 REPORT_URL = "/api/v1/kg-lpv/jobs/{job_id}/report"
+DISMISS_URL = "/api/v1/kg-lpv/findings/{finding_id}/dismiss"
 
 _SECTIONS = [
     {
@@ -257,3 +259,59 @@ async def test_report_non_owned_job_returns_404(ready_kg_lpv, db_session, roles,
 
     resp2 = await auth_get(ready_kg_lpv, REPORT_URL.format(job_id=job_id), other.id)
     assert resp2.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_report_summary_excludes_dismissed_finding(ready_kg_lpv, db_session, teacher_user):
+    """Correctness fix (final-review Finding 2): giáo viên bác bỏ 1 finding (§8)
+    -> finding đó KHÔNG còn là lỗi đang hoạt động, phải biến mất khỏi
+    `total_confirmed`/`summary` và khỏi danh sách `findings` của nhánh của nó
+    (trước fix, router chỉ loại `unjudged`, vẫn cộng `dismissed` vào confirmed)."""
+    plan = SavedLessonPlan(
+        user_id=teacher_user.id, title="KHBD test", content="noi dung", sections=_SECTIONS,
+    )
+    db_session.add(plan)
+    await db_session.commit()
+    await db_session.refresh(plan)
+
+    job = KgLpvJob(user_id=teacher_user.id, saved_lesson_plan_id=plan.id, status="done", progress=100)
+    db_session.add(job)
+    await db_session.commit()
+    await db_session.refresh(job)
+
+    f_open = KgLpvFinding(
+        job_id=job.id, code=ErrorCode.M1.value, branch=VerificationBranch.N2.value, section_id="muc_tieu",
+        evidence=[{"a": 1}], explanation="Mục tiêu lệch YCCĐ.", status="open",
+    )
+    f_to_dismiss = KgLpvFinding(
+        job_id=job.id, code=ErrorCode.M2.value, branch=VerificationBranch.N2.value, section_id="muc_tieu",
+        evidence=[{"a": 1}], explanation="Động từ không đo được.", status="open",
+    )
+    db_session.add_all([f_open, f_to_dismiss])
+    await db_session.commit()
+    for f in (f_open, f_to_dismiss):
+        await db_session.refresh(f)
+
+    resp_before = await auth_get(ready_kg_lpv, REPORT_URL.format(job_id=job.id), teacher_user.id)
+    assert resp_before.status_code == 200
+    report_before = resp_before.json()
+    assert report_before["summary"]["total_confirmed"] == 2
+
+    resp_dismiss = await auth_post(ready_kg_lpv, DISMISS_URL.format(finding_id=f_to_dismiss.id), teacher_user.id)
+    assert resp_dismiss.status_code == 200
+    assert resp_dismiss.json()["status"] == "dismissed"
+
+    resp_after = await auth_get(ready_kg_lpv, REPORT_URL.format(job_id=job.id), teacher_user.id)
+    assert resp_after.status_code == 200
+    report_after = resp_after.json()
+
+    assert report_after["summary"]["total_confirmed"] == 1
+    assert report_after["summary"].get(ErrorCode.M2.value, 0) == 0
+
+    n2_findings = next(b for b in report_after["branches"] if b["branch"] == "N2")["findings"]
+    n2_codes = {f["code"] for f in n2_findings}
+    assert ErrorCode.M1.value in n2_codes
+    assert ErrorCode.M2.value not in n2_codes
+
+    # dismissed KHÔNG phải unjudged -> không được lọt vào danh sách unjudged
+    assert all(f["status"] != "dismissed" for f in report_after["unjudged"])

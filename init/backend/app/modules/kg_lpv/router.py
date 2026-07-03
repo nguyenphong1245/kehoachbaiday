@@ -215,7 +215,8 @@ async def get_job_report(
     """Sổ lỗi đầy đủ của job (owner-only, §6.3) — findings nhóm theo nhánh N1/N2/N3
     kèm đếm theo mã. Findings `status="unjudged"` (phán xử LLM lỗi, §9) liệt kê
     RIÊNG trong `unjudged` — KHÔNG tính vào `summary` (chỉ mang tính kiểm toán, không
-    phải lỗi nội dung đã xác nhận)."""
+    phải lỗi nội dung đã xác nhận). Findings `status="dismissed"` (giáo viên đã bác
+    bỏ, §8) cũng KHÔNG tính vào `summary` — không còn là lỗi đang hoạt động."""
     job = await db.get(KgLpvJob, job_id)
     if job is None or job.user_id != current_user.id:
         raise HTTPException(
@@ -227,7 +228,9 @@ async def get_job_report(
     all_findings = result.scalars().all()
 
     unjudged = [FindingOut.model_validate(f) for f in all_findings if f.status == "unjudged"]
-    confirmed = [f for f in all_findings if f.status != "unjudged"]
+    # "dismissed" = giáo viên đã bác bỏ (§8) -> không còn là lỗi đang hoạt động,
+    # không được tính vào tổng lỗi xác nhận cùng "unjudged" (chỉ mang tính kiểm toán).
+    confirmed = [f for f in all_findings if f.status not in ("unjudged", "dismissed")]
 
     branches: list[BranchReport] = []
     summary: dict[str, int] = {}
