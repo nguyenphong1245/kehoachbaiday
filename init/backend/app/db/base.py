@@ -31,6 +31,7 @@ def load_all_models() -> None:
     import app.models.teaching_rule  # noqa: F401
     import app.models.lesson_plan_comment  # noqa: F401
     import app.models.admin_ai_model_setting  # noqa: F401
+    import app.models.feature_flag  # noqa: F401
 
 
 load_all_models()

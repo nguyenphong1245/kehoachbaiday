@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 from typing import Any
 
 from app.api.deps import get_current_user, require_admin
+from app.core.logging import logger
 from app.core.rate_limiter import limiter
 from app.db.session import get_db
 from app.models.user import User
@@ -20,6 +21,7 @@ from app.models.code_exercise import CodeExercise, CodeSubmission
 from app.models.classroom import Classroom
 from app.models.class_student import ClassStudent
 from app.models.classroom_material import ClassroomMaterial
+from app.models.feature_flag import FeatureFlag
 from pydantic import BaseModel
 from app.schemas.admin import (
     DashboardStats,
@@ -29,6 +31,8 @@ from app.schemas.admin import (
     ContentListResponse,
     AIModelSettingsRead,
     AIModelSettingsUpdate,
+    FeatureFlagRead,
+    FeatureFlagUpdate,
 )
 from app.services.admin_ai_model_registry import (
     ALLOWED_GEMINI_MODELS,
@@ -464,3 +468,52 @@ async def get_teachers_overview(request: Request, session: AsyncSession = Depend
     result.sort(key=lambda x: x["total_classrooms"], reverse=True)
 
     return result
+
+
+@router.get(
+    "/feature-flags",
+    response_model=list[FeatureFlagRead],
+    dependencies=[Depends(require_admin)],
+)
+@limiter.limit("30/minute")
+async def list_feature_flags(request: Request, session: AsyncSession = Depends(get_db)):
+    """Danh sách cờ tính năng (bảng feature_flags dùng chung, không riêng KG-LPV)."""
+    result = await session.execute(select(FeatureFlag))
+    return result.scalars().all()
+
+
+@router.put(
+    "/feature-flags/{key}",
+    response_model=FeatureFlagRead,
+    dependencies=[Depends(require_admin)],
+)
+@limiter.limit("10/minute")
+async def update_feature_flag(
+    request: Request,
+    key: str,
+    payload: FeatureFlagUpdate,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Bật/tắt runtime 1 cờ tính năng. Có hiệu lực ngay (xóa cache trong tiến trình nếu có)."""
+    flag = await session.get(FeatureFlag, key)
+    if flag is None:
+        flag = FeatureFlag(key=key, enabled=payload.enabled, updated_by=current_user.id)
+        session.add(flag)
+    else:
+        flag.enabled = payload.enabled
+        flag.updated_by = current_user.id
+
+    await session.commit()
+    await session.refresh(flag)
+
+    if key == "kg_lpv":
+        from app.modules.kg_lpv.feature_flag import invalidate_cache
+        invalidate_cache()
+
+    logger.info(
+        "admin.feature_flag_updated key=%s enabled=%s admin_id=%s",
+        key, payload.enabled, current_user.id,
+    )
+
+    return flag

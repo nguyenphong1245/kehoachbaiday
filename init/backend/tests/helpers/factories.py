@@ -10,7 +10,6 @@ from app.models.class_student import ClassStudent
 from app.models.classroom import Classroom
 from app.models.student_group import GroupMember
 from app.models.guide_card import GuideCard
-from app.models.profile import UserProfile
 from app.models.role import Role
 from app.models.settings import UserSettings
 from app.models.student_group import StudentGroup
@@ -52,7 +51,6 @@ async def create_user(
         is_active=is_active,
         token_balance=token_balance,
     )
-    user.profile = UserProfile()
     user.settings = UserSettings()
 
     if role_names and roles:

@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from app.api import api_router
+from app.api import build_api_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging, logger
 from fastapi.middleware.cors import CORSMiddleware
@@ -95,6 +95,14 @@ async def lifespan(app: FastAPI):
         logger.info("Neo4j driver closed")
     except Exception as e:
         logger.warning("Failed to close Neo4j driver: %s", e)
+
+    # Đóng Neo4j driver KG-LPV (nếu đã init)
+    try:
+        from app.modules.kg_lpv.graph_client import graph_client as kg_lpv_graph_client
+        kg_lpv_graph_client.close()
+        logger.info("KG-LPV Neo4j driver closed")
+    except Exception as e:
+        logger.warning("Failed to close KG-LPV Neo4j driver: %s", e)
 
     # Đóng database engine
     try:
@@ -234,7 +242,7 @@ def get_app() -> FastAPI:
     application.state.limiter = limiter
     application.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-    application.include_router(api_router, prefix=settings.api_v1_prefix)
+    application.include_router(build_api_router(), prefix=settings.api_v1_prefix)
 
     # WebSocket routes (mounted directly, not under API prefix)
     from app.api.routes.ws_collaboration import router as ws_router

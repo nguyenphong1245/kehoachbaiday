@@ -4,7 +4,7 @@ API Routes cho Lesson Plan Builder - Giao diện mới cho việc soạn kế ho
 from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
 from fastapi.responses import StreamingResponse
 from typing import Optional
-from sqlalchemy import select, func, update
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 import json
 import asyncio
@@ -50,6 +50,7 @@ from app.services.admin_ai_model_registry import (
     get_effective_model_for_feature,
 )
 from app.services.response_parser import parse_response_to_sections
+from app.services.token_service import deduct_tokens as _deduct_tokens, check_token_balance as _check_token_balance
 from app.prompts.lesson_plan_generation import build_teacher_preferences_section
 from app.utils.prompt_sanitize import sanitize_prompt_input
 
@@ -60,62 +61,6 @@ _LESSON_PLAN_RESERVE_TOKENS = 5000  # Reserve more tokens for lesson plan genera
 _MINDMAP_RESERVE_TOKENS = 500       # Reserve for mindmap generation
 _EDIT_SUGGEST_RESERVE_TOKENS = 1000  # Reserve for edit-suggest
 _EDIT_APPLY_RESERVE_TOKENS = 1500    # Reserve for edit-apply
-
-
-async def _deduct_tokens(session: AsyncSession, user_id: int, amount: int) -> bool:
-    """Deduct tokens from user balance and track usage. Returns True if successful.
-    If amount exceeds balance, deduct all remaining balance instead of failing.
-    """
-    if amount <= 0:
-        return True
-
-    # First, try to deduct the full amount
-    result = await session.execute(
-        update(User)
-        .where(User.id == user_id, User.token_balance >= amount)
-        .values(
-            token_balance=User.token_balance - amount,
-            tokens_used=User.tokens_used + amount,
-        )
-        .returning(User.token_balance)
-    )
-    row = result.first()
-    if row is not None:
-        await session.flush()
-        logger.info("lesson_builder.token_deducted user_id=%s amount=%s new_balance=%s", user_id, amount, row[0])
-        return True
-
-    # Full amount exceeds balance — deduct whatever remains
-    result2 = await session.execute(
-        select(User.token_balance).where(User.id == user_id)
-    )
-    current_balance = result2.scalar()
-    if current_balance is None or current_balance <= 0:
-        return False
-
-    await session.execute(
-        update(User)
-        .where(User.id == user_id)
-        .values(
-            token_balance=0,
-            tokens_used=User.tokens_used + current_balance,
-        )
-    )
-    await session.flush()
-    logger.info(
-        "lesson_builder.token_deducted user_id=%s amount=%s (capped from %s) new_balance=0",
-        user_id, current_balance, amount,
-    )
-    return True
-
-
-async def _check_token_balance(session: AsyncSession, user_id: int, required: int) -> bool:
-    """Check if user has enough token balance."""
-    result = await session.execute(
-        select(User.token_balance).where(User.id == user_id)
-    )
-    balance = result.scalar()
-    return balance is not None and balance >= required
 
 
 @router.get("/static-data", response_model=StaticDataResponse)

@@ -86,3 +86,18 @@ class AIModelSettingUpdateItem(BaseModel):
 
 class AIModelSettingsUpdate(BaseModel):
     settings: list[AIModelSettingUpdateItem]
+
+
+class FeatureFlagRead(BaseModel):
+    key: str
+    enabled: bool
+    config: dict[str, Any] | None = None
+    updated_by: int | None = None
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class FeatureFlagUpdate(BaseModel):
+    enabled: bool

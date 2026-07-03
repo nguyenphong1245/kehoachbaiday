@@ -66,6 +66,13 @@ class Settings(BaseSettings):
     # Internal API key for auto-submit and scheduled tasks
     internal_api_key: str = "CHANGE-ME-IN-ENV-FILE-INTERNAL-KEY"
 
+    # KG-LPV module (kiểm chứng KHBD bằng đồ thị tri thức) — tầng 2 bật/tắt (cần restart)
+    kg_lpv_enabled: bool = False
+    kg_lpv_neo4j_uri: str | None = None
+    kg_lpv_neo4j_username: str | None = None
+    kg_lpv_neo4j_password: str | None = None
+    kg_lpv_neo4j_database: str = "neo4j"
+
     @property
     def cors_origins_list(self) -> list[str]:
         """Parse CORS_ORIGINS from comma-separated string to list."""
