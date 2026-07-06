@@ -109,4 +109,86 @@ describe("VerificationPanel", () => {
     expect(screen.getByText("Tách đoạn")).toBeInTheDocument();
     expect(screen.getAllByText("Định danh & Đối chiếu").length).toBeGreaterThan(0);
   });
+
+  const makeOneOpenReport = (): ReportResponse => ({
+    job_id: 1,
+    status: "done",
+    branches: [
+      { branch: "N1", counts_by_code: {}, findings: [] },
+      { branch: "N2", counts_by_code: { M2: 1 }, findings: [makeFinding({ id: 5, code: "M2", branch: "N2", section_id: "hoat_dong_1" })] },
+      { branch: "N3", counts_by_code: {}, findings: [] },
+    ],
+    unjudged: [],
+    summary: { M2: 1, total_confirmed: 1 },
+  });
+
+  it("docked variant: open finding is auto-selected and batch button calls onRepairBatch", () => {
+    const onRepairBatch = vi.fn();
+    render(
+      <VerificationPanel
+        open
+        variant="docked"
+        onClose={vi.fn()}
+        job={{ status: "done", progress: 100, stats: null }}
+        report={makeOneOpenReport()}
+        progress={100}
+        phase="Hoàn tất"
+        loading={false}
+        error={null}
+        onDismiss={vi.fn()}
+        onLocate={vi.fn()}
+        onRepairBatch={onRepairBatch}
+      />
+    );
+
+    const batchButton = screen.getByRole("button", { name: /Sửa 1 lỗi đã chọn/i });
+    fireEvent.click(batchButton);
+    expect(onRepairBatch).toHaveBeenCalledWith([{ id: 5 }]);
+  });
+
+  it("docked variant: editing a finding's explanation includes explanation_override in the batch call", () => {
+    const onRepairBatch = vi.fn();
+    render(
+      <VerificationPanel
+        open
+        variant="docked"
+        onClose={vi.fn()}
+        job={{ status: "done", progress: 100, stats: null }}
+        report={makeOneOpenReport()}
+        progress={100}
+        phase="Hoàn tất"
+        loading={false}
+        error={null}
+        onDismiss={vi.fn()}
+        onLocate={vi.fn()}
+        onRepairBatch={onRepairBatch}
+      />
+    );
+
+    // Mở chế độ sửa nhận xét (nút bút chì) rồi gõ nội dung mới
+    fireEvent.click(screen.getByTitle("Sửa nhận xét"));
+    const textarea = screen.getByRole("textbox");
+    fireEvent.change(textarea, { target: { value: "Giải thích mới" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /Sửa 1 lỗi đã chọn/i }));
+    expect(onRepairBatch).toHaveBeenCalledWith([{ id: 5, explanation_override: "Giải thích mới" }]);
+  });
+
+  it("overlay variant (default): no batch button is rendered", () => {
+    render(
+      <VerificationPanel
+        open
+        onClose={vi.fn()}
+        job={{ status: "done", progress: 100, stats: null }}
+        report={makeOneOpenReport()}
+        progress={100}
+        phase="Hoàn tất"
+        loading={false}
+        error={null}
+        onDismiss={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByRole("button", { name: /lỗi đã chọn/i })).not.toBeInTheDocument();
+  });
 });

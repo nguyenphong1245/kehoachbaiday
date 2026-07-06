@@ -4,9 +4,9 @@
  * sổ lỗi nhóm theo nhánh N1/N2/N3. Kiểm chứng chạy bất đồng bộ — giáo viên có
  * thể đóng panel và tiếp tục chỉnh sửa; không bao giờ tự động thay nội dung KHBD.
  */
-import React from "react";
-import { AlertCircle, Check, Loader2, X } from "lucide-react";
-import type { JobStatusResponse, ReportResponse, SectionDiff } from "@/types/kgLpv";
+import React, { useEffect, useState } from "react";
+import { AlertCircle, Check, Loader2, Wrench, X } from "lucide-react";
+import type { JobStatusResponse, ReportResponse, RepairFindingItem, SectionDiff } from "@/types/kgLpv";
 import { FindingCard } from "./FindingCard";
 import { RepairDiffModal } from "./RepairDiffModal";
 import { SummaryBar } from "./SummaryBar";
@@ -49,6 +49,8 @@ interface VerificationPanelProps {
   repairError?: string | null;
   onApplyDiffs?: (sectionIds: string[]) => void | Promise<void>;
   onCloseDiffModal?: () => void;
+  variant?: "overlay" | "docked";
+  onRepairBatch?: (items: RepairFindingItem[]) => void | Promise<void>;
 }
 
 export const VerificationPanel: React.FC<VerificationPanelProps> = ({
@@ -68,17 +70,55 @@ export const VerificationPanel: React.FC<VerificationPanelProps> = ({
   repairError = null,
   onApplyDiffs,
   onCloseDiffModal,
+  variant = "overlay",
+  onRepairBatch,
 }) => {
   const activeStep = currentStepIndex(job?.status);
   const isRunning = loading || (job !== null && !report && job.status !== "failed");
 
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [overrides, setOverrides] = useState<Record<number, string>>({});
+
+  useEffect(() => {
+    if (!report) return;
+    const openIds = new Set<number>();
+    report.branches.forEach((branch) => {
+      branch.findings.forEach((finding) => {
+        if (finding.status === "open") openIds.add(finding.id);
+      });
+    });
+    setSelectedIds(openIds);
+  }, [report]);
+
+  const handleToggleSelect = (findingId: number, next: boolean) => {
+    setSelectedIds((prev) => {
+      const nextSet = new Set(prev);
+      if (next) nextSet.add(findingId);
+      else nextSet.delete(findingId);
+      return nextSet;
+    });
+  };
+
+  const handleRepairBatch = () => {
+    const items: RepairFindingItem[] = [...selectedIds].map((id) =>
+      overrides[id] ? { id, explanation_override: overrides[id] } : { id }
+    );
+    onRepairBatch?.(items);
+  };
+
   return (
     <>
-      {open && <div className="fixed inset-0 bg-black/20 z-40" onClick={onClose} />}
+      {variant === "overlay" && open && (
+        <div className="fixed inset-0 bg-black/20 z-40" onClick={onClose} />
+      )}
       <div
-        className={`fixed top-0 right-0 h-screen w-full sm:w-96 bg-white dark:bg-stone-800 border-l border-stone-200 dark:border-stone-700 shadow-2xl z-50 transform transition-transform duration-300 ease-out flex flex-col ${
-          open ? "translate-x-0" : "translate-x-full"
-        }`}
+        className={
+          variant === "docked"
+            ? "relative h-full w-full max-w-md border-l border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 flex flex-col"
+            : `fixed top-0 right-0 h-screen w-full sm:w-96 bg-white dark:bg-stone-800 border-l border-stone-200 dark:border-stone-700 shadow-2xl z-50 transform transition-transform duration-300 ease-out flex flex-col ${
+                open ? "translate-x-0" : "translate-x-full"
+              }`
+        }
       >
         <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-stone-200 dark:border-stone-700">
           <h2 className="text-sm font-bold text-stone-800 dark:text-white uppercase tracking-wide">
@@ -172,6 +212,10 @@ export const VerificationPanel: React.FC<VerificationPanelProps> = ({
                           onDismiss={onDismiss}
                           onLocate={onLocate}
                           onRepair={onRepair}
+                          selectable={variant === "docked"}
+                          selected={selectedIds.has(finding.id)}
+                          onToggleSelect={handleToggleSelect}
+                          onExplanationChange={(id, text) => setOverrides((o) => ({ ...o, [id]: text }))}
                         />
                       ))}
                     </div>
@@ -206,6 +250,19 @@ export const VerificationPanel: React.FC<VerificationPanelProps> = ({
             </p>
           )}
         </div>
+
+        {variant === "docked" && selectedIds.size > 0 && (
+          <div className="flex-shrink-0 border-t border-stone-200 dark:border-stone-700 p-3">
+            <button
+              type="button"
+              onClick={handleRepairBatch}
+              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold text-white bg-brand hover:bg-brand-dark rounded-lg transition-colors"
+            >
+              <Wrench className="w-4 h-4" />
+              Sửa {selectedIds.size} lỗi đã chọn
+            </button>
+          </div>
+        )}
       </div>
 
       {(repairing || (diffs !== null && diffs !== undefined)) && (
