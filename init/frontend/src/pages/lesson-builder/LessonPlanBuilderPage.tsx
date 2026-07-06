@@ -834,7 +834,7 @@ export const LessonPlanBuilderPage: React.FC = () => {
               onBack={handleBackToConfigure}
               onSaved={setSavedPlanId}
               onAutoFix={handleAutoFix}
-              autoFixEnabled={kgLpvStatus.enabled && kgLpvStatus.availability === "ok"}
+              autoFixEnabled={!!savedPlanId && kgLpvStatus.enabled && kgLpvStatus.availability === "ok"}
             />
           )}
         </main>
