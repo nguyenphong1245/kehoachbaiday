@@ -27,6 +27,7 @@ import {
   List,
   Sparkles,
   MoreHorizontal,
+  Wand2,
 } from "lucide-react";
 import type { LessonPlanSection, GenerateLessonPlanResponse, ActivityConfig, EditRelatedChange } from "@/types/lessonBuilder";
 import { exportToPDF, generateMindmap, saveLessonPlan, updateSavedLessonPlan } from "@/services/lessonBuilderService";
@@ -62,6 +63,8 @@ interface LessonPlanOutputProps {
   savedLessonPlanId?: string;
   hideFullscreen?: boolean;
   onSaved?: (savedLessonPlanId: string) => void;
+  onAutoFix?: () => void;
+  autoFixEnabled?: boolean;
 }
 
 // ============== Turndown helpers ==============
@@ -164,6 +167,13 @@ const escapeHtml = (text: string): string => {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
+};
+
+// Neo DOM cho mỗi section KHBD (dùng cho Sửa tự động - AF6 onLocate).
+// Chèn dạng raw-HTML block (div, có blank line trước/sau) để marked.parse giữ nguyên,
+// không chèn vào giữa dòng để tránh phá vỡ heading markdown ngay sau nó.
+const sectionAnchorHtml = (sectionId: string): string => {
+  return `\n\n<div id="kglpv-section-${sectionId}" class="kglpv-anchor" style="height:0;overflow:hidden;"></div>\n\n`;
 };
 
 /**
@@ -760,6 +770,8 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
   savedLessonPlanId,
   hideFullscreen,
   onSaved,
+  onAutoFix,
+  autoFixEnabled,
 }) => {
   const fullSectionTitle = "Nội dung";
 
@@ -938,7 +950,9 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
   };
 
   // Ghép toàn bộ sections thành 1 chuỗi markdown liên tục
-  const getFullMarkdown = useCallback(() => {
+  // withAnchors=true chèn neo DOM (#kglpv-section-<id>) cho từng section — dùng khi build
+  // HTML để hiển thị trong editor; để false khi build markdown thuần cho AI (fullLessonForAIEdit).
+  const getFullMarkdown = useCallback((withAnchors = false) => {
     const mainSections = sections.filter(
       (s) => !["thong_tin_chung", "phieu_hoc_tap", "trac_nghiem"].includes(s.section_type)
     );
@@ -968,6 +982,9 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
       if (s.mindmap_data?.trim()) {
         sectionContent = insertMindmapPlaceholder(sectionContent, s.section_id, s.mindmap_activity_name);
       }
+      if (withAnchors) {
+        sectionContent = sectionAnchorHtml(s.section_id) + sectionContent;
+      }
       return sectionContent;
     }).join("\n\n");
 
@@ -976,19 +993,21 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
       if (worksheetSections.length > 0) {
         content += "### **1. Phiếu học tập**\n\n";
         worksheetSections.forEach(s => {
+          const anchor = withAnchors ? sectionAnchorHtml(s.section_id) : "";
           // Prefer worksheet_data, fall back to content
           if (s.worksheet_data) {
-            content += renderWorksheetDataToMarkdown(s.worksheet_data, s.title) + "\n\n";
+            content += anchor + renderWorksheetDataToMarkdown(s.worksheet_data, s.title) + "\n\n";
           } else if (s.content) {
-            content += `${s.content}\n\n`;
+            content += `${anchor}${s.content}\n\n`;
           }
         });
       }
       if (quizSections.length > 0) {
         content += "### **2. Trắc nghiệm**\n\n";
         quizSections.forEach(s => {
+          const anchor = withAnchors ? sectionAnchorHtml(s.section_id) : "";
           const cleanedContent = s.content.replace(/\n---\n/g, '\n');
-          content += `${cleanedContent}\n\n`;
+          content += `${anchor}${cleanedContent}\n\n`;
         });
       }
     }
@@ -1147,7 +1166,7 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
       if (s.mindmap_data?.trim()) {
         sc = insertMindmapPlaceholder(sc, s.section_id, s.mindmap_activity_name);
       }
-      return sc;
+      return sectionAnchorHtml(s.section_id) + sc;
     }).join("\n\n");
 
     const worksheetSections = updatedSections.filter((s) => s.section_type === "phieu_hoc_tap");
@@ -1158,16 +1177,16 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
         content += "### **1. Phiếu học tập**\n\n";
         worksheetSections.forEach((s) => {
           if (s.worksheet_data) {
-            content += renderWorksheetDataToMarkdown(s.worksheet_data, s.title) + "\n\n";
+            content += sectionAnchorHtml(s.section_id) + renderWorksheetDataToMarkdown(s.worksheet_data, s.title) + "\n\n";
           } else if (s.content) {
-            content += `${s.content}\n\n`;
+            content += `${sectionAnchorHtml(s.section_id)}${s.content}\n\n`;
           }
         });
       }
       if (quizSections.length > 0) {
         content += "### **2. Trắc nghiệm**\n\n";
         quizSections.forEach((s) => {
-          content += `${s.content.replace(/\n---\n/g, "\n")}\n\n`;
+          content += `${sectionAnchorHtml(s.section_id)}${s.content.replace(/\n---\n/g, "\n")}\n\n`;
         });
       }
     }
@@ -1218,7 +1237,7 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
         // Loaded from saved KHBD with HTML content — use directly (preserves table formatting)
         html = fc;
       } else {
-        const fullMd = getFullMarkdown();
+        const fullMd = getFullMarkdown(true);
         html = marked.parse(fullMd) as string;
       }
       // Auto-format quiz answer keys into tables
@@ -3029,6 +3048,18 @@ export const LessonPlanOutput: React.FC<LessonPlanOutputProps> = ({
 
         {showActionsMenu && (
           <div className="absolute right-0 mt-1.5 w-52 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 shadow-xl z-20 p-1">
+            {autoFixEnabled && (
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { setShowActionsMenu(false); onAutoFix?.(); }}
+                className="w-full px-2.5 py-2 text-xs rounded-md text-left text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/30 flex items-center gap-2"
+                title="Kiểm chứng KHBD rồi sửa các lỗi phát hiện được"
+              >
+                <Wand2 className="w-3.5 h-3.5" />
+                <span>Sửa tự động</span>
+              </button>
+            )}
+
             <button
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
