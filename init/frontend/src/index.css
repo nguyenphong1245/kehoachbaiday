@@ -444,6 +444,19 @@ a {
   @apply text-inherit my-0;
 }
 
+/* KG-LPV: cuộn tới + tô nền tạm thời khi nhấn "Định vị" trên một nhận xét */
+.kglpv-locate-highlight {
+  background-color: rgba(250, 204, 21, 0.25); /* amber-300/25 */
+  transition: background-color 0.3s ease;
+  border-radius: 0.375rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .kglpv-locate-highlight {
+    background-color: rgba(250, 204, 21, 0.18);
+  }
+}
+
 /* Rich editor: Ctrl+Click to open link hint */
 .rich-editor-content a {
   cursor: text;

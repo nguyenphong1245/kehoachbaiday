@@ -96,6 +96,19 @@ export const LessonPlanBuilderPage: React.FC = () => {
   const kgLpvJob = useKgLpvJob();
   const [kgLpvPanelOpen, setKgLpvPanelOpen] = useState(false);
   const [savedPlanId, setSavedPlanId] = useState<string | null>(null);
+  const [kgLpvDocked, setKgLpvDocked] = useState(false);
+  // Docked chỉ áp dụng ở màn hình >= md; dưới đó luôn dùng overlay để không vỡ layout.
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(min-width: 768px)").matches : true
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mql = window.matchMedia("(min-width: 768px)");
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
 
   const handleVerify = () => {
     if (!savedPlanId) return;
@@ -103,14 +116,49 @@ export const LessonPlanBuilderPage: React.FC = () => {
     kgLpvJob.start(Number(savedPlanId));
   };
 
-  const handleLocateSection = (sectionId: string) => {
-    const el = document.getElementById(sectionId);
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-    } else {
-      console.log("kg-lpv: không tìm thấy anchor cho section", sectionId);
+  const handleAutoFix = useCallback(async () => {
+    setKgLpvDocked(true);
+    setKgLpvPanelOpen(true);
+    // Nếu chưa có job ở trạng thái cuối trong phiên → chạy kiểm chứng.
+    if (!kgLpvJob.job || !["done", "repaired"].includes(kgLpvJob.job.status)) {
+      await handleVerify();
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kgLpvJob.job, savedPlanId]);
+
+  const handleLocateSection = useCallback((sectionId: string) => {
+    const el = document.getElementById(`kglpv-section-${sectionId}`);
+    if (!el) return; // KHBD tải từ HTML đã lưu có thể chưa có neo — bỏ qua
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("kglpv-locate-highlight");
+    window.setTimeout(() => el.classList.remove("kglpv-locate-highlight"), 2000);
+  }, []);
+
+  const kgLpvVariant: "overlay" | "docked" = kgLpvDocked && isDesktop ? "docked" : "overlay";
+  const kgLpvDockedActive = kgLpvVariant === "docked" && kgLpvPanelOpen;
+
+  const verificationPanel = (
+    <VerificationPanel
+      variant={kgLpvVariant}
+      open={kgLpvPanelOpen}
+      onClose={() => setKgLpvPanelOpen(false)}
+      job={kgLpvJob.job}
+      report={kgLpvJob.report}
+      progress={kgLpvJob.progress}
+      phase={kgLpvJob.phase}
+      loading={kgLpvJob.loading}
+      error={kgLpvJob.error}
+      onDismiss={kgLpvJob.dismiss}
+      onLocate={handleLocateSection}
+      onRepair={kgLpvJob.repair}
+      diffs={kgLpvJob.diffs}
+      repairing={kgLpvJob.repairing}
+      repairError={kgLpvJob.repairError}
+      onApplyDiffs={kgLpvJob.applyDiffs}
+      onCloseDiffModal={kgLpvJob.closeDiffModal}
+      onRepairBatch={kgLpvJob.repairBatch}
+    />
+  );
 
   // Password form state
   const [oldPassword, setOldPassword] = useState("");
@@ -574,8 +622,9 @@ export const LessonPlanBuilderPage: React.FC = () => {
           </div>
         </header>
 
-        {/* Content Area */}
-        <main className={`flex-1 overflow-y-auto bg-stone-100 ${currentStep === 'result' ? 'p-0' : 'p-3 sm:p-6'}`}>
+        {/* Content Area (+ panel docked cạnh khi Sửa tự động đang mở trên desktop) */}
+        <div className="flex-1 flex min-h-0">
+        <main className={`flex-1 min-w-0 overflow-y-auto bg-stone-100 ${currentStep === 'result' ? 'p-0' : 'p-3 sm:p-6'}`}>
           {/* Step 1: Select Lesson */}
           {currentStep === "select" && (
             <div className="flex flex-col items-center justify-center h-full">
@@ -784,30 +833,22 @@ export const LessonPlanBuilderPage: React.FC = () => {
               activities={activities}
               onBack={handleBackToConfigure}
               onSaved={setSavedPlanId}
+              onAutoFix={handleAutoFix}
+              autoFixEnabled={kgLpvStatus.enabled && kgLpvStatus.availability === "ok"}
             />
           )}
         </main>
+
+        {kgLpvDockedActive && (
+          <div className="w-full max-w-md flex-shrink-0 border-l border-stone-200 dark:border-stone-700">
+            {verificationPanel}
+          </div>
+        )}
+        </div>
       </div>
 
       {/* KG-LPV: panel kiểm chứng KHBD (ẩn khi module tắt) */}
-      <VerificationPanel
-        open={kgLpvPanelOpen}
-        onClose={() => setKgLpvPanelOpen(false)}
-        job={kgLpvJob.job}
-        report={kgLpvJob.report}
-        progress={kgLpvJob.progress}
-        phase={kgLpvJob.phase}
-        loading={kgLpvJob.loading}
-        error={kgLpvJob.error}
-        onDismiss={kgLpvJob.dismiss}
-        onLocate={handleLocateSection}
-        onRepair={kgLpvJob.repair}
-        diffs={kgLpvJob.diffs}
-        repairing={kgLpvJob.repairing}
-        repairError={kgLpvJob.repairError}
-        onApplyDiffs={kgLpvJob.applyDiffs}
-        onCloseDiffModal={kgLpvJob.closeDiffModal}
-      />
+      {!kgLpvDockedActive && verificationPanel}
 
       {/* Backdrop */}
       {showUserMenu && (
