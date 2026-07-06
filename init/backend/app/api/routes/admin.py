@@ -342,7 +342,10 @@ async def update_ai_model_settings(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> AIModelSettingsRead:
-    updates = {item.feature_key: item.model_name for item in payload.settings}
+    updates = {
+        item.feature_key: {"provider": getattr(item, "provider", "gemini") or "gemini", "model_name": item.model_name}
+        for item in payload.settings
+    }
 
     try:
         await upsert_model_settings(

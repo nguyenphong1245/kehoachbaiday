@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.admin_ai_model_setting import AdminAIModelSetting
+from app.models.ai_provider_credential import AiProviderCredential
 
 ALLOWED_GEMINI_MODELS: tuple[str, ...] = (
     "gemini-3-pro",
@@ -91,6 +92,21 @@ FEATURE_CONFIGS: dict[str, dict[str, str]] = {
 }
 
 
+PROVIDER_GEMINI = "gemini"
+PROVIDER_OPENAI = "openai"
+PROVIDER_DEEPSEEK = "deepseek"
+
+PROVIDERS: dict[str, dict] = {
+    PROVIDER_GEMINI: {"label": "Google Gemini", "models": ALLOWED_GEMINI_MODELS, "base_url": None, "env_key": "GEMINI_API_KEY"},
+    PROVIDER_OPENAI: {"label": "OpenAI", "models": ("gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini"), "base_url": None, "env_key": "OPENAI_API_KEY"},
+    PROVIDER_DEEPSEEK: {"label": "DeepSeek", "models": ("deepseek-chat", "deepseek-reasoner"), "base_url": "https://api.deepseek.com", "env_key": "DEEPSEEK_API_KEY"},
+}
+
+MULTI_PROVIDER_FEATURES: set[str] = {
+    FEATURE_KG_LPV_SEGMENTATION, FEATURE_KG_LPV_N2_CRITIC, FEATURE_KG_LPV_N3_JUDGE, FEATURE_KG_LPV_REPAIR,
+}
+
+
 def _normalize_model_name(model_name: str | None) -> str:
     raw = (model_name or "").strip()
     if not raw:
@@ -151,58 +167,131 @@ async def get_effective_model_for_feature(db: AsyncSession, feature_key: str) ->
     return _resolve_default_model(feature_key)
 
 
-async def get_all_effective_model_settings(db: AsyncSession) -> list[dict[str, str]]:
+def provider_allows_model(provider: str, model: str) -> bool:
+    cfg = PROVIDERS.get(provider)
+    if not cfg:
+        return False
+    name = _normalize_model_name(model) if provider == PROVIDER_GEMINI else (model or "").strip()
+    return name in cfg["models"]
+
+
+async def get_effective_provider_model(db: AsyncSession, feature_key: str) -> tuple[str, str]:
+    """Trả (provider, model). Feature ngoài MULTI_PROVIDER_FEATURES luôn gemini."""
+    if feature_key not in FEATURE_CONFIGS:
+        raise ValueError(f"Unsupported AI feature: {feature_key}")
+    if feature_key not in MULTI_PROVIDER_FEATURES:
+        return PROVIDER_GEMINI, await get_effective_model_for_feature(db, feature_key)
+
+    row = await db.scalar(
+        select(AdminAIModelSetting).where(AdminAIModelSetting.feature_key == feature_key)
+    )
+    if row and row.provider in PROVIDERS and provider_allows_model(row.provider, row.model_name):
+        model = _normalize_model_name(row.model_name) if row.provider == PROVIDER_GEMINI else row.model_name.strip()
+        return row.provider, model
+    return PROVIDER_GEMINI, _resolve_default_model(feature_key)
+
+
+async def get_provider_credentials(db: AsyncSession, provider: str) -> tuple[str | None, str | None]:
+    cfg = PROVIDERS.get(provider)
+    if not cfg:
+        raise ValueError(f"Unsupported provider: {provider}")
+    row = await db.scalar(select(AiProviderCredential).where(AiProviderCredential.provider == provider))
+    api_key = (row.api_key if row and row.api_key else None) or os.getenv(cfg["env_key"])
+    base_url = (row.base_url if row and row.base_url else None) or cfg["base_url"]
+    return api_key, base_url
+
+
+async def set_provider_credential(
+    db: AsyncSession,
+    provider: str,
+    api_key: str | None,
+    base_url: str | None,
+    admin_id: int,
+) -> None:
+    if provider not in PROVIDERS:
+        raise ValueError(f"Unsupported provider: {provider}")
+    row = await db.scalar(select(AiProviderCredential).where(AiProviderCredential.provider == provider))
+    if row is None:
+        row = AiProviderCredential(provider=provider)
+        db.add(row)
+    if api_key:  # bỏ trống = giữ key cũ
+        row.api_key = api_key.strip()
+    if base_url is not None:
+        row.base_url = base_url.strip() or None
+    row.updated_by_admin_id = admin_id
+
+
+async def get_all_provider_status(db: AsyncSession) -> list[dict]:
+    rows = {r.provider: r for r in (await db.execute(select(AiProviderCredential))).scalars().all()}
+    out = []
+    for provider, cfg in PROVIDERS.items():
+        row = rows.get(provider)
+        key = (row.api_key if row and row.api_key else None) or os.getenv(cfg["env_key"])
+        out.append({
+            "provider": provider,
+            "label": cfg["label"],
+            "configured": bool(key),
+            "key_last4": key[-4:] if key else None,
+            "base_url": (row.base_url if row and row.base_url else None) or cfg["base_url"],
+            "models": list(cfg["models"]),
+        })
+    return out
+
+
+async def get_all_effective_model_settings(db: AsyncSession) -> list[dict]:
     rows = (await db.execute(select(AdminAIModelSetting))).scalars().all()
     by_feature = {r.feature_key: r for r in rows}
 
-    result: list[dict[str, str]] = []
+    result: list[dict] = []
     for feature_key, config in FEATURE_CONFIGS.items():
         row = by_feature.get(feature_key)
+        provider = PROVIDER_GEMINI
         model_name = _resolve_default_model(feature_key)
         if row:
-            normalized = _normalize_model_name(row.model_name)
-            if normalized in ALLOWED_GEMINI_MODELS:
-                model_name = normalized
-
-        result.append(
-            {
-                "feature_key": feature_key,
-                "feature_label": config["label"],
-                "description": config["description"],
-                "model_name": model_name,
-            }
-        )
+            if feature_key in MULTI_PROVIDER_FEATURES and row.provider in PROVIDERS and provider_allows_model(row.provider, row.model_name):
+                provider = row.provider
+                model_name = row.model_name if row.provider != PROVIDER_GEMINI else _normalize_model_name(row.model_name)
+            else:
+                normalized = _normalize_model_name(row.model_name)
+                if normalized in ALLOWED_GEMINI_MODELS:
+                    model_name = normalized
+        available = list(PROVIDERS) if feature_key in MULTI_PROVIDER_FEATURES else [PROVIDER_GEMINI]
+        result.append({
+            "feature_key": feature_key,
+            "feature_label": config["label"],
+            "description": config["description"],
+            "provider": provider,
+            "model_name": model_name,
+            "available_providers": [{"value": p, "label": PROVIDERS[p]["label"]} for p in available],
+            "models_by_provider": {p: list(PROVIDERS[p]["models"]) for p in available},
+        })
 
     return result
 
 
 async def upsert_model_settings(
     db: AsyncSession,
-    settings_updates: dict[str, str],
+    settings_updates: dict[str, dict],
     updated_by_admin_id: int,
 ) -> None:
     if not settings_updates:
         return
-
-    for feature_key, model_name in settings_updates.items():
+    for feature_key, item in settings_updates.items():
         if feature_key not in FEATURE_CONFIGS:
             raise ValueError(f"Unsupported AI feature: {feature_key}")
-
-        normalized = _normalize_model_name(model_name)
-        if normalized not in ALLOWED_GEMINI_MODELS:
-            raise ValueError(f"Unsupported Gemini model: {model_name}")
-
-        existing = await db.scalar(
-            select(AdminAIModelSetting).where(AdminAIModelSetting.feature_key == feature_key)
-        )
+        provider = item.get("provider") or PROVIDER_GEMINI
+        model_name = item.get("model_name") or ""
+        if feature_key not in MULTI_PROVIDER_FEATURES and provider != PROVIDER_GEMINI:
+            raise ValueError(f"Feature '{feature_key}' chỉ hỗ trợ Gemini")
+        if provider not in PROVIDERS:
+            raise ValueError(f"Nhà cung cấp không hợp lệ: {provider}")
+        if not provider_allows_model(provider, model_name):
+            raise ValueError(f"Model '{model_name}' không hợp lệ cho {provider}")
+        stored_model = _normalize_model_name(model_name) if provider == PROVIDER_GEMINI else model_name.strip()
+        existing = await db.scalar(select(AdminAIModelSetting).where(AdminAIModelSetting.feature_key == feature_key))
         if existing:
-            existing.model_name = normalized
+            existing.provider = provider
+            existing.model_name = stored_model
             existing.updated_by_admin_id = updated_by_admin_id
         else:
-            db.add(
-                AdminAIModelSetting(
-                    feature_key=feature_key,
-                    model_name=normalized,
-                    updated_by_admin_id=updated_by_admin_id,
-                )
-            )
+            db.add(AdminAIModelSetting(feature_key=feature_key, provider=provider, model_name=stored_model, updated_by_admin_id=updated_by_admin_id))

@@ -71,7 +71,10 @@ class AIModelFeatureSetting(BaseModel):
     feature_key: str
     feature_label: str
     description: str
+    provider: str = "gemini"
     model_name: str
+    available_providers: list[dict] = []
+    models_by_provider: dict[str, list[str]] = {}
 
 
 class AIModelSettingsRead(BaseModel):
