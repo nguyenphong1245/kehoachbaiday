@@ -5,7 +5,7 @@
  * thể đóng panel và tiếp tục chỉnh sửa; không bao giờ tự động thay nội dung KHBD.
  */
 import React, { useEffect, useState } from "react";
-import { AlertCircle, Check, Loader2, Wrench, X } from "lucide-react";
+import { AlertCircle, Check, ChevronLeft, ChevronRight, Loader2, Wrench, X } from "lucide-react";
 import type { JobStatusResponse, ReportResponse, RepairFindingItem, SectionDiff } from "@/types/kgLpv";
 import { FindingCard } from "./FindingCard";
 import { RepairDiffModal } from "./RepairDiffModal";
@@ -78,6 +78,7 @@ export const VerificationPanel: React.FC<VerificationPanelProps> = ({
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [overrides, setOverrides] = useState<Record<number, string>>({});
+  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     if (!report) return;
@@ -117,27 +118,68 @@ export const VerificationPanel: React.FC<VerificationPanelProps> = ({
       <div
         className={
           variant === "docked"
-            ? "relative h-full w-full max-w-md border-l border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 flex flex-col"
+            ? `relative h-full flex-shrink-0 border-l border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 flex flex-col transition-[width] duration-200 ${
+                collapsed ? "w-11" : "w-full max-w-md"
+              }`
             : `fixed top-0 right-0 h-screen w-full sm:w-96 bg-white dark:bg-stone-800 border-l border-stone-200 dark:border-stone-700 shadow-2xl z-50 transform transition-transform duration-300 ease-out flex flex-col ${
                 open ? "translate-x-0" : "translate-x-full"
               }`
         }
       >
+        {variant === "docked" && collapsed ? (
+          <div className="flex flex-col items-center gap-3 py-3">
+            <button
+              type="button"
+              onClick={() => setCollapsed(false)}
+              className="p-1.5 hover:bg-stone-100 dark:hover:bg-stone-700 rounded-lg transition-colors"
+              title="Mở rộng"
+              aria-label="Mở rộng"
+            >
+              <ChevronLeft className="w-4 h-4 text-stone-500" />
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 hover:bg-stone-100 dark:hover:bg-stone-700 rounded-lg transition-colors"
+              title="Đóng"
+              aria-label="Đóng"
+            >
+              <X className="w-4 h-4 text-stone-500" />
+            </button>
+            <span className="mt-1 text-[10px] font-bold uppercase tracking-wider text-stone-400 [writing-mode:vertical-rl] rotate-180">
+              Kiểm chứng KHBD
+            </span>
+          </div>
+        ) : (
+        <>
         <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-stone-200 dark:border-stone-700">
           <h2 className="text-sm font-bold text-stone-800 dark:text-white uppercase tracking-wide">
             Kiểm chứng KHBD
           </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 hover:bg-stone-100 dark:hover:bg-stone-700 rounded-lg transition-colors"
-            aria-label="Đóng"
-          >
-            <X className="w-4 h-4 text-stone-500" />
-          </button>
+          <div className="flex items-center gap-0.5">
+            {variant === "docked" && (
+              <button
+                type="button"
+                onClick={() => setCollapsed(true)}
+                className="p-1.5 hover:bg-stone-100 dark:hover:bg-stone-700 rounded-lg transition-colors"
+                title="Thu gọn"
+                aria-label="Thu gọn"
+              >
+                <ChevronRight className="w-4 h-4 text-stone-500" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 hover:bg-stone-100 dark:hover:bg-stone-700 rounded-lg transition-colors"
+              aria-label="Đóng"
+            >
+              <X className="w-4 h-4 text-stone-500" />
+            </button>
+          </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto kglpv-scroll px-4 py-4 space-y-4">
           {error && (
             <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 text-sm">
               <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
@@ -265,6 +307,8 @@ export const VerificationPanel: React.FC<VerificationPanelProps> = ({
               Sửa {selectedIds.size} lỗi đã chọn
             </button>
           </div>
+        )}
+        </>
         )}
       </div>
 

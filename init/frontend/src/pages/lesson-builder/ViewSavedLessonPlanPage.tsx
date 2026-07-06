@@ -198,11 +198,7 @@ const ViewSavedLessonPlanPage: React.FC = () => {
           )}
         </main>
 
-        {kgLpvDockedActive && (
-          <div className="w-full max-w-md flex-shrink-0 border-l border-stone-200 dark:border-stone-700">
-            {verificationPanel}
-          </div>
-        )}
+        {kgLpvDockedActive && verificationPanel}
       </div>
     </div>
   );
