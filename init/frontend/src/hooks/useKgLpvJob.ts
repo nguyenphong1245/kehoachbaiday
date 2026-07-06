@@ -4,8 +4,8 @@
  * job đạt trạng thái cuối (done/failed/repaired) — khi đó tải sổ lỗi (report).
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { applyDiff, dismissFinding, getDiff, getJob, getReport, startRepair, startVerify } from "@/services/kgLpvApi";
-import type { JobStatusResponse, ReportResponse, SectionDiff } from "@/types/kgLpv";
+import { applyDiff, dismissFinding, getDiff, getJob, getReport, startRepair, startRepairBatch, startVerify } from "@/services/kgLpvApi";
+import type { JobStatusResponse, RepairFindingItem, ReportResponse, SectionDiff } from "@/types/kgLpv";
 
 const POLL_INTERVAL_MS = 2500;
 const TERMINAL_STATUSES = new Set(["done", "failed", "repaired"]);
@@ -36,6 +36,7 @@ export interface UseKgLpvJobResult {
   repairing: boolean;
   repairError: string | null;
   repair: (findingId: number) => Promise<void>;
+  repairBatch: (items: RepairFindingItem[]) => Promise<void>;
   applyDiffs: (sectionIds: string[]) => Promise<void>;
   closeDiffModal: () => void;
 }
@@ -166,6 +167,50 @@ export function useKgLpvJob(): UseKgLpvJobResult {
     }
   }, []);
 
+  // Bước 4 — Sửa & kiểm lại theo lô: sửa nhiều finding cùng lúc, mỗi finding có
+  // thể kèm nhận xét đã chỉnh sửa (`explanation_override`) của giáo viên. Chờ
+  // job chuyển sang trạng thái cuối (`repaired`/`failed`) rồi tải các đoạn đã
+  // sửa để mở RepairDiffModal.
+  const repairBatch = useCallback(async (items: RepairFindingItem[]) => {
+    if (jobIdRef.current === null || items.length === 0) return;
+    const jobId = jobIdRef.current;
+    setRepairing(true);
+    setRepairError(null);
+    setDiffs(null);
+    try {
+      await startRepairBatch(jobId, items);
+
+      await new Promise<void>((resolve, reject) => {
+        const check = async () => {
+          try {
+            const status = await getJob(jobId);
+            setJob(status);
+            if (REPAIR_TERMINAL_STATUSES.has(status.status)) {
+              clearInterval(repairIntervalId);
+              if (status.status === "failed") {
+                reject(new Error("Sửa lỗi thất bại"));
+              } else {
+                resolve();
+              }
+            }
+          } catch (err) {
+            clearInterval(repairIntervalId);
+            reject(err);
+          }
+        };
+        const repairIntervalId = setInterval(check, POLL_INTERVAL_MS);
+        check();
+      });
+
+      const diffData = await getDiff(jobId);
+      setDiffs(diffData);
+    } catch (err: any) {
+      setRepairError(err.response?.data?.detail || err.message || "Không thể sửa lỗi");
+    } finally {
+      setRepairing(false);
+    }
+  }, []);
+
   const applyDiffs = useCallback(async (sectionIds: string[]) => {
     if (jobIdRef.current === null) return;
     const jobId = jobIdRef.current;
@@ -193,6 +238,7 @@ export function useKgLpvJob(): UseKgLpvJobResult {
     repairing,
     repairError,
     repair,
+    repairBatch,
     applyDiffs,
     closeDiffModal,
   };

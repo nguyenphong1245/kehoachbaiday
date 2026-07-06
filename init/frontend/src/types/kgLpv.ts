@@ -69,6 +69,12 @@ export interface RepairRequest {
   finding_ids: number[];
 }
 
+/** 1 finding cần sửa theo lô, kèm chỉnh sửa nhận xét (tuỳ chọn) của giáo viên. */
+export interface RepairFindingItem {
+  id: number;
+  explanation_override?: string;
+}
+
 export interface RepairResponse {
   job_id: number;
 }

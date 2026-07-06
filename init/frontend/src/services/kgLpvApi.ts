@@ -7,6 +7,7 @@ import type {
   FindingOut,
   JobStatusResponse,
   KgLpvStatusResponse,
+  RepairFindingItem,
   RepairResponse,
   ReportResponse,
   SectionDiff,
@@ -67,6 +68,20 @@ export const startRepair = async (jobId: number, findingIds: number[] = []): Pro
 };
 
 /**
+ * Bước 4 — sửa theo lô kèm chỉnh sửa nhận xét (`explanation_override`) của
+ * giáo viên cho từng finding. `items` rỗng = sửa tất cả finding `status="open"`.
+ */
+export const startRepairBatch = async (
+  jobId: number,
+  items: RepairFindingItem[],
+): Promise<RepairResponse> => {
+  const { data } = await api.post<RepairResponse>(`/kg-lpv/jobs/${jobId}/repair`, {
+    findings: items,
+  });
+  return data;
+};
+
+/**
  * Các đoạn đã sửa của job (before/after + findings_addressed).
  */
 export const getDiff = async (jobId: number): Promise<SectionDiff[]> => {
@@ -92,6 +107,7 @@ export const kgLpvApi = {
   getReport,
   dismissFinding,
   startRepair,
+  startRepairBatch,
   getDiff,
   applyDiff,
 };
