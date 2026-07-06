@@ -61,10 +61,19 @@ from app.services.admin_ai_model_registry import FEATURE_KG_LPV_REPAIR
 from app.services.token_service import deduct_tokens
 
 
-async def repair(db: AsyncSession, job: KgLpvJob, findings: list[KgLpvFinding]) -> list[SectionDiff]:
+async def repair(
+    db: AsyncSession,
+    job: KgLpvJob,
+    findings: list[KgLpvFinding],
+    overrides: dict[int, str] | None = None,
+) -> list[SectionDiff]:
     """Sửa cục bộ + kiểm lại các finding hợp lệ. Không bao giờ raise cho lỗi 1 lượt
     LLM (bắt riêng từng finding); exception hạ tầng (không tìm thấy KHBD nguồn...)
-    thoát lên `run_repair_job`, nơi có try/except bao ngoài đánh dấu job `failed`."""
+    thoát lên `run_repair_job`, nơi có try/except bao ngoài đánh dấu job `failed`.
+
+    `overrides`: map `finding.id -> explanation` tuỳ chỉnh (giáo viên) — dùng thay
+    `finding.explanation` gốc khi dựng prompt sửa, nếu có mặt và không rỗng."""
+    overrides = overrides or {}
     repairable = [f for f in findings if f.status == "open" and f.evidence]
     skipped = len(findings) - len(repairable)
     if skipped:
@@ -100,7 +109,8 @@ async def repair(db: AsyncSession, job: KgLpvJob, findings: list[KgLpvFinding]) 
         applied: list[KgLpvFinding] = []
 
         for finding in section_findings:
-            prompt = build_repair_prompt(current_text, finding.code, finding.explanation, finding.evidence)
+            explanation = overrides.get(finding.id) or finding.explanation
+            prompt = build_repair_prompt(current_text, finding.code, explanation, finding.evidence)
             try:
                 data, tokens = await generate_json(db, FEATURE_KG_LPV_REPAIR, prompt)
             except Exception as exc:  # noqa: BLE001 - 1 lượt LLM hỏng không được crash batch (§9)
@@ -334,7 +344,7 @@ def _text_overlap_ratio(a: str | None, b: str | None) -> float:
     return len(a_words & b_words) / shorter_len
 
 
-async def run_repair_job(job_id: int, finding_ids: list[int]) -> None:
+async def run_repair_job(job_id: int, finding_ids: list[int], overrides: dict[int, str] | None = None) -> None:
     """Job nền `POST /jobs/{job_id}/repair` — mở session DB riêng (cùng pattern
     `orchestrator.run_job`), tải job + các finding được chọn, chạy `repair(...)`,
     rồi chuyển `job.status` sang `repaired`. Không bao giờ để exception thoát ra
@@ -349,7 +359,7 @@ async def run_repair_job(job_id: int, finding_ids: list[int]) -> None:
             result = await db.execute(select(KgLpvFinding).where(KgLpvFinding.id.in_(finding_ids)))
             findings = result.scalars().all()
 
-            await repair(db, job, list(findings))
+            await repair(db, job, list(findings), overrides=overrides)
 
             job.status = "repaired"
             await db.commit()

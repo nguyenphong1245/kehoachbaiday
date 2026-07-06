@@ -319,9 +319,17 @@ async def start_repair(
     re_verifying -> repaired` (do `repairer.run_repair_job` cập nhật)."""
     job = await _load_owned_job(db, job_id, current_user.id)
 
+    # id được yêu cầu: từ findings[] (kèm override) hoặc finding_ids[] (tương thích ngược)
+    overrides: dict[int, str] = {
+        item.id: item.explanation_override
+        for item in payload.findings
+        if item.explanation_override
+    }
+    requested_ids = [item.id for item in payload.findings] or payload.finding_ids
+
     query = select(KgLpvFinding).where(KgLpvFinding.job_id == job_id, KgLpvFinding.status == "open")
-    if payload.finding_ids:
-        query = query.where(KgLpvFinding.id.in_(payload.finding_ids))
+    if requested_ids:
+        query = query.where(KgLpvFinding.id.in_(requested_ids))
     result = await db.execute(query)
     findings = result.scalars().all()
 
@@ -339,13 +347,18 @@ async def start_repair(
         )
 
     finding_ids = [f.id for f in findings]
+    # chỉ giữ override cho các finding thực sự hợp lệ (open + thuộc job)
+    valid_overrides = {fid: overrides[fid] for fid in finding_ids if fid in overrides}
 
     job.status = "repairing"
     await db.commit()
 
-    logger.info("kg_lpv.repair.requested job_id=%s findings=%d", job_id, len(finding_ids))
+    logger.info(
+        "kg_lpv.repair.requested job_id=%s findings=%d overrides=%d",
+        job_id, len(finding_ids), len(valid_overrides),
+    )
 
-    create_task(run_repair_job(job.id, finding_ids))
+    create_task(run_repair_job(job.id, finding_ids, valid_overrides or None))
 
     return RepairResponse(job_id=job.id)
 

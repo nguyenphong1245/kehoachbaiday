@@ -244,10 +244,22 @@ class SectionDiff(BaseModel):
     findings_addressed: list[int] = Field(default_factory=list)
 
 
+class RepairFindingItem(BaseModel):
+    """1 phần tử `RepairRequest.findings` — id finding kèm giải thích tuỳ chỉnh
+    (tuỳ chọn) từ giáo viên, thay cho `finding.explanation` gốc khi dựng prompt sửa."""
+
+    id: int
+    explanation_override: str | None = None
+
+
 class RepairRequest(BaseModel):
-    """Body `POST /jobs/{job_id}/repair` — rỗng = sửa tất cả finding `status="open"` của job."""
+    """Body `POST /jobs/{job_id}/repair`.
+    - Rỗng (cả hai) = sửa tất cả finding `status="open"`.
+    - `finding_ids`: danh sách id (tương thích ngược).
+    - `findings`: danh sách kèm `explanation_override` (ưu tiên nếu có)."""
 
     finding_ids: list[int] = Field(default_factory=list)
+    findings: list[RepairFindingItem] = Field(default_factory=list)
 
 
 class RepairResponse(BaseModel):

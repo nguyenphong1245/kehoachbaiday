@@ -561,3 +561,147 @@ async def test_apply_non_owner_returns_404(ready_kg_lpv, db_session, roles):
 
     resp = await auth_post(ready_kg_lpv, APPLY_URL.format(job_id=job.id), other.id, json={})
     assert resp.status_code == 404
+
+
+# =========================== (f) Task 1: explanation_override giáo viên ===========================
+
+
+@pytest.mark.asyncio
+async def test_repair_uses_explanation_override_when_present(db_session, teacher_user, monkeypatch):
+    """`repair(..., overrides={finding.id: "..."})` phải dùng override thay cho
+    `finding.explanation` gốc khi dựng prompt sửa."""
+    monkeypatch.setattr(graph_client, "get_lesson_context", lambda lesson_id, grade: LessonContext())
+    # An toàn: reverify M6 (N2) không được tạo finding mới ngoài ý muốn.
+    monkeypatch.setattr(
+        n2_curriculum, "generate_json",
+        AsyncMock(return_value=({"verdict": "hop_le", "evidence_refs": [], "explanation": "OK"}, 0)),
+    )
+
+    captured = {}
+
+    async def fake_generate_json(db, feature_key, prompt, **kwargs):
+        captured["prompt"] = prompt
+        return ({"after": "Nội dung đã sửa"}, 10)
+
+    monkeypatch.setattr(repairer, "generate_json", fake_generate_json)
+
+    sections = [
+        {"section_id": "muc_tieu", "section_type": "muc_tieu", "title": "Mục tiêu", "content": "Mục tiêu gốc."},
+        {"section_id": "khoi_dong", "section_type": "khoi_dong", "title": "Khởi động", "content": "Nội dung gốc chưa đúng."},
+    ]
+    plan = SavedLessonPlan(user_id=teacher_user.id, title="KHBD test", content="noi dung", sections=sections)
+    db_session.add(plan)
+    await db_session.commit()
+    await db_session.refresh(plan)
+
+    segments = SegmentedPlan(
+        objective_clauses=[],
+        activity_components=[_act("khoi_dong__noi_dung", "noi_dung", "Nội dung gốc chưa đúng.", "khoi_dong")],
+    ).model_dump(mode="json")
+
+    job = KgLpvJob(
+        user_id=teacher_user.id, saved_lesson_plan_id=plan.id, status="done", progress=100, segments=segments,
+    )
+    db_session.add(job)
+    await db_session.commit()
+    await db_session.refresh(job)
+
+    finding = KgLpvFinding(
+        job_id=job.id, code="M6", branch="N2", section_id="khoi_dong",
+        evidence=[{"ma_dinh_danh": "MDKT-1", "trich_dan": "..."}],
+        explanation="Giải thích gốc.", status="open",
+    )
+    db_session.add(finding)
+    await db_session.commit()
+    await db_session.refresh(finding)
+
+    await repair(db_session, job, [finding], overrides={finding.id: "HÃY VIẾT LẠI THEO Ý GIÁO VIÊN"})
+
+    assert "HÃY VIẾT LẠI THEO Ý GIÁO VIÊN" in captured["prompt"]
+    assert "Giải thích gốc." not in captured["prompt"]
+
+
+@pytest.mark.asyncio
+async def test_repair_endpoint_accepts_findings_with_override(ready_kg_lpv, db_session, teacher_user, monkeypatch):
+    """Body `{"findings": [{"id": .., "explanation_override": ".."}]}` phải được
+    `RepairRequest` chấp nhận và endpoint lên lịch job nền (202)."""
+    sections = [{"section_id": "muc_tieu", "section_type": "muc_tieu", "title": "Mục tiêu", "content": "Nội dung."}]
+    plan = SavedLessonPlan(user_id=teacher_user.id, title="KHBD", content="c", sections=sections)
+    db_session.add(plan)
+    await db_session.commit()
+    await db_session.refresh(plan)
+
+    job = KgLpvJob(user_id=teacher_user.id, saved_lesson_plan_id=plan.id, status="done", progress=100)
+    db_session.add(job)
+    await db_session.commit()
+    await db_session.refresh(job)
+
+    finding = KgLpvFinding(
+        job_id=job.id, code="M1", branch="N2", section_id="muc_tieu",
+        evidence=[{"a": 1}], explanation="Giải thích gốc.", status="open",
+    )
+    db_session.add(finding)
+    await db_session.commit()
+    await db_session.refresh(finding)
+
+    captured = _capture_create_task(monkeypatch)
+    resp = await auth_post(
+        ready_kg_lpv, REPAIR_URL.format(job_id=job.id), teacher_user.id,
+        json={"findings": [{"id": finding.id, "explanation_override": "sửa theo ý tôi"}]},
+    )
+    assert resp.status_code == 202
+    # Job nền chưa được chạy trong test này — đóng coroutine để tránh cảnh báo
+    # "coroutine was never awaited" và rò rỉ tài nguyên.
+    captured[0].close()
+
+
+@pytest.mark.asyncio
+async def test_repair_endpoint_empty_body_still_repairs_all_open_findings(
+    ready_kg_lpv, db_session, teacher_user, monkeypatch
+):
+    """Tương thích ngược: body rỗng (không `finding_ids`, không `findings`) vẫn phải
+    sửa tất cả finding `status="open"` của job (hành vi cũ không đổi)."""
+    sections = [{"section_id": "muc_tieu", "section_type": "muc_tieu", "title": "Mục tiêu", "content": "Nội dung."}]
+    plan = SavedLessonPlan(user_id=teacher_user.id, title="KHBD", content="c", sections=sections)
+    db_session.add(plan)
+    await db_session.commit()
+    await db_session.refresh(plan)
+
+    job = KgLpvJob(user_id=teacher_user.id, saved_lesson_plan_id=plan.id, status="done", progress=100)
+    db_session.add(job)
+    await db_session.commit()
+    await db_session.refresh(job)
+
+    finding = KgLpvFinding(
+        job_id=job.id, code="M1", branch="N2", section_id="muc_tieu",
+        evidence=[{"a": 1}], explanation="Giải thích gốc.", status="open",
+    )
+    db_session.add(finding)
+    await db_session.commit()
+    await db_session.refresh(finding)
+
+    captured = _capture_create_task(monkeypatch)
+    resp = await auth_post(ready_kg_lpv, REPAIR_URL.format(job_id=job.id), teacher_user.id, json={})
+    assert resp.status_code == 202
+    captured[0].close()
+
+
+def test_repair_request_accepts_old_and_new_body_shapes():
+    """`RepairRequest` phải chấp nhận body cũ (`finding_ids`), body mới (`findings`
+    kèm `explanation_override`), và body rỗng (cả hai mặc định `[]`)."""
+    from app.modules.kg_lpv.schemas import RepairRequest
+
+    old_shape = RepairRequest.model_validate({"finding_ids": [1, 2]})
+    assert old_shape.finding_ids == [1, 2]
+    assert old_shape.findings == []
+
+    new_shape = RepairRequest.model_validate(
+        {"findings": [{"id": 3, "explanation_override": "sửa theo ý tôi"}]}
+    )
+    assert new_shape.findings[0].id == 3
+    assert new_shape.findings[0].explanation_override == "sửa theo ý tôi"
+    assert new_shape.finding_ids == []
+
+    empty = RepairRequest.model_validate({})
+    assert empty.finding_ids == []
+    assert empty.findings == []
