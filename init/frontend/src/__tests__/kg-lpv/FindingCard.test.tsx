@@ -52,4 +52,25 @@ describe("FindingCard", () => {
     expect(screen.getByText("Không phán xử được")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Bỏ qua/i })).not.toBeInTheDocument();
   });
+
+  it("cho sửa nhận xét và gọi onExplanationChange", () => {
+    const onExplanationChange = vi.fn();
+    const finding = { id: 1, code: "M2", branch: "N2", truc: null, section_id: "muc_tieu", span: null, evidence: [], explanation: "gốc", status: "open" };
+    render(<FindingCard finding={finding as any} selectable selected onToggleSelect={vi.fn()} onExplanationChange={onExplanationChange} />);
+    fireEvent.click(screen.getByTitle("Sửa nhận xét"));
+    const ta = screen.getByRole("textbox");
+    fireEvent.change(ta, { target: { value: "GV chỉnh" } });
+    expect(onExplanationChange).toHaveBeenCalledWith(1, "GV chỉnh");
+  });
+
+  it("checkbox chọn gọi onToggleSelect; unjudged không có checkbox", () => {
+    const onToggleSelect = vi.fn();
+    const open = { id: 1, code: "M2", branch: "N2", truc: null, section_id: "s", span: null, evidence: [], explanation: "x", status: "open" };
+    const { rerender } = render(<FindingCard finding={open as any} selectable selected={false} onToggleSelect={onToggleSelect} />);
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect(onToggleSelect).toHaveBeenCalledWith(1, true);
+    const unjudged = { ...open, status: "unjudged" };
+    rerender(<FindingCard finding={unjudged as any} selectable onToggleSelect={onToggleSelect} />);
+    expect(screen.queryByRole("checkbox")).toBeNull();
+  });
 });

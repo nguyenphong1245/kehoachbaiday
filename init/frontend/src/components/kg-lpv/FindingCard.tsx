@@ -4,7 +4,7 @@
  * chỉ mang tính kiểm toán) hiển thị badge mờ riêng, KHÔNG có nút Bỏ qua.
  */
 import React, { useState } from "react";
-import { MapPin, Wrench, X } from "lucide-react";
+import { MapPin, Pencil, Wrench, X } from "lucide-react";
 import type { FindingOut } from "@/types/kgLpv";
 
 interface FindingCardProps {
@@ -12,6 +12,10 @@ interface FindingCardProps {
   onDismiss?: (findingId: number) => void | Promise<void>;
   onLocate?: (sectionId: string) => void;
   onRepair?: (findingId: number) => void | Promise<void>;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (findingId: number, next: boolean) => void;
+  onExplanationChange?: (findingId: number, text: string) => void;
 }
 
 const BRANCH_LABELS: Record<string, string> = {
@@ -29,9 +33,20 @@ function evidenceLabel(ev: Record<string, unknown>): string {
   return parts.join(" · ") || "Bằng chứng đồ thị";
 }
 
-export const FindingCard: React.FC<FindingCardProps> = ({ finding, onDismiss, onLocate, onRepair }) => {
+export const FindingCard: React.FC<FindingCardProps> = ({
+  finding,
+  onDismiss,
+  onLocate,
+  onRepair,
+  selectable,
+  selected,
+  onToggleSelect,
+  onExplanationChange,
+}) => {
   const [dismissing, setDismissing] = useState(false);
   const [repairing, setRepairing] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(finding.explanation);
   const isUnjudged = finding.status === "unjudged";
   const isDismissed = finding.status === "dismissed";
   const isOpen = finding.status === "open";
@@ -68,6 +83,15 @@ export const FindingCard: React.FC<FindingCardProps> = ({ finding, onDismiss, on
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5 flex-wrap">
+          {selectable && isOpen && (
+            <input
+              type="checkbox"
+              checked={!!selected}
+              onChange={(e) => onToggleSelect?.(finding.id, e.target.checked)}
+              className="w-3.5 h-3.5 rounded border-stone-300 dark:border-stone-600"
+              aria-label="Chọn phát hiện"
+            />
+          )}
           <span
             className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold ${
               isUnjudged
@@ -103,7 +127,31 @@ export const FindingCard: React.FC<FindingCardProps> = ({ finding, onDismiss, on
         </button>
       </div>
 
-      <p className="text-sm text-stone-700 dark:text-stone-200">{finding.explanation}</p>
+      {editing ? (
+        <textarea
+          value={draft}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            onExplanationChange?.(finding.id, e.target.value);
+          }}
+          className="w-full text-sm text-stone-700 dark:text-stone-200 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-600 rounded-md p-1.5"
+          rows={2}
+        />
+      ) : (
+        <div className="flex items-start gap-1.5">
+          <p className="text-sm text-stone-700 dark:text-stone-200">{draft}</p>
+          {isOpen && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              title="Sửa nhận xét"
+              className="flex-shrink-0 text-stone-400 hover:text-brand-dark dark:hover:text-sky-300 transition-colors"
+            >
+              <Pencil className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+      )}
 
       {finding.evidence.length > 0 && (
         <ul className="space-y-0.5">
