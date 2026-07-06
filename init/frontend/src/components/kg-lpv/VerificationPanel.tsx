@@ -88,7 +88,10 @@ export const VerificationPanel: React.FC<VerificationPanelProps> = ({
       });
     });
     setSelectedIds(openIds);
+    setOverrides({});
   }, [report]);
+
+  if (variant === "docked" && !open) return null;
 
   const handleToggleSelect = (findingId: number, next: boolean) => {
     setSelectedIds((prev) => {

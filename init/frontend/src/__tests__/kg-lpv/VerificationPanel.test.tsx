@@ -191,4 +191,68 @@ describe("VerificationPanel", () => {
 
     expect(screen.queryByRole("button", { name: /lỗi đã chọn/i })).not.toBeInTheDocument();
   });
+
+  it("docked variant with open=false: renders nothing (no stray pane when panel is closed)", () => {
+    render(
+      <VerificationPanel
+        open={false}
+        variant="docked"
+        onClose={vi.fn()}
+        job={{ status: "done", progress: 100, stats: null }}
+        report={makeOneOpenReport()}
+        progress={100}
+        phase="Hoàn tất"
+        loading={false}
+        error={null}
+        onDismiss={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText("Kiểm chứng KHBD")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /lỗi đã chọn/i })).not.toBeInTheDocument();
+  });
+
+  it("clears stale overrides when the report changes (new repair round)", () => {
+    const onRepairBatch = vi.fn();
+    const { rerender } = render(
+      <VerificationPanel
+        open
+        variant="docked"
+        onClose={vi.fn()}
+        job={{ status: "done", progress: 100, stats: null }}
+        report={makeOneOpenReport()}
+        progress={100}
+        phase="Hoàn tất"
+        loading={false}
+        error={null}
+        onDismiss={vi.fn()}
+        onLocate={vi.fn()}
+        onRepairBatch={onRepairBatch}
+      />
+    );
+
+    fireEvent.click(screen.getByTitle("Sửa nhận xét"));
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Giải thích mới" } });
+
+    // Vòng sửa lỗi mới trả về report object khác (dù cùng finding id) — override cũ phải bị xóa.
+    rerender(
+      <VerificationPanel
+        open
+        variant="docked"
+        onClose={vi.fn()}
+        job={{ status: "done", progress: 100, stats: null }}
+        report={makeOneOpenReport()}
+        progress={100}
+        phase="Hoàn tất"
+        loading={false}
+        error={null}
+        onDismiss={vi.fn()}
+        onLocate={vi.fn()}
+        onRepairBatch={onRepairBatch}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Sửa 1 lỗi đã chọn/i }));
+    expect(onRepairBatch).toHaveBeenCalledWith([{ id: 5 }]);
+  });
 });

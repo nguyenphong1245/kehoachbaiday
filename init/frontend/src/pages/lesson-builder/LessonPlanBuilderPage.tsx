@@ -141,7 +141,10 @@ export const LessonPlanBuilderPage: React.FC = () => {
     <VerificationPanel
       variant={kgLpvVariant}
       open={kgLpvPanelOpen}
-      onClose={() => setKgLpvPanelOpen(false)}
+      onClose={() => {
+        setKgLpvPanelOpen(false);
+        setKgLpvDocked(false);
+      }}
       job={kgLpvJob.job}
       report={kgLpvJob.report}
       progress={kgLpvJob.progress}
