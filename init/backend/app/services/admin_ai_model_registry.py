@@ -99,7 +99,7 @@ PROVIDER_DEEPSEEK = "deepseek"
 PROVIDERS: dict[str, dict] = {
     PROVIDER_GEMINI: {"label": "Google Gemini", "models": ALLOWED_GEMINI_MODELS, "base_url": None, "env_key": "GEMINI_API_KEY"},
     PROVIDER_OPENAI: {"label": "OpenAI", "models": ("gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini"), "base_url": None, "env_key": "OPENAI_API_KEY"},
-    PROVIDER_DEEPSEEK: {"label": "DeepSeek", "models": ("deepseek-chat", "deepseek-reasoner"), "base_url": "https://api.deepseek.com", "env_key": "DEEPSEEK_API_KEY"},
+    PROVIDER_DEEPSEEK: {"label": "DeepSeek", "models": ("deepseek-chat",), "base_url": "https://api.deepseek.com", "env_key": "DEEPSEEK_API_KEY"},
 }
 
 MULTI_PROVIDER_FEATURES: set[str] = {
