@@ -63,11 +63,19 @@ export interface ContentListResponse {
   limit: number;
 }
 
+export interface AIProviderOption {
+  value: string;
+  label: string;
+}
+
 export interface AIModelFeatureSetting {
   feature_key: string;
   feature_label: string;
   description: string;
+  provider: string;
   model_name: string;
+  available_providers: AIProviderOption[];
+  models_by_provider: Record<string, string[]>;
 }
 
 export interface AIModelSettings {
@@ -77,7 +85,22 @@ export interface AIModelSettings {
 
 export interface AIModelSettingUpdateItem {
   feature_key: string;
+  provider: string;
   model_name: string;
+}
+
+export interface AiProviderStatus {
+  provider: string;
+  label: string;
+  configured: boolean;
+  key_last4?: string | null;
+  base_url?: string | null;
+  models: string[];
+}
+
+export interface AiProviderUpdate {
+  api_key?: string;
+  base_url?: string;
 }
 
 // ============== API CALLS ==============
@@ -125,6 +148,19 @@ export const updateAIModelSettings = async (
   settings: AIModelSettingUpdateItem[]
 ): Promise<AIModelSettings> => {
   const { data } = await api.put("/admin/ai-model-settings", { settings });
+  return data;
+};
+
+export const getAiProviders = async (): Promise<AiProviderStatus[]> => {
+  const { data } = await api.get("/admin/ai-providers");
+  return data;
+};
+
+export const updateAiProvider = async (
+  provider: string,
+  body: AiProviderUpdate
+): Promise<AiProviderStatus> => {
+  const { data } = await api.put(`/admin/ai-providers/${provider}`, body);
   return data;
 };
 
