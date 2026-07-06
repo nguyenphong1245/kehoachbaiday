@@ -31,12 +31,17 @@ from app.schemas.admin import (
     ContentListResponse,
     AIModelSettingsRead,
     AIModelSettingsUpdate,
+    AiProviderStatus,
+    AiProviderUpdate,
     FeatureFlagRead,
     FeatureFlagUpdate,
 )
 from app.services.admin_ai_model_registry import (
     ALLOWED_GEMINI_MODELS,
+    PROVIDERS,
     get_all_effective_model_settings,
+    get_all_provider_status,
+    set_provider_credential,
     upsert_model_settings,
 )
 
@@ -343,7 +348,7 @@ async def update_ai_model_settings(
     session: AsyncSession = Depends(get_db),
 ) -> AIModelSettingsRead:
     updates = {
-        item.feature_key: {"provider": getattr(item, "provider", "gemini") or "gemini", "model_name": item.model_name}
+        item.feature_key: {"provider": item.provider, "model_name": item.model_name}
         for item in payload.settings
     }
 
@@ -362,6 +367,30 @@ async def update_ai_model_settings(
         allowed_models=list(ALLOWED_GEMINI_MODELS),
         settings=settings,
     )
+
+
+@router.get("/ai-providers", response_model=list[AiProviderStatus], dependencies=[Depends(require_admin)])
+@limiter.limit("30/minute")
+async def get_ai_providers(request: Request, session: AsyncSession = Depends(get_db)):
+    return await get_all_provider_status(session)
+
+
+@router.put("/ai-providers/{provider}", response_model=AiProviderStatus, dependencies=[Depends(require_admin)])
+@limiter.limit("10/minute")
+async def update_ai_provider(
+    request: Request,
+    provider: str,
+    payload: AiProviderUpdate,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    if provider not in PROVIDERS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Nhà cung cấp không hợp lệ: {provider}")
+    await set_provider_credential(session, provider, payload.api_key, payload.base_url, current_user.id)
+    await session.commit()
+    logger.info("admin.ai_provider_updated provider=%s by=%s", provider, current_user.id)
+    statuses = {s["provider"]: s for s in await get_all_provider_status(session)}
+    return statuses[provider]
 
 
 @router.get("/teachers-overview", dependencies=[Depends(require_admin)])

@@ -84,11 +84,26 @@ class AIModelSettingsRead(BaseModel):
 
 class AIModelSettingUpdateItem(BaseModel):
     feature_key: str
+    provider: str = "gemini"
     model_name: str
 
 
 class AIModelSettingsUpdate(BaseModel):
     settings: list[AIModelSettingUpdateItem]
+
+
+class AiProviderStatus(BaseModel):
+    provider: str
+    label: str
+    configured: bool
+    key_last4: str | None = None
+    base_url: str | None = None
+    models: list[str] = []
+
+
+class AiProviderUpdate(BaseModel):
+    api_key: str | None = None
+    base_url: str | None = None
 
 
 class FeatureFlagRead(BaseModel):
