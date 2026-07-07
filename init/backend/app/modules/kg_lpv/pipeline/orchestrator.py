@@ -181,7 +181,18 @@ async def run_verification(db: AsyncSession, job: KgLpvJob, segmented: Segmented
         raise RuntimeError("Không tìm thấy KHBD nguồn cho job kiểm chứng")
 
     identity = _build_identity(plan)
-    lesson_ctx: LessonContext = graph_client.get_lesson_context(identity.get("lesson_id"), identity.get("grade"))
+    # `identity["lesson_id"]` là elementId của đồ thị soạn KHBD, KHÔNG phải
+    # ma_dinh_danh của đồ thị KG-LPV. Resolve đỉnh BaiHoc theo định danh (khớp
+    # ma_dinh_danh, fallback lớp/chủ đề/tên) để N2/N3 lấy đúng ngữ cảnh bài.
+    matched_bh = graph_client.find_lesson_by_identity(
+        lesson_id=identity.get("lesson_id"),
+        grade=identity.get("grade"),
+        book_type=identity.get("book_type"),
+        topic=identity.get("topic"),
+        lesson_name=identity.get("lesson_name"),
+    )
+    effective_lesson_id = (matched_bh or {}).get("ma_dinh_danh") or identity.get("lesson_id")
+    lesson_ctx: LessonContext = graph_client.get_lesson_context(effective_lesson_id, identity.get("grade"))
 
     n2_usage: dict[str, int] = {}
     t0 = time.monotonic()

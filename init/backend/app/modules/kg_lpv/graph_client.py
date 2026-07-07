@@ -1,5 +1,13 @@
-"""Driver Neo4j KG-LPV — lazy singleton, chỉ đọc, không kết nối lúc import/startup."""
+"""Driver Neo4j KG-LPV — lazy singleton, chỉ đọc, không kết nối lúc import/startup.
 
+Truy vấn theo lược đồ ĐỒ THỊ HỆ THỐNG (đồ thị soạn KHBD, dùng chung): cây
+`Lop-[:CO_CHU_DE]->ChuDe-[:CO_BAI_HOC]->BaiHoc`, khớp `BaiHoc` theo `elementId`
+(chính là `saved_lesson_plans.lesson_id`). Bài học không có `ma_dinh_danh` —
+`elementId` đóng vai trò định danh. Ngữ cảnh N2/N3 lấy từ `MucTieu`/`ChiMuc`/
+`NangLucTinHoc`/`NangLucChung`/`PhamChat`/`ChiBao` của đồ thị hệ thống.
+"""
+
+import re
 import time
 
 from neo4j import GraphDatabase
@@ -73,12 +81,12 @@ class KgLpvGraphClient:
         topic: str | None,
         lesson_name: str | None,
     ) -> dict | None:
-        """Khớp đúng một `BaiHoc` trong cây `KhoiLop-[:CO_CHU_DE]->ChuDe-[:CO_BAI_HOC]->BaiHoc`.
+        """Khớp một `BaiHoc` trong đồ thị hệ thống (`Lop-[:CO_CHU_DE]->ChuDe-[:CO_BAI_HOC]->BaiHoc`).
 
-        Ưu tiên khớp theo `ma_dinh_danh` (nếu có `lesson_id`); nếu không, thử
-        khớp theo đường `KhoiLop.ten`/`ChuDe.ten`/`BaiHoc.ten` chính xác. Trả
-        về dict phẳng (không rò rỉ driver) kèm nút cha `khoi_lop`/`chu_de` và
-        4 trường vết xuất xứ, hoặc `None` nếu đồ thị chưa sẵn sàng / không có
+        Ưu tiên khớp CHÍNH XÁC theo `elementId(bh)` (= `lesson_id` của KHBD); nếu
+        không, thử theo đường `Lop.ten`/`ChuDe.ten`/`BaiHoc.ten`. Trả về dict phẳng
+        (không rò rỉ driver) kèm nút cha `khoi_lop`/`chu_de` (`ma_dinh_danh` =
+        elementId của bài), hoặc `None` nếu đồ thị chưa sẵn sàng / không có
         đỉnh khớp. `book_type` (ấn bản SGK) không thuộc cây chương trình
         (§5.2) nên không dùng để so khớp — chỉ truyền qua để log/đối chiếu ở
         tầng gọi nếu cần.
@@ -90,23 +98,31 @@ class KgLpvGraphClient:
         settings = get_settings()
         try:
             with driver.session(database=settings.kg_lpv_neo4j_database) as session:
+                record = None
+                # Ưu tiên khớp CHÍNH XÁC theo elementId (= saved_lesson_plans.lesson_id).
                 if lesson_id:
                     record = session.run(
                         """
-                        MATCH (kl:KhoiLop)-[:CO_CHU_DE]->(cd:ChuDe)-[:CO_BAI_HOC]->(bh:BaiHoc {ma_dinh_danh: $lesson_id})
-                        RETURN bh, kl, cd
+                        MATCH (bh:BaiHoc) WHERE elementId(bh) = $lesson_id
+                        OPTIONAL MATCH (bh)-[:THUOC_LOP]->(l:Lop)
+                        OPTIONAL MATCH (bh)-[:THUOC_CHU_DE]->(cd:ChuDe)
+                        RETURN bh, l, cd
                         LIMIT 1
                         """,
                         lesson_id=lesson_id,
                     ).single()
-                else:
+                # Fallback: nếu elementId không khớp, thử khớp theo lớp/chủ đề/tên bài.
+                if record is None:
                     record = session.run(
                         """
-                        MATCH (kl:KhoiLop)-[:CO_CHU_DE]->(cd:ChuDe)-[:CO_BAI_HOC]->(bh:BaiHoc)
-                        WHERE ($grade IS NULL OR kl.ten CONTAINS $grade)
-                          AND ($topic IS NULL OR cd.ten = $topic)
+                        MATCH (bh:BaiHoc)
+                        OPTIONAL MATCH (bh)-[:THUOC_LOP]->(l:Lop)
+                        OPTIONAL MATCH (bh)-[:THUOC_CHU_DE]->(cd:ChuDe)
+                        WITH bh, l, cd
+                        WHERE ($grade IS NULL OR (l IS NOT NULL AND l.ten CONTAINS $grade))
+                          AND ($topic IS NULL OR (cd IS NOT NULL AND cd.ten = $topic))
                           AND ($lesson_name IS NULL OR bh.ten = $lesson_name)
-                        RETURN bh, kl, cd
+                        RETURN bh, l, cd
                         LIMIT 1
                         """,
                         grade=grade,
@@ -139,16 +155,15 @@ class KgLpvGraphClient:
         settings = get_settings()
         try:
             with driver.session(database=settings.kg_lpv_neo4j_database) as session:
+                # Đồ thị hệ thống không có fulltext index -> khớp gần đúng bằng CONTAINS.
                 records = session.run(
                     """
-                    CALL db.index.fulltext.queryNodes('baihoc_ten_fulltext', $ten)
-                    YIELD node, score
-                    WHERE $grade IS NULL OR EXISTS {
-                        MATCH (kl:KhoiLop)-[:CO_CHU_DE]->(:ChuDe)-[:CO_BAI_HOC]->(node)
-                        WHERE kl.ten CONTAINS $grade
-                    }
-                    RETURN node, score
-                    ORDER BY score DESC
+                    MATCH (node:BaiHoc)
+                    OPTIONAL MATCH (node)-[:THUOC_LOP]->(l:Lop)
+                    WITH node, l
+                    WHERE toLower(node.ten) CONTAINS toLower($ten)
+                      AND ($grade IS NULL OR (l IS NOT NULL AND l.ten CONTAINS $grade))
+                    RETURN node, 1.0 AS score
                     LIMIT $limit
                     """,
                     ten=ten,
@@ -162,31 +177,26 @@ class KgLpvGraphClient:
 
     @staticmethod
     def _bai_hoc_record_to_dict(record) -> dict:
-        bh = dict(record["bh"])
-        kl = dict(record["kl"])
-        cd = dict(record["cd"])
+        bh_node = record["bh"]
+        bh = dict(bh_node)
+        lop = dict(record["l"]) if record["l"] is not None else {}
+        cd = dict(record["cd"]) if record["cd"] is not None else {}
         return {
-            "ma_dinh_danh": bh.get("ma_dinh_danh"),
+            "ma_dinh_danh": bh_node.element_id,  # đồ thị hệ thống không có ma_dinh_danh -> dùng elementId
             "ten": bh.get("ten"),
-            "khoi_lop": {"ma_dinh_danh": kl.get("ma_dinh_danh"), "ten": kl.get("ten")},
-            "chu_de": {"ma_dinh_danh": cd.get("ma_dinh_danh"), "ten": cd.get("ten")},
-            "ma_nguon": bh.get("ma_nguon"),
-            "so_ky_hieu": bh.get("so_ky_hieu"),
-            "ngay_hieu_luc": bh.get("ngay_hieu_luc"),
-            "vi_tri_trang": bh.get("vi_tri_trang"),
+            "khoi_lop": {"ten": lop.get("ten")},
+            "chu_de": {"ten": cd.get("ten")},
+            "loai": bh.get("loai"),
         }
 
     @staticmethod
     def _fulltext_record_to_dict(record) -> dict:
-        node = dict(record["node"])
+        node = record["node"]
+        n = dict(node)
         return {
-            "ma_dinh_danh": node.get("ma_dinh_danh"),
-            "ten": node.get("ten"),
+            "ma_dinh_danh": node.element_id,
+            "ten": n.get("ten"),
             "score": record["score"],
-            "ma_nguon": node.get("ma_nguon"),
-            "so_ky_hieu": node.get("so_ky_hieu"),
-            "ngay_hieu_luc": node.get("ngay_hieu_luc"),
-            "vi_tri_trang": node.get("vi_tri_trang"),
         }
 
     def get_lesson_context(self, lesson_id: str | None, grade: str | None) -> LessonContext:
@@ -207,7 +217,7 @@ class KgLpvGraphClient:
                 return LessonContext(
                     lesson=self._fetch_lesson(session, lesson_id),
                     yccd=self._fetch_yccd(session, lesson_id),
-                    nang_luc_tin_hoc=self._fetch_all_nodes(session, "NangLucTinHoc"),
+                    nang_luc_tin_hoc=self._fetch_nang_luc_tin_hoc(session),
                     nang_luc_chung=self._fetch_all_nodes(session, "NangLucChung"),
                     pham_chat=self._fetch_all_nodes(session, "PhamChat"),
                     chi_bao_nls=self._fetch_chi_bao_nls(session, grade),
@@ -221,25 +231,31 @@ class KgLpvGraphClient:
     @staticmethod
     def _fetch_lesson(session, lesson_id: str) -> dict | None:
         record = session.run(
-            "MATCH (bh:BaiHoc {ma_dinh_danh: $lesson_id}) RETURN bh", lesson_id=lesson_id
+            "MATCH (bh:BaiHoc) WHERE elementId(bh) = $lesson_id RETURN bh", lesson_id=lesson_id
         ).single()
-        return dict(record["bh"]) if record else None
+        if not record:
+            return None
+        bh = dict(record["bh"])
+        bh["ma_dinh_danh"] = record["bh"].element_id
+        return bh
 
     @staticmethod
     def _fetch_yccd(session, lesson_id: str) -> list[dict]:
-        records = session.run(
-            """
-            MATCH (bh:BaiHoc {ma_dinh_danh: $lesson_id})-[:CO_YCCD]->(y:YCCD)
-            OPTIONAL MATCH (y)-[:O_MUC]->(m:MucNhanThuc)
-            RETURN y, m
-            """,
+        """YCCĐ lấy từ `MucTieu` của bài (đồ thị hệ thống không có nhãn `YCCD`).
+        Tách nội dung mục tiêu thành từng dòng làm 1 YCCĐ để M1 đối chiếu theo mục.
+        `muc_nhan_thuc=None` vì đồ thị hệ thống không gắn bậc nhận thức."""
+        record = session.run(
+            "MATCH (bh:BaiHoc)-[:CO_MUC_TIEU]->(mt:MucTieu) WHERE elementId(bh) = $lesson_id RETURN mt",
             lesson_id=lesson_id,
-        )
+        ).single()
+        if not record:
+            return []
+        noi_dung = (dict(record["mt"]).get("noi_dung") or "").strip()
         result = []
-        for record in records:
-            y = dict(record["y"])
-            m = dict(record["m"]) if record["m"] is not None else None
-            result.append({**y, "muc_nhan_thuc": m})
+        for line in re.split(r"[\n;]+", noi_dung):
+            text = line.strip(" -•\t")
+            if text:
+                result.append({"ten": text, "muc_nhan_thuc": None})
         return result
 
     @staticmethod
@@ -250,64 +266,58 @@ class KgLpvGraphClient:
         return [dict(record["n"]) for record in records]
 
     @staticmethod
+    def _fetch_nang_luc_tin_hoc(session) -> list[dict]:
+        """Danh mục `NangLucTinHoc` — thêm `ma_nang_luc` (= `id`, dạng NLa..NLe) mà
+        M3/N3 đối chiếu."""
+        records = session.run("MATCH (n:NangLucTinHoc) RETURN n")
+        out = []
+        for record in records:
+            n = dict(record["n"])
+            out.append({**n, "ma_nang_luc": n.get("id")})
+        return out
+
+    @staticmethod
     def _fetch_chi_bao_nls(session, grade: str | None) -> list[dict]:
-        records = session.run(
-            """
-            MATCH (cb:ChiBaoNLS)-[:AP_DUNG_CHO]->(kl:KhoiLop)
-            WHERE $grade IS NULL OR kl.ten CONTAINS $grade OR kl.ma_dinh_danh ENDS WITH $grade
-            OPTIONAL MATCH (cb)-[:CO_MUC_DO]->(md:MucDoNLS)
-            RETURN cb, collect(md) AS muc_do_list
-            """,
-            grade=grade,
-        )
+        """Chỉ báo NLS từ nhãn `ChiBao` của đồ thị hệ thống (không gắn khối lớp nên
+        không lọc theo `grade`). `muc_do` để rỗng (đồ thị không curate mức độ)."""
+        records = session.run("MATCH (cb:ChiBao) RETURN cb")
         result = []
         for record in records:
             cb = dict(record["cb"])
-            muc_do = [dict(md) for md in record["muc_do_list"] if md is not None]
-            result.append({**cb, "muc_do": muc_do})
+            result.append({"ma_chi_bao": cb.get("ma"), "noi_dung": cb.get("noi_dung"), "muc_do": []})
         return result
 
     @staticmethod
     def _fetch_menh_de_kien_thuc(session, lesson_id: str) -> list[dict]:
+        """Mệnh đề kiến thức lấy từ `ChiMuc` (các mục nội dung của bài) trong đồ thị
+        hệ thống — đồ thị không có nhãn `MenhDeKienThuc` riêng."""
         records = session.run(
             """
-            MATCH (m:MenhDeKienThuc)-[:THUOC]->(bh:BaiHoc {ma_dinh_danh: $lesson_id})
-            RETURN m
+            MATCH (bh:BaiHoc)-[:CO_CHI_MUC]->(cm:ChiMuc) WHERE elementId(bh) = $lesson_id
+            RETURN cm ORDER BY cm.thu_tu
             """,
             lesson_id=lesson_id,
         )
-        return [dict(record["m"]) for record in records]
+        out = []
+        for record in records:
+            cm = dict(record["cm"])
+            ten = cm.get("tieu_de") or cm.get("noi_dung") or ""
+            out.append({"ma_dinh_danh": cm.get("id"), "ten": ten, "ma_nguon": "SGK"})
+        return out
 
     @staticmethod
     def _fetch_dong_tu_nhan_thuc(session) -> dict:
-        """Bảng động từ nhận thức (`DongTuNhanThuc`, §5.2). Quy ước thuộc tính node
-        (do nhóm nghiên cứu curate theo lược đồ nạp liệu — xem `scripts/kg_lpv/README.md`):
-        `dong_tu` (chuỗi động từ), `do_duoc` (bool đo lường được hay không), `bac`
-        (mức nhận thức tương ứng — chỉ có ý nghĩa khi `do_duoc=true`, dùng đối chiếu M1).
-        """
-        records = session.run("MATCH (d:DongTuNhanThuc) RETURN d")
-        do_duoc: list[dict] = []
-        khong_do_duoc: list[str] = []
-        for record in records:
-            d = dict(record["d"])
-            dong_tu = d.get("dong_tu")
-            if not dong_tu:
-                continue
-            if d.get("do_duoc"):
-                do_duoc.append({"dong_tu": dong_tu, "bac": d.get("bac")})
-            else:
-                khong_do_duoc.append(dong_tu)
-        return {"do_duoc": do_duoc, "khong_do_duoc": khong_do_duoc}
+        """Đồ thị hệ thống không có bảng `DongTuNhanThuc` -> trả rỗng. M1 bỏ qua kiểm
+        bậc động từ, M2 rơi xuống phán xử bằng LLM (đã có sẵn nhánh đó)."""
+        return {"do_duoc": [], "khong_do_duoc": []}
 
     def get_method_procedures(self, method_names: list[str]) -> dict[str, list[dict]]:
-        """Quy trình chuẩn (`BuocQuyTrinh`, đã sắp `thu_tu`) của các `PhuongPhapDH`/
-        `KyThuatDH` có tên trong `method_names` — dùng đối chiếu C7 (trục 5, §7 Bước 3).
-
-        Trả `{ten_phuong_phap: [buoc, ...]}` (mỗi `buoc` là dict phẳng kèm 4 trường
-        vết xuất xứ); phương pháp không tìm thấy trong đồ thị đơn giản không có mặt
-        trong dict trả về (KHÔNG phải lỗi). Trả `{}` nếu đồ thị chưa sẵn sàng, danh
-        sách tên rỗng, hoặc truy vấn lỗi — không bao giờ raise (cùng quy ước phòng
-        thủ với các phương thức khác của client này).
+        """Quy trình chuẩn (các bước) của phương pháp/kĩ thuật dạy học — dùng đối
+        chiếu C7 (trục 5). Đồ thị hệ thống lưu quy trình dưới dạng văn bản
+        (`PhuongPhapDayHoc.cach_tien_hanh`), KHÔNG tách thành node `BuocQuyTrinh`.
+        Trả mỗi phương pháp = 1 "bước" chứa toàn bộ mô tả quy trình để N3 đối chiếu;
+        phương pháp không có trong đồ thị đơn giản không xuất hiện (KHÔNG phải lỗi).
+        Trả `{}` nếu đồ thị chưa sẵn sàng / danh sách rỗng / truy vấn lỗi.
         """
         if not method_names:
             return {}
@@ -321,16 +331,17 @@ class KgLpvGraphClient:
             with driver.session(database=settings.kg_lpv_neo4j_database) as session:
                 records = session.run(
                     """
-                    MATCH (pp)-[r:GOM_BUOC]->(b:BuocQuyTrinh)
-                    WHERE (pp:PhuongPhapDH OR pp:KyThuatDH) AND pp.ten IN $method_names
-                    WITH pp, b, r.thu_tu AS thu_tu
-                    ORDER BY thu_tu
-                    WITH pp, collect(b) AS buoc_list
-                    RETURN pp.ten AS ten, buoc_list
+                    MATCH (pp)
+                    WHERE (pp:PhuongPhapDayHoc OR pp:KyThuatDayHoc)
+                      AND pp.ten IN $method_names AND pp.cach_tien_hanh IS NOT NULL
+                    RETURN pp.ten AS ten, pp.cach_tien_hanh AS cach_tien_hanh
                     """,
                     method_names=method_names,
                 )
-                return {record["ten"]: [dict(b) for b in record["buoc_list"]] for record in records}
+                return {
+                    record["ten"]: [{"thu_tu": 1, "noi_dung": record["cach_tien_hanh"]}]
+                    for record in records
+                }
         except Exception as exc:  # pragma: no cover - defensive
             logger.warning("kg_lpv.graph_client.get_method_procedures_failed error=%s", exc)
             return {}
