@@ -7,6 +7,7 @@ from app.models.admin_ai_model_setting import AdminAIModelSetting
 from app.models.ai_provider_credential import AiProviderCredential
 
 ALLOWED_GEMINI_MODELS: tuple[str, ...] = (
+    "gemini-3.5-flash",
     "gemini-3-pro",
     "gemini-3-flash",
     "gemini-2.5-pro",
